@@ -1,0 +1,37 @@
+import Image from "next/image";
+import { adminLogin } from "../actions";
+
+export const dynamic = "force-dynamic";
+
+export default function AdminLogin({ searchParams }: { searchParams: { error?: string } }) {
+  return (
+    <div style={{ minHeight: "100vh", background: "#0E1A2B", display: "grid", placeItems: "center", padding: 20 }}>
+      <div className="ds-view" style={{ width: "100%", maxWidth: 420 }}>
+        <div style={{ textAlign: "center", marginBottom: 26 }}>
+          <Image src="/logo.webp" alt="Dental Scotland" width={190} height={52} style={{ height: 52, width: "auto" }} />
+        </div>
+        <div style={{ background: "#fff", borderRadius: 20, padding: "34px 32px", boxShadow: "0 30px 60px -30px rgba(0,0,0,.6)" }}>
+          <div style={{ fontSize: 22, fontWeight: 800, letterSpacing: "-.01em" }}>Practice login</div>
+          <div style={{ fontSize: 13.5, color: "#7A8696", marginTop: 4 }}>Invisalign proposals & payments dashboard</div>
+          {searchParams.error && (
+            <div style={{ marginTop: 16, padding: "11px 14px", borderRadius: 10, background: "#FBE9E8", color: "#C23B34", fontSize: 13.5, fontWeight: 600 }}>
+              Incorrect email or password — please try again.
+            </div>
+          )}
+          <form action={adminLogin} style={{ marginTop: 20 }}>
+            <label className="label">Email</label>
+            <input className="input" name="email" type="email" required placeholder="you@dentalscotland.com" />
+            <div style={{ marginTop: 14 }}>
+              <label className="label">Password</label>
+              <input className="input" name="password" type="password" required placeholder="••••••••" />
+            </div>
+            <button className="btn btn-teal" style={{ width: "100%", marginTop: 22 }}>Sign in →</button>
+          </form>
+        </div>
+        <div style={{ textAlign: "center", color: "#4E6178", fontSize: 12.5, marginTop: 18 }}>
+          Dental Scotland · It&apos;s time to smile
+        </div>
+      </div>
+    </div>
+  );
+}

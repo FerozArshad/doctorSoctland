@@ -1,0 +1,59 @@
+* { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; }
+body {
+  font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
+  background: #F4F6F9;
+  color: #16202E;
+  -webkit-font-smoothing: antialiased;
+  font-variant-numeric: tabular-nums;
+}
+input, button, select, textarea { font-family: inherit; }
+input:focus, textarea:focus { outline: none; }
+::placeholder { color: #9AA6B4; }
+a { color: inherit; }
+
+.ds-scroll::-webkit-scrollbar { width: 10px; height: 10px; }
+.ds-scroll::-webkit-scrollbar-thumb {
+  background: #D5DCE5;
+  border-radius: 8px;
+  border: 3px solid transparent;
+  background-clip: content-box;
+}
+
+@keyframes ds-fade {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes ds-toast {
+  from { opacity: 0; transform: translateY(12px) scale(.98); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+@keyframes ds-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(14,147,132,.5); }
+  50% { box-shadow: 0 0 0 6px rgba(14,147,132,0); }
+}
+.ds-view { animation: ds-fade .32s cubic-bezier(.2,.7,.3,1) both; }
+
+/* Shared components from the design system */
+.card { background: #fff; border: 1px solid #E7ECF2; border-radius: 16px; }
+.btn {
+  border: none; border-radius: 11px; font-weight: 700; cursor: pointer;
+  font-size: 14.5px; padding: 13px; font-family: inherit;
+}
+.btn-teal { background: #0E9384; color: #fff; }
+.btn-dark { background: #0E1A2B; color: #fff; }
+.btn-outline { background: #fff; color: #16202E; border: 1.5px solid #CBD5E0; }
+.btn:disabled { opacity: .55; cursor: not-allowed; }
+
+.input {
+  width: 100%; margin-top: 6px; padding: 11px 13px;
+  border: 1px solid #E1E7EE; border-radius: 10px; font-size: 14px; background: #FBFCFD;
+}
+.input.err { border: 1.5px solid #E5544B; background: #FEF6F5; }
+.label { font-size: 12.5px; font-weight: 700; color: #3C4a59; }
+
+.badge {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-size: 12.5px; font-weight: 700; padding: 4px 10px; border-radius: 20px;
+}
+.row-hover:hover { background: #F8FAFC; }

@@ -1,0 +1,92 @@
+// Dental Scotland — Invisalign proposal & payment system
+// SQLite for local dev; switch provider to "postgresql" for production.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Admin {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  passwordHash String
+  name         String
+  role         String   @default("Treatment Coordinator")
+  createdAt    DateTime @default(now())
+}
+
+model Patient {
+  id                    String       @id @default(cuid())
+  firstName             String
+  lastName              String       @default("")
+  email                 String       @unique
+  phone                 String       @default("")
+  alignerCount          Int
+  pkg                   String       @default("Go") // Express | Go
+  videoUrl              String       @default("")
+  notes                 String       @default("")
+  // draft | sent | interested | awaiting | deposit | paid | overdue
+  status                String       @default("draft")
+  pricePence            Int
+  discountPct           Int          @default(5)
+  amountPaidPence       Int          @default(0)
+  proposalToken         String       @unique @default(cuid())
+  passwordHash          String? // set on first visit to the secure link
+  otpHash               String? // hashed one-time login code
+  otpExpiresAt          DateTime?
+  otpAttempts           Int          @default(0)
+  // Patient's chosen payment route: full | deposit | monthly | finance
+  paymentPreference     String?
+  stripeCustomerId      String?
+  stripePaymentMethodId String? // saved card for scheduled instalments
+  createdAt             DateTime     @default(now())
+  updatedAt             DateTime     @updatedAt
+  activities            Activity[]
+  payments              Payment[]
+  instalments           Instalment[]
+}
+
+model Activity {
+  id        String   @id @default(cuid())
+  patientId String
+  patient   Patient  @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  text      String
+  createdAt DateTime @default(now())
+
+  @@index([patientId, createdAt])
+}
+
+model Payment {
+  id                    String    @id @default(cuid())
+  patientId             String
+  patient               Patient   @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  amountPence           Int
+  type                  String // full | deposit | instalment | manual
+  status                String    @default("pending") // pending | paid | failed
+  stripeSessionId       String?   @unique
+  stripePaymentIntentId String?
+  paidAt                DateTime?
+  createdAt             DateTime  @default(now())
+
+  @@index([patientId])
+}
+
+model Instalment {
+  id                    String    @id @default(cuid())
+  patientId             String
+  patient               Patient   @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  number                Int // 1..3
+  amountPence           Int
+  dueDate               DateTime
+  status                String    @default("scheduled") // scheduled | paid | failed
+  stripePaymentIntentId String?
+  paidAt                DateTime?
+  createdAt             DateTime  @default(now())
+
+  @@index([patientId])
+  @@index([status, dueDate])
+}

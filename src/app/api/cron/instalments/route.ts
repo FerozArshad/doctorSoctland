@@ -8,6 +8,7 @@ import { fmt, fullPricePence } from "@/lib/pricing";
 import { notifyAdmin, receiptEmailHtml, sendEmail } from "@/lib/notify";
 
 export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
 
 export async function GET(req: NextRequest) {
   const auth = req.headers.get("authorization") || "";

@@ -1,9 +1,11 @@
 import { PrismaClient } from "@prisma/client";
+import { assertRemoteDatabaseUrl } from "./database-url";
 
 const globalForPrisma = globalThis as unknown as { prisma?: PrismaClient };
 
 function getClient(): PrismaClient {
   if (!globalForPrisma.prisma) {
+    assertRemoteDatabaseUrl();
     globalForPrisma.prisma = new PrismaClient();
   }
   return globalForPrisma.prisma;

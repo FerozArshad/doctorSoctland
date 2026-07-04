@@ -1,7 +1,6 @@
 // Dental Scotland — Invisalign proposal & payment system
-// Production uses Postgres (Vercel Postgres / Neon / Supabase).
-// Local dev: use a hosted Postgres URL, or temporarily set provider to "sqlite"
-// and DATABASE_URL="file:./dev.db" for offline work.
+// Remote Postgres only (Vercel Postgres / Neon / Supabase).
+// Local dev uses the SAME DATABASE_URL as production — copy from Vercel → .env
 
 generator client {
   provider = "prisma-client-js"

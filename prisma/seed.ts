@@ -1,5 +1,8 @@
 import { PrismaClient } from "@prisma/client";
+import { assertRemoteDatabaseUrl } from "../src/lib/database-url";
 import { runSeed } from "../src/lib/seed-data";
+
+assertRemoteDatabaseUrl();
 
 const db = new PrismaClient();
 

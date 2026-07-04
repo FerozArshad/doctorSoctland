@@ -6,11 +6,13 @@
     "dev": "next dev",
     "postinstall": "prisma generate",
     "build": "prisma generate && next build",
-    "db:deploy": "prisma db push",
     "start": "next start",
     "db:push": "prisma db push",
-    "db:seed": "tsx prisma/seed.ts",
-    "admin:password": "tsx scripts/set-admin-password.ts"
+    "db:deploy": "prisma db push",
+    "db:seed": "tsx --env-file=.env prisma/seed.ts",
+    "bootstrap:remote": "tsx --env-file=.env scripts/bootstrap-remote.ts",
+    "seed:live": "tsx --env-file=.env scripts/seed-via-live-api.ts",
+    "admin:password": "tsx --env-file=.env scripts/set-admin-password.ts"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"

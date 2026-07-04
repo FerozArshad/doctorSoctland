@@ -2,6 +2,9 @@
 //   npm run admin:password -- newSecurePassword123
 import { PrismaClient } from "@prisma/client";
 import bcrypt from "bcryptjs";
+import { assertRemoteDatabaseUrl } from "../src/lib/database-url";
+
+assertRemoteDatabaseUrl();
 
 const db = new PrismaClient();
 

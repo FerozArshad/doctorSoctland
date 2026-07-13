@@ -21,13 +21,13 @@ export type SeedResult = {
 };
 
 export async function runSeed(db: PrismaClient): Promise<SeedResult> {
-  const existingAdmin = await db.admin.findUnique({ where: { email: "admin@dentalscotland.com" } });
+  const existingAdmin = await db.admin.findUnique({ where: { email: "concierge@dentalscotland.com" } });
 
   await db.admin.upsert({
-    where: { email: "admin@dentalscotland.com" },
+    where: { email: "concierge@dentalscotland.com" },
     update: {},
     create: {
-      email: "admin@dentalscotland.com",
+      email: "concierge@dentalscotland.com",
       passwordHash: await bcrypt.hash("dental123", 10),
       name: "Dr. Rhona Sinclair",
       role: "Treatment Coordinator",
@@ -37,7 +37,7 @@ export async function runSeed(db: PrismaClient): Promise<SeedResult> {
   const patientCount = await db.patient.count();
   if (patientCount > 0) {
     return {
-      adminEmail: "admin@dentalscotland.com",
+      adminEmail: "concierge@dentalscotland.com",
       adminCreated: !existingAdmin,
       patientsSeeded: 0,
       patientsSkipped: true,
@@ -108,7 +108,7 @@ export async function runSeed(db: PrismaClient): Promise<SeedResult> {
   }
 
   return {
-    adminEmail: "admin@dentalscotland.com",
+    adminEmail: "concierge@dentalscotland.com",
     adminCreated: !existingAdmin,
     patientsSeeded: patients.length,
     patientsSkipped: false,

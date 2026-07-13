@@ -20,7 +20,7 @@ export default function AdminLogin({ searchParams }: { searchParams: { error?: s
           )}
           <form action={adminLogin} style={{ marginTop: 20 }}>
             <label className="label">Email</label>
-            <input className="input" name="email" type="email" required placeholder="you@dentalscotland.com" />
+            <input className="input" name="email" type="email" required placeholder="concierge@dentalscotland.com" />
             <div style={{ marginTop: 14 }}>
               <label className="label">Password</label>
               <input className="input" name="password" type="password" required placeholder="••••••••" />

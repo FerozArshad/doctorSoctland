@@ -17,7 +17,7 @@ npm run db:seed     # admin login + 9 demo patients
 npm run dev         # http://localhost:3000
 ```
 
-**Admin login:** `admin@dentalscotland.com` / `dental123` — change this after first login (or edit `prisma/seed.ts` before seeding a fresh DB).
+**Admin login:** `concierge@dentalscotland.com` / `dental123` — change this after first login (or edit `prisma/seed.ts` before seeding a fresh DB).
 
 ---
 

@@ -17,7 +17,7 @@ export function escapeHtml(s: string): string {
 
 // ── Email ────────────────────────────────────────────────────────────────
 export async function sendEmail(to: string, subject: string, html: string) {
-  const from = process.env.EMAIL_FROM || "Dental Scotland <onboarding@resend.dev>";
+  const from = process.env.EMAIL_FROM || "Dental Scotland <concierge@dentalscotland.com>";
 
   // Prefer Gmail when it's connected (GOOGLE_CLIENT_ID/SECRET + GMAIL_REFRESH_TOKEN).
   if (gmailConfigured()) {

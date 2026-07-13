@@ -4,6 +4,7 @@
 import { Resend } from "resend";
 import type { Patient } from "@prisma/client";
 import { estMonths, fmt, fullPricePence, instalmentPence } from "./pricing";
+import { gmailConfigured, sendGmail } from "./google";
 
 const appUrl = () => process.env.APP_URL || "http://localhost:3000";
 
@@ -16,14 +17,22 @@ export function escapeHtml(s: string): string {
 
 // ── Email ────────────────────────────────────────────────────────────────
 export async function sendEmail(to: string, subject: string, html: string) {
+  const from = process.env.EMAIL_FROM || "Dental Scotland <onboarding@resend.dev>";
+
+  // Prefer Gmail when it's connected (GOOGLE_CLIENT_ID/SECRET + GMAIL_REFRESH_TOKEN).
+  if (gmailConfigured()) {
+    await sendGmail(to, subject, html, from);
+    return { simulated: false, via: "gmail" as const };
+  }
+
   const key = process.env.RESEND_API_KEY;
   if (!key) {
-    console.log(`[email:simulated] to=${to} subject="${subject}" (set RESEND_API_KEY to send for real)`);
+    console.log(`[email:simulated] to=${to} subject="${subject}" (connect Gmail or set RESEND_API_KEY to send for real)`);
     return { simulated: true };
   }
   const resend = new Resend(key);
   const { error } = await resend.emails.send({
-    from: process.env.EMAIL_FROM || "Dental Scotland <onboarding@resend.dev>",
+    from,
     to,
     subject,
     html,

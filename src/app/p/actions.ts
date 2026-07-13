@@ -227,7 +227,6 @@ export async function selectPaymentOption(formData: FormData) {
   const labels: Record<string, string> = {
     full: "Pay in full",
     deposit: "£700 deposit + 3 instalments",
-    monthly: "Monthly payment plan",
     finance: "0% finance",
   };
   if (!labels[choice]) redirect(`/p/${token}`);
@@ -255,15 +254,6 @@ export async function selectPaymentOption(formData: FormData) {
   // Instant-pay routes go straight to Stripe Checkout.
   if (choice === "full" || choice === "deposit") {
     await launchCheckout(token, choice);
-  }
-
-  // Monthly plan: practice confirms and sends the payment link/schedule.
-  if (choice === "monthly") {
-    await db.patient.update({
-      where: { id: patient.id },
-      data: { status: patient.status === "paid" || patient.status === "deposit" ? patient.status : "awaiting" },
-    });
-    redirect(toastUrl(`/p/${token}`, "Monthly plan requested — we'll send your payment schedule shortly", "✓"));
   }
 
   // Finance: log + hand over to the external lender's application.

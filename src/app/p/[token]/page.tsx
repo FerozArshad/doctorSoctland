@@ -4,7 +4,7 @@ import { notFound } from "next/navigation";
 import { Suspense } from "react";
 import { db } from "@/lib/db";
 import { getAdmin, getPatientSession } from "@/lib/auth";
-import { DEPOSIT_PENCE, estMonths, finance36Pence, fmt, fullPricePence, instalmentPence, monthlyPlan } from "@/lib/pricing";
+import { DEPOSIT_PENCE, estMonths, finance36Pence, fmt, fullPricePence, instalmentPence } from "@/lib/pricing";
 import { COMP_ITEMS, COMP_TOTAL, WHY_US } from "@/lib/content";
 import { bookCall, markInterested } from "@/app/p/actions";
 import CreateAccountCard from "@/components/CreateAccountCard";
@@ -49,7 +49,6 @@ export default async function ProposalPage({
   const full = fullPricePence(c.pricePence, c.discountPct);
   const instal = instalmentPence(c.pricePence);
   const fin36 = finance36Pence(c.pricePence);
-  const monthly = monthlyPlan(c.pricePence, c.alignerCount);
   const paid = c.status === "paid";
   const depositPaid = c.status === "deposit";
 
@@ -71,15 +70,6 @@ export default async function ProposalPage({
       price: fmt(instal),
       priceSub: "/mo",
       cta: `Pay ${fmt(DEPOSIT_PENCE)} deposit →`,
-    },
-    {
-      key: "monthly",
-      title: "Monthly payments",
-      desc: `Spread the full amount over your ≈${monthly.months}-month treatment — we'll send your payment schedule.`,
-      priceTop: "approx.",
-      price: fmt(monthly.perMonthPence),
-      priceSub: "/mo",
-      cta: "Request monthly payment plan →",
     },
     {
       key: "finance",

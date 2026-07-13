@@ -4,7 +4,7 @@ import { db } from "@/lib/db";
 import { estMonths, fmt } from "@/lib/pricing";
 import { avatarBg, initials, statusOf, timeAgo } from "@/lib/status";
 import { COMP_ITEMS, COMP_TOTAL } from "@/lib/content";
-import { markPaid, recordDeposit, sendProposal } from "@/app/admin/actions";
+import { approveFinance, markPaid, recordDeposit, sendProposal } from "@/app/admin/actions";
 import TopBar from "@/components/TopBar";
 import MessageBox from "@/components/MessageBox";
 
@@ -201,6 +201,39 @@ export default async function PatientProfile({ params }: { params: { id: string 
                   </form>
                 </div>
               </div>
+
+              {/* signed consent / finance application */}
+              {c.consentSignedAt && (
+                <div className="card" style={{ padding: 24 }}>
+                  <div style={{ fontSize: 15, fontWeight: 800, marginBottom: 4 }}>
+                    {c.paymentPreference === "finance" ? "0% finance application" : "Signed consent"}
+                  </div>
+                  <div style={{ fontSize: 12.5, color: "#7A8696", marginBottom: 14 }}>
+                    Consent signed {c.consentSignedAt.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}
+                    {c.dateOfBirth ? ` · DOB ${c.dateOfBirth}` : ""}
+                  </div>
+                  {c.consentSignature && (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={c.consentSignature} alt="Patient signature" style={{ maxWidth: "100%", height: 90, objectFit: "contain", border: "1px solid #E7ECF2", borderRadius: 10, background: "#fff", padding: 6, display: "block" }} />
+                  )}
+                  {c.paymentPreference === "finance" &&
+                    (c.financeApprovedAt ? (
+                      <div style={{ marginTop: 14, padding: "12px 14px", borderRadius: 12, background: "#E6F6EA", color: "#1C7C3A", fontSize: 13, fontWeight: 600 }}>
+                        ✓ Approved {c.financeApprovedAt.toLocaleDateString("en-GB", { day: "numeric", month: "short" })} — link emailed.
+                        <div style={{ fontWeight: 500, marginTop: 4, wordBreak: "break-all" }}>
+                          <a href={c.financeLink} style={{ color: "#0B7A6E" }}>{c.financeLink}</a>
+                        </div>
+                      </div>
+                    ) : (
+                      <form action={approveFinance} style={{ marginTop: 14 }}>
+                        <input type="hidden" name="patientId" value={c.id} />
+                        <label className="label">Finance / info link to send</label>
+                        <input className="input" name="financeLink" placeholder="https://lender.example.com/apply/…" defaultValue={c.financeLink} />
+                        <button className="btn btn-teal" style={{ marginTop: 10, width: "100%", padding: 11, fontSize: 13.5 }}>Approve &amp; email finance link</button>
+                      </form>
+                    ))}
+                </div>
+              )}
 
               {/* messaging */}
               <MessageBox patientId={c.id} hasPhone={hasPhone} />

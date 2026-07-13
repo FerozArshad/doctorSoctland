@@ -5,7 +5,7 @@ import bcrypt from "bcryptjs";
 import { db } from "@/lib/db";
 import { clearAdminSession, createAdminSession, requireAdmin } from "@/lib/auth";
 import { defaultDiscountPct, fmt, fullPricePence, netPricePence, priceForPence, UPFRONT_PENCE } from "@/lib/pricing";
-import { proposalEmailHtml, proposalWhatsAppText, sendEmail, sendWhatsApp } from "@/lib/notify";
+import { financeLinkEmailHtml, proposalEmailHtml, proposalWhatsAppText, sendEmail, sendWhatsApp } from "@/lib/notify";
 
 function toastUrl(base: string, msg: string, icon = "✓", bg = "#0E9384") {
   const q = new URLSearchParams({ toast: msg, ticon: icon, tbg: bg });
@@ -115,6 +115,37 @@ export async function updatePatient(formData: FormData) {
     },
   });
   redirect(toastUrl(`/admin/patients/${id}`, "Patient details updated", "✓"));
+}
+
+// Approve a finance application: save the lender link and auto-email it to the patient.
+export async function approveFinance(formData: FormData) {
+  await requireAdmin();
+  const id = String(formData.get("patientId"));
+  const financeLink = String(formData.get("financeLink") || "").trim();
+  if (!/^https?:\/\/.+/i.test(financeLink)) {
+    redirect(toastUrl(`/admin/patients/${id}`, "Enter a valid finance link (https://…)", "!", "#E0A429"));
+  }
+  const patient = await db.patient.findUniqueOrThrow({ where: { id } });
+
+  await db.patient.update({
+    where: { id },
+    data: {
+      financeLink,
+      financeApprovedAt: new Date(),
+      activities: { create: { text: "Finance application approved — link emailed to patient" } },
+    },
+  });
+
+  let emailOk = true;
+  try {
+    await sendEmail(patient.email, "Your 0% finance application is ready — Dental Scotland", financeLinkEmailHtml(patient, financeLink));
+  } catch (e) {
+    console.error(e);
+    emailOk = false;
+  }
+  // redirect() throws NEXT_REDIRECT — must be called outside the try/catch.
+  if (emailOk) redirect(toastUrl(`/admin/patients/${id}`, `Approved — finance link emailed to ${patient.firstName}`, "✉"));
+  redirect(toastUrl(`/admin/patients/${id}`, "Saved, but the email failed to send — check email config", "!", "#E0A429"));
 }
 
 // Sends the proposal by email + WhatsApp and logs activity.

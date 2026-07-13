@@ -199,6 +199,21 @@ export function reminderEmailHtml(p: Patient) {
   );
 }
 
+// Sent when an admin approves a finance application and attaches the lender link.
+export function financeLinkEmailHtml(p: Patient, link: string) {
+  return brandedEmail(
+    "Your 0% finance application is ready",
+    `<p style="font-size:15px;line-height:1.7;color:#3C4a59;">Hi ${p.firstName},</p>
+     <p style="font-size:15px;line-height:1.7;color:#3C4a59;">Thank you for applying for 0% interest-free finance for your Invisalign treatment. Your application has been reviewed and approved to proceed.</p>
+     <p style="font-size:15px;line-height:1.7;color:#3C4a59;">Please continue your application with our finance partner using the secure link below:</p>
+     <div style="text-align:center;margin:22px 0 6px;">
+       <a href="${link}" style="display:inline-block;background:#0E9384;color:#ffffff;text-decoration:none;padding:15px 34px;border-radius:11px;font-weight:800;font-size:15px;">Complete your finance application →</a>
+     </div>
+     <p style="font-size:13px;line-height:1.7;color:#7A8696;margin-top:18px;">If the button doesn't work, copy and paste this link into your browser:<br/><span style="color:#0E9384;word-break:break-all;">${link}</span></p>
+     <p style="font-size:15px;line-height:1.7;color:#3C4a59;margin-top:16px;">Any questions, just reply to this email — we're here to help.</p>`
+  );
+}
+
 export function reminderWhatsAppText(p: Patient) {
   const net = netPricePence(p.pricePence, p.upfrontPaidPence);
   const full = fullPricePence(net, p.discountPct);

@@ -4,6 +4,7 @@
 // the practice, which sends the payment link or lender application.
 import { useState } from "react";
 import { selectPaymentOption } from "@/app/p/actions";
+import ConsentModal, { Applicant } from "./ConsentModal";
 
 export type PayOption = {
   key: "full" | "deposit" | "monthly" | "finance";
@@ -17,13 +18,26 @@ export type PayOption = {
   cta: string; // button label when selected
 };
 
-export default function PaymentOptionsForm({ token, options }: { token: string; options: PayOption[] }) {
+export default function PaymentOptionsForm({ token, options, applicant }: { token: string; options: PayOption[]; applicant: Applicant }) {
   const [choice, setChoice] = useState<PayOption["key"]>(options[0]?.key ?? "full");
   const [submitting, setSubmitting] = useState(false);
+  const [showConsent, setShowConsent] = useState(false);
   const selected = options.find((o) => o.key === choice)!;
 
   return (
-    <form action={selectPaymentOption} onSubmit={() => setSubmitting(true)}>
+    <form
+      action={selectPaymentOption}
+      onSubmit={(e) => {
+        // Finance requires signed consent first — open the modal instead of submitting.
+        if (choice === "finance") {
+          e.preventDefault();
+          setShowConsent(true);
+          return;
+        }
+        setSubmitting(true);
+      }}
+    >
+      <ConsentModal open={showConsent} onClose={() => setShowConsent(false)} token={token} intent="finance" applicant={applicant} />
       <input type="hidden" name="token" value={token} />
       <input type="hidden" name="choice" value={choice} />
       <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>

@@ -6,9 +6,10 @@ import { db } from "@/lib/db";
 import { getAdmin, getPatientSession } from "@/lib/auth";
 import { DEPOSIT_PENCE, estMonths, finance36Pence, fmt, fullPricePence, instalmentPence, netPricePence } from "@/lib/pricing";
 import { COMP_ITEMS, COMP_TOTAL, WHY_US } from "@/lib/content";
-import { bookCall, markInterested } from "@/app/p/actions";
+import { bookCall } from "@/app/p/actions";
 import CreateAccountCard from "@/components/CreateAccountCard";
 import PaymentOptionsForm, { PayOption } from "@/components/PaymentOptionsForm";
+import InterestedButton from "@/components/InterestedButton";
 import OtpGate from "@/components/OtpGate";
 import VideoBlock from "@/components/VideoBlock";
 import Toast from "@/components/Toast";
@@ -54,6 +55,13 @@ export default async function ProposalPage({
   const fin36 = finance36Pence(net);
   const paid = c.status === "paid";
   const depositPaid = c.status === "deposit";
+  const applicant = {
+    firstName: c.firstName,
+    lastName: c.lastName,
+    email: c.email,
+    phone: c.phone,
+    dateOfBirth: c.dateOfBirth,
+  };
 
   const payOptions: PayOption[] = [
     {
@@ -203,7 +211,7 @@ export default async function ProposalPage({
                 </div>
               </div>
             ) : (
-              <PaymentOptionsForm token={c.proposalToken} options={payOptions} />
+              <PaymentOptionsForm token={c.proposalToken} options={payOptions} applicant={applicant} />
             )}
 
             {/* why us */}
@@ -230,10 +238,7 @@ export default async function ProposalPage({
               <div style={{ marginTop: 34, padding: 26, borderRadius: 16, background: "#0E1A2B", textAlign: "center" }}>
                 <div style={{ color: "#fff", fontSize: 19, fontWeight: 800 }}>Ready to get started?</div>
                 <div style={{ color: "#9FB2C8", fontSize: 14, marginTop: 6, lineHeight: 1.6 }}>Happy with your plan? Let us know and we&apos;ll order your aligners immediately.</div>
-                <form action={markInterested} style={{ display: "inline-block" }}>
-                  <input type="hidden" name="token" value={c.proposalToken} />
-                  <button className="btn btn-teal" style={{ marginTop: 18, padding: "14px 30px", fontSize: 15, fontWeight: 800, letterSpacing: ".02em" }}>I&apos;M INTERESTED</button>
-                </form>
+                <InterestedButton token={c.proposalToken} applicant={applicant} />
                 <form action={bookCall} style={{ marginTop: 16 }}>
                   <input type="hidden" name="token" value={c.proposalToken} />
                   <button style={{ background: "transparent", color: "#9FB2C8", border: "none", fontWeight: 600, fontSize: 13.5, cursor: "pointer", textDecoration: "underline" }}>

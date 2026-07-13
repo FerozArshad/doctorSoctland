@@ -268,6 +268,60 @@ export async function selectPaymentOption(formData: FormData) {
   redirect(toastUrl(`/p/${token}`, "Finance application noted — our team will send your application link", "⏳", "#E0A429"));
 }
 
+// ── Consent + finance/interest application ──────────────────────────────
+// Patient signs the Invisalign consent and submits basic info; admin then
+// reviews and (for finance) sends the application link.
+export async function submitApplication(formData: FormData) {
+  const token = String(formData.get("token"));
+  const intent = formData.get("intent") === "finance" ? "finance" : "interested";
+  const consent = formData.get("consent") === "on";
+  const signature = String(formData.get("signature") || "");
+  const firstName = String(formData.get("firstName") || "").trim();
+  const lastName = String(formData.get("lastName") || "").trim();
+  const phone = String(formData.get("phone") || "").trim();
+  const dob = String(formData.get("dob") || "").trim();
+  const note = String(formData.get("note") || "").trim().slice(0, 500);
+  const patient = await requireVerified(token);
+
+  if (!consent || !signature.startsWith("data:image")) {
+    redirect(toastUrl(`/p/${token}`, "Please tick the consent box and add your signature to continue", "!", "#E0A429"));
+  }
+
+  const keep = patient.status === "paid" || patient.status === "deposit";
+  const status = keep ? patient.status : intent === "finance" ? "awaiting" : "interested";
+
+  await db.patient.update({
+    where: { id: patient.id },
+    data: {
+      firstName: firstName || patient.firstName,
+      lastName: lastName || patient.lastName,
+      phone: phone || patient.phone,
+      dateOfBirth: dob || patient.dateOfBirth,
+      consentSignedAt: new Date(),
+      consentSignature: signature,
+      status,
+      paymentPreference: intent === "finance" ? "finance" : patient.paymentPreference,
+      activities: {
+        create: [
+          { text: intent === "finance" ? "Signed Invisalign consent & applied for 0% finance" : "Signed Invisalign consent & registered interest" },
+          ...(note ? [{ text: `Message from patient: “${note}”` }] : []),
+        ],
+      },
+    },
+  });
+
+  const name = `${firstName || patient.firstName} ${lastName || patient.lastName}`.trim();
+  await notifyAdmin(
+    intent === "finance"
+      ? `📝 ${name} applied for 0% finance (consent signed)`
+      : `⭐ ${name} is interested (consent signed)`,
+    `${name} signed the Invisalign consent${dob ? `, DOB ${dob}` : ""}. Review and send their ${intent === "finance" ? "finance application link" : "next steps"}: ${appUrl()}/admin/patients/${patient.id}` +
+      (note ? ` — Their message: “${note}”` : "")
+  );
+
+  redirect(toastUrl(`/p/${token}`, "Thank you! Please check your inbox — you'll receive an email shortly (usually within 2–3 hours).", "✓"));
+}
+
 // ── Interest / finance / call-back ──────────────────────────────────────
 export async function markInterested(formData: FormData) {
   const token = String(formData.get("token"));

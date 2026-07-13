@@ -37,6 +37,12 @@ model Patient {
   amountPaidPence       Int          @default(0)
   // £250 consultation/booking paid before the proposal — deducted from the total.
   upfrontPaidPence      Int          @default(0)
+  // Consent & finance application (captured when patient applies for finance / registers interest)
+  dateOfBirth           String       @default("")
+  consentSignedAt       DateTime?
+  consentSignature      String? // data-URL PNG of the drawn signature
+  financeLink           String       @default("") // finance/info link the admin attaches
+  financeApprovedAt     DateTime?
   proposalToken         String       @unique @default(cuid())
   passwordHash          String? // set on first visit to the secure link
   otpHash               String? // hashed one-time login code

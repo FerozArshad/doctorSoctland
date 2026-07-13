@@ -35,6 +35,8 @@ model Patient {
   pricePence            Int
   discountPct           Int          @default(5)
   amountPaidPence       Int          @default(0)
+  // £250 consultation/booking paid before the proposal — deducted from the total.
+  upfrontPaidPence      Int          @default(0)
   proposalToken         String       @unique @default(cuid())
   passwordHash          String? // set on first visit to the secure link
   otpHash               String? // hashed one-time login code

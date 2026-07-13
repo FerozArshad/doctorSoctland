@@ -4,7 +4,7 @@ import { redirect } from "next/navigation";
 import bcrypt from "bcryptjs";
 import { db } from "@/lib/db";
 import { clearAdminSession, createAdminSession, requireAdmin } from "@/lib/auth";
-import { defaultDiscountPct, fmt, fullPricePence, priceForPence } from "@/lib/pricing";
+import { defaultDiscountPct, fmt, fullPricePence, netPricePence, priceForPence, UPFRONT_PENCE } from "@/lib/pricing";
 import { proposalEmailHtml, proposalWhatsAppText, sendEmail, sendWhatsApp } from "@/lib/notify";
 
 function toastUrl(base: string, msg: string, icon = "✓", bg = "#0E9384") {
@@ -76,6 +76,47 @@ export async function createPatient(formData: FormData) {
   redirect(toastUrl(`/admin/patients/${patient.id}`, `Draft saved for ${firstName}`));
 }
 
+// Edit an existing patient — allowed at any status (even after paid/done).
+export async function updatePatient(formData: FormData) {
+  await requireAdmin();
+  const id = String(formData.get("patientId"));
+  const firstName = String(formData.get("firstName") || "").trim();
+  const lastName = String(formData.get("lastName") || "").trim();
+  const email = String(formData.get("email") || "").trim().toLowerCase();
+  const phone = String(formData.get("phone") || "").trim();
+  const alignerCount = Math.min(40, Math.max(1, parseInt(String(formData.get("alignerCount") || "14"), 10) || 14));
+  const pkg = formData.get("pkg") === "Express" ? "Express" : "Go";
+  const videoUrl = String(formData.get("videoUrl") || "").trim();
+  const notes = String(formData.get("notes") || "").trim();
+  const paidUpfront = formData.get("paidUpfront") === "on";
+
+  if (!firstName || !/.+@.+\..+/.test(email)) {
+    redirect(toastUrl(`/admin/patients/${id}/edit`, "A first name and valid email are required", "!", "#E0A429"));
+  }
+  const clash = await db.patient.findFirst({ where: { email, NOT: { id } } });
+  if (clash) {
+    redirect(toastUrl(`/admin/patients/${id}/edit`, "Another patient already uses that email", "!", "#E0A429"));
+  }
+
+  await db.patient.update({
+    where: { id },
+    data: {
+      firstName,
+      lastName,
+      email,
+      phone,
+      alignerCount,
+      pkg,
+      videoUrl,
+      notes,
+      pricePence: priceForPence(alignerCount),
+      upfrontPaidPence: paidUpfront ? UPFRONT_PENCE : 0,
+      activities: { create: { text: "Patient details updated by admin" } },
+    },
+  });
+  redirect(toastUrl(`/admin/patients/${id}`, "Patient details updated", "✓"));
+}
+
 // Sends the proposal by email + WhatsApp and logs activity.
 async function deliverProposal(patientId: string) {
   const patient = await db.patient.findUniqueOrThrow({ where: { id: patientId } });
@@ -127,7 +168,7 @@ export async function markPaid(formData: FormData) {
   await requireAdmin();
   const id = String(formData.get("patientId"));
   const patient = await db.patient.findUniqueOrThrow({ where: { id } });
-  const full = fullPricePence(patient.pricePence, patient.discountPct);
+  const full = fullPricePence(netPricePence(patient.pricePence, patient.upfrontPaidPence), patient.discountPct);
   await db.patient.update({
     where: { id },
     data: {

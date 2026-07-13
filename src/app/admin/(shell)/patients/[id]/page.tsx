@@ -84,6 +84,9 @@ export default async function PatientProfile({ params }: { params: { id: string 
               </div>
             </div>
             <div style={{ display: "flex", gap: 10 }}>
+              <Link href={`/admin/patients/${c.id}/edit`} className="btn btn-outline" style={{ padding: "11px 16px", fontSize: 13.5, textDecoration: "none" }}>
+                Edit
+              </Link>
               <form action={sendProposal}>
                 <input type="hidden" name="patientId" value={c.id} />
                 <button className="btn btn-outline" style={{ padding: "11px 16px", fontSize: 13.5 }}>

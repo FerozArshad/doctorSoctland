@@ -1,5 +1,12 @@
 // Pricing rules from the practice: 7 aligners → £1,500 · 8–20 → £2,250 · 20+ → £2,750
 export const DEPOSIT_PENCE = 70_000; // £700
+export const UPFRONT_PENCE = 25_000; // £250 consultation/booking paid before the proposal
+
+// Total the patient still owes: treatment price minus any £250 upfront already paid.
+// All payment options (full / deposit / instalments / finance) are computed on this.
+export function netPricePence(pricePence: number, upfrontPaidPence: number): number {
+  return Math.max(0, pricePence - (upfrontPaidPence || 0));
+}
 
 export function priceForPence(alignerCount: number): number {
   if (alignerCount <= 7) return 150_000;

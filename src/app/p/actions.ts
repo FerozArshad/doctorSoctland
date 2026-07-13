@@ -7,7 +7,7 @@ import bcrypt from "bcryptjs";
 import { db } from "@/lib/db";
 import { createPatientSession, getAdmin, getPatientSession } from "@/lib/auth";
 import { rateLimit } from "@/lib/ratelimit";
-import { DEPOSIT_PENCE, fmt, fullPricePence } from "@/lib/pricing";
+import { DEPOSIT_PENCE, fmt, fullPricePence, netPricePence } from "@/lib/pricing";
 import { brandedEmail, notifyAdmin, sendEmail, sendWhatsApp } from "@/lib/notify";
 import { stripe, stripeConfigured } from "@/lib/stripe";
 
@@ -179,7 +179,9 @@ async function launchCheckout(token: string, type: "full" | "deposit"): Promise<
     await db.patient.update({ where: { id: patient.id }, data: { stripeCustomerId: customerId } });
   }
 
-  const full = fullPricePence(patient.pricePence, patient.discountPct);
+  // Charge on the net total (treatment price minus any £250 upfront already paid).
+  const net = netPricePence(patient.pricePence, patient.upfrontPaidPence);
+  const full = fullPricePence(net, patient.discountPct);
   const amount = type === "full" ? full : DEPOSIT_PENCE;
   const name =
     type === "full"

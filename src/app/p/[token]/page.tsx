@@ -4,7 +4,7 @@ import { notFound } from "next/navigation";
 import { Suspense } from "react";
 import { db } from "@/lib/db";
 import { getAdmin, getPatientSession } from "@/lib/auth";
-import { DEPOSIT_PENCE, estMonths, finance36Pence, fmt, fullPricePence, instalmentPence } from "@/lib/pricing";
+import { DEPOSIT_PENCE, estMonths, finance36Pence, fmt, fullPricePence, instalmentPence, netPricePence } from "@/lib/pricing";
 import { COMP_ITEMS, COMP_TOTAL, WHY_US } from "@/lib/content";
 import { bookCall, markInterested } from "@/app/p/actions";
 import CreateAccountCard from "@/components/CreateAccountCard";
@@ -46,9 +46,12 @@ export default async function ProposalPage({
     );
   }
 
-  const full = fullPricePence(c.pricePence, c.discountPct);
-  const instal = instalmentPence(c.pricePence);
-  const fin36 = finance36Pence(c.pricePence);
+  // Net total = treatment price minus any £250 upfront already paid. Every
+  // payment option is calculated on this so the charge matches what's shown.
+  const net = netPricePence(c.pricePence, c.upfrontPaidPence);
+  const full = fullPricePence(net, c.discountPct);
+  const instal = instalmentPence(net);
+  const fin36 = finance36Pence(net);
   const paid = c.status === "paid";
   const depositPaid = c.status === "deposit";
 
@@ -57,7 +60,7 @@ export default async function ProposalPage({
       key: "full",
       title: "Pay in full today",
       desc: `${c.discountPct}% discount when paid in full — secure card payment.`,
-      strike: fmt(c.pricePence),
+      strike: fmt(net),
       price: fmt(full),
       tag: "Best value",
       cta: `Pay ${fmt(full)} securely →`,
@@ -178,6 +181,16 @@ export default async function ProposalPage({
 
             {/* payment options */}
             <h2 style={{ fontSize: 19, fontWeight: 800, margin: "36px 0 16px" }}>Payment options</h2>
+            {c.upfrontPaidPence > 0 && !paid && !depositPaid && (
+              <div style={{ border: "1px solid #CFEDE5", background: "#F4FCFA", borderRadius: 14, padding: "14px 18px", marginBottom: 16, display: "flex", gap: 10, alignItems: "flex-start" }}>
+                <span style={{ fontSize: 16, lineHeight: 1.4 }}>✓</span>
+                <div style={{ fontSize: 13.5, color: "#3C4a59", lineHeight: 1.6 }}>
+                  Thank you — we&apos;ve received your <strong>{fmt(c.upfrontPaidPence)}</strong> booking payment.
+                  It&apos;s already been credited against your treatment, so the balance remaining is{" "}
+                  <strong style={{ color: "#0B7A6E" }}>{fmt(net)}</strong>. The options below reflect this.
+                </div>
+              </div>
+            )}
             {paid ? (
               <div style={{ padding: "18px 20px", borderRadius: 14, background: "#E6F6EA", color: "#1C7C3A", fontWeight: 700, fontSize: 15 }}>
                 ✓ Your treatment is paid in full — thank you! We&apos;ll be in touch to arrange your aligner fitting.

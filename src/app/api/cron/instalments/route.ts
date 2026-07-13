@@ -4,7 +4,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { stripe, stripeConfigured } from "@/lib/stripe";
-import { fmt, fullPricePence } from "@/lib/pricing";
+import { fmt, fullPricePence, netPricePence } from "@/lib/pricing";
 import { notifyAdmin, receiptEmailHtml, sendEmail } from "@/lib/notify";
 
 export const runtime = "nodejs";
@@ -46,7 +46,7 @@ export async function GET(req: NextRequest) {
       });
 
       const newPaid = p.amountPaidPence + inst.amountPence;
-      const fullTarget = fullPricePence(p.pricePence, 0); // instalment plan pays full price
+      const fullTarget = netPricePence(p.pricePence, p.upfrontPaidPence); // instalment plan pays the net total
       const done = inst.number === 3 || newPaid >= fullTarget;
 
       await db.$transaction([

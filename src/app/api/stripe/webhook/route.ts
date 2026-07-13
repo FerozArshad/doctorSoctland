@@ -4,7 +4,7 @@ import { NextRequest, NextResponse } from "next/server";
 import type Stripe from "stripe";
 import { db } from "@/lib/db";
 import { stripe } from "@/lib/stripe";
-import { fmt, fullPricePence, instalmentPence } from "@/lib/pricing";
+import { fmt, fullPricePence, instalmentPence, netPricePence } from "@/lib/pricing";
 import { notifyAdmin, receiptEmailHtml, sendEmail } from "@/lib/notify";
 
 export const runtime = "nodejs";
@@ -68,7 +68,7 @@ async function handleCheckoutPaid(
       where: { id: patientId },
       data: {
         status: "paid",
-        amountPaidPence: fullPricePence(patient.pricePence, patient.discountPct),
+        amountPaidPence: fullPricePence(netPricePence(patient.pricePence, patient.upfrontPaidPence), patient.discountPct),
         activities: { create: { text: `Paid in full via secure link — ${fmt(amount)}` } },
       },
     });
@@ -88,7 +88,7 @@ async function handleCheckoutPaid(
     }
   }
 
-  const per = instalmentPence(patient.pricePence);
+  const per = instalmentPence(netPricePence(patient.pricePence, patient.upfrontPaidPence));
   const dueDates = [1, 2, 3].map((m) => {
     const d = new Date();
     d.setMonth(d.getMonth() + m);

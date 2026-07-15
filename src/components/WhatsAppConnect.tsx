@@ -39,19 +39,21 @@ export default function WhatsAppConnect() {
     };
     window.addEventListener("message", onMessage);
 
-    window.fbAsyncInit = function () {
-      window.FB.init({ appId: APP_ID, autoLogAppEvents: true, xfbml: true, version: "v25.0" });
+    const initFb = () => {
+      if (!window.FB) return;
+      window.FB.init({ appId: APP_ID, autoLogAppEvents: true, xfbml: true, version: "v23.0" });
       setSdkReady(true);
     };
-    if (!document.getElementById("facebook-jssdk")) {
+    window.fbAsyncInit = initFb;
+    if (window.FB) {
+      initFb(); // SDK already loaded — initialise immediately
+    } else if (!document.getElementById("facebook-jssdk")) {
       const js = document.createElement("script");
       js.id = "facebook-jssdk";
       js.src = "https://connect.facebook.net/en_US/sdk.js";
       js.async = true;
       js.defer = true;
       document.body.appendChild(js);
-    } else if (window.FB) {
-      setSdkReady(true);
     }
     return () => window.removeEventListener("message", onMessage);
   }, []);
@@ -75,6 +77,9 @@ export default function WhatsAppConnect() {
   };
 
   const launch = () => {
+    if (!window.FB) { setStatus("Facebook SDK is still loading — wait a second and click again."); return; }
+    // Guarantee init has run before login (prevents "FB.login() called before FB.init()").
+    window.FB.init({ appId: APP_ID, autoLogAppEvents: true, xfbml: true, version: "v23.0" });
     setStatus("Opening WhatsApp sign-up…");
     setWabaId(""); setPhoneId(""); setToken("");
     window.FB.login(

@@ -56,26 +56,32 @@ export default function WhatsAppConnect() {
     return () => window.removeEventListener("message", onMessage);
   }, []);
 
+  // Kept separate because FB.login rejects an async callback ("Expression is of
+  // type asyncfunction, not function"). The callback below must be a plain fn.
+  const exchangeCode = async (code: string) => {
+    setStatus("Finishing connection…");
+    try {
+      const r = await fetch("/api/whatsapp/embedded-signup", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ code }),
+      });
+      const j = await r.json();
+      if (j.access_token) { setToken(j.access_token); setStatus("✓ Connected. Save the two values below into your environment variables."); }
+      else { setStatus("Token exchange failed: " + (j.error || "unknown error")); }
+    } catch (e) {
+      setStatus("Token exchange request failed: " + (e as Error).message);
+    }
+  };
+
   const launch = () => {
     setStatus("Opening WhatsApp sign-up…");
     setWabaId(""); setPhoneId(""); setToken("");
     window.FB.login(
-      async (response: any) => {
+      (response: any) => {
         const code = response?.authResponse?.code;
         if (!code) { setStatus("No authorisation code returned — the popup may have been closed."); return; }
-        setStatus("Finishing connection…");
-        try {
-          const r = await fetch("/api/whatsapp/embedded-signup", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ code }),
-          });
-          const j = await r.json();
-          if (j.access_token) { setToken(j.access_token); setStatus("✓ Connected. Save the two values below into your environment variables."); }
-          else { setStatus("Token exchange failed: " + (j.error || "unknown error")); }
-        } catch (e) {
-          setStatus("Token exchange request failed: " + (e as Error).message);
-        }
+        void exchangeCode(code);
       },
       {
         config_id: CONFIG_ID,

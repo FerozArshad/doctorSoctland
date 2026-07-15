@@ -5,10 +5,11 @@
 // / WHATSAPP_TOKEN). Uses Meta's Facebook JS SDK per the v4 implementation.
 import { useEffect, useState } from "react";
 
-// NOTE: NEXT_PUBLIC_* are inlined at BUILD time — set them in Vercel then do a
-// FRESH build (redeploy without build cache), or the button stays disabled.
-const APP_ID = process.env.NEXT_PUBLIC_META_APP_ID || "";
-const CONFIG_ID = process.env.NEXT_PUBLIC_META_CONFIG_ID || "";
+// NOTE: NEXT_PUBLIC_* are inlined at BUILD time. Strip stray quotes/whitespace —
+// a value pasted into Vercel WITH the surrounding "…" leaves a quoted appId,
+// which makes the button enable (non-empty) but silently breaks FB.init.
+const APP_ID = (process.env.NEXT_PUBLIC_META_APP_ID || "").trim().replace(/^["'\s]+|["'\s]+$/g, "");
+const CONFIG_ID = (process.env.NEXT_PUBLIC_META_CONFIG_ID || "").trim().replace(/^["'\s]+|["'\s]+$/g, "");
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 declare global {
@@ -41,8 +42,13 @@ export default function WhatsAppConnect() {
 
     const initFb = () => {
       if (!window.FB) return;
-      window.FB.init({ appId: APP_ID, autoLogAppEvents: true, xfbml: true, version: "v23.0" });
-      setSdkReady(true);
+      try {
+        window.FB.init({ appId: APP_ID, autoLogAppEvents: true, xfbml: true, version: "v23.0" });
+        console.log("[wa-connect] initFb: FB.init done", { APP_ID, appIdLen: APP_ID.length });
+        setSdkReady(true);
+      } catch (e) {
+        console.error("[wa-connect] initFb: FB.init threw", e);
+      }
     };
     window.fbAsyncInit = initFb;
     if (window.FB) {
@@ -77,11 +83,21 @@ export default function WhatsAppConnect() {
   };
 
   const launch = () => {
+    console.log("[wa-connect] launch()", { APP_ID, CONFIG_ID, appIdLen: APP_ID.length, configIdLen: CONFIG_ID.length, hasFB: !!window.FB });
     if (!window.FB) { setStatus("Facebook SDK is still loading — wait a second and click again."); return; }
+    if (!APP_ID || !CONFIG_ID) { setStatus("App ID / Config ID missing at runtime — check the env vars."); return; }
     // Guarantee init has run before login (prevents "FB.login() called before FB.init()").
-    window.FB.init({ appId: APP_ID, autoLogAppEvents: true, xfbml: true, version: "v23.0" });
+    try {
+      window.FB.init({ appId: APP_ID, autoLogAppEvents: true, xfbml: true, version: "v23.0" });
+      console.log("[wa-connect] FB.init() succeeded");
+    } catch (e) {
+      console.error("[wa-connect] FB.init() threw", e);
+      setStatus("FB.init failed: " + (e as Error).message);
+      return;
+    }
     setStatus("Opening WhatsApp sign-up…");
     setWabaId(""); setPhoneId(""); setToken("");
+    console.log("[wa-connect] calling FB.login()", { config_id: CONFIG_ID });
     window.FB.login(
       (response: any) => {
         const code = response?.authResponse?.code;
@@ -126,6 +142,13 @@ export default function WhatsAppConnect() {
 
       {status && <div style={{ marginTop: 14, fontSize: 13.5, color: "#3C4a59" }}>{status}</div>}
 
+      {/* Debug panel — shows the actual runtime values (App ID / Config ID are not secret) */}
+      <div style={{ marginTop: 16, padding: "12px 14px", borderRadius: 10, background: "#0E1A2B", color: "#9FB2C8", fontSize: 12, fontFamily: "ui-monospace, monospace", lineHeight: 1.7, wordBreak: "break-all" }}>
+        <div style={{ color: "#7CF3D6", fontWeight: 700, marginBottom: 4 }}>debug</div>
+        <div>APP_ID: {APP_ID ? `"${APP_ID}"` : "(empty)"} · len {APP_ID.length}</div>
+        <div>CONFIG_ID: {CONFIG_ID ? `"${CONFIG_ID}"` : "(empty)"} · len {CONFIG_ID.length}</div>
+        <div>SDK ready: {String(sdkReady)} · window.FB: {typeof window !== "undefined" && window.FB ? "present" : "missing"}</div>
+      </div>
       {(phoneId || token) && (
         <div style={{ marginTop: 18, border: "1px solid #CFEDE5", background: "#F4FCFA", borderRadius: 14, padding: "16px 18px" }}>
           <div style={{ fontWeight: 800, fontSize: 14, color: "#0B7A6E", marginBottom: 10 }}>Paste these into your env vars (Vercel + local), then redeploy:</div>

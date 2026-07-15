@@ -5,6 +5,8 @@
 // / WHATSAPP_TOKEN). Uses Meta's Facebook JS SDK per the v4 implementation.
 import { useEffect, useState } from "react";
 
+// NOTE: NEXT_PUBLIC_* are inlined at BUILD time — set them in Vercel then do a
+// FRESH build (redeploy without build cache), or the button stays disabled.
 const APP_ID = process.env.NEXT_PUBLIC_META_APP_ID || "";
 const CONFIG_ID = process.env.NEXT_PUBLIC_META_CONFIG_ID || "";
 

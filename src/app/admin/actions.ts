@@ -16,10 +16,12 @@ function toastUrl(base: string, msg: string, icon = "✓", bg = "#0E9384") {
 export async function adminLogin(formData: FormData) {
   const email = String(formData.get("email") || "").trim().toLowerCase();
   const password = String(formData.get("password") || "");
-  // Max 5 attempts per email per 15 minutes. Use a distinct error so a lockout
-  // isn't indistinguishable from a wrong password (correct creds fail silently).
+  // Max 10 attempts per email per 15 minutes — enough to stop brute force, but
+  // forgiving of a few mistyped attempts. Distinct error so a lockout isn't
+  // indistinguishable from a wrong password (correct creds would fail silently).
+  // NOTE: in-memory, so it resets on redeploy and is per-instance on serverless.
   const { rateLimit } = await import("@/lib/ratelimit");
-  if (!rateLimit(`alogin:${email}`, 5, 15 * 60 * 1000)) redirect("/admin/login?error=locked");
+  if (!rateLimit(`alogin:${email}`, 10, 15 * 60 * 1000)) redirect("/admin/login?error=locked");
   const admin = await db.admin.findUnique({ where: { email } });
   if (!admin || !(await bcrypt.compare(password, admin.passwordHash))) {
     redirect("/admin/login?error=1");

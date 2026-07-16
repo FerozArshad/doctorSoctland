@@ -9,7 +9,6 @@ import { COMP_ITEMS, COMP_TOTAL, WHY_US } from "@/lib/content";
 import { bookCall } from "@/app/p/actions";
 import CreateAccountCard from "@/components/CreateAccountCard";
 import PaymentOptionsForm, { PayOption } from "@/components/PaymentOptionsForm";
-import InterestedButton from "@/components/InterestedButton";
 import OtpGate from "@/components/OtpGate";
 import VideoBlock from "@/components/VideoBlock";
 import Toast from "@/components/Toast";
@@ -236,13 +235,12 @@ export default async function ProposalPage({
             {/* CTA */}
             {!paid && (
               <div style={{ marginTop: 34, padding: 26, borderRadius: 16, background: "#0E1A2B", textAlign: "center" }}>
-                <div style={{ color: "#fff", fontSize: 19, fontWeight: 800 }}>Ready to get started?</div>
-                <div style={{ color: "#9FB2C8", fontSize: 14, marginTop: 6, lineHeight: 1.6 }}>Happy with your plan? Let us know and we&apos;ll order your aligners immediately.</div>
-                <InterestedButton token={c.proposalToken} applicant={applicant} />
-                <form action={bookCall} style={{ marginTop: 16 }}>
+                <div style={{ color: "#fff", fontSize: 19, fontWeight: 800 }}>Questions before you choose?</div>
+                <div style={{ color: "#9FB2C8", fontSize: 14, marginTop: 6, lineHeight: 1.6 }}>Your Treatment Coordinator is happy to talk anything through — no obligation.</div>
+                <form action={bookCall} style={{ marginTop: 18 }}>
                   <input type="hidden" name="token" value={c.proposalToken} />
-                  <button style={{ background: "transparent", color: "#9FB2C8", border: "none", fontWeight: 600, fontSize: 13.5, cursor: "pointer", textDecoration: "underline" }}>
-                    Or book a follow-up call with your Treatment Coordinator
+                  <button className="btn btn-teal" style={{ padding: "13px 28px", fontSize: 14.5, fontWeight: 800 }}>
+                    Book a follow-up call
                   </button>
                 </form>
               </div>

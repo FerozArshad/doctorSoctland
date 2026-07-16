@@ -17,6 +17,8 @@ model Admin {
   passwordHash String
   name         String
   role         String   @default("Treatment Coordinator")
+  // Super Admin sees revenue/earnings; a plain Admin sees patients & pipeline only.
+  isSuperAdmin Boolean  @default(false)
   createdAt    DateTime @default(now())
 }
 

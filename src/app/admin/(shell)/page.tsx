@@ -3,10 +3,15 @@ import { db } from "@/lib/db";
 import { fmt } from "@/lib/pricing";
 import { avatarBg, initials, statusOf, timeAgo, STATUS, StatusKey } from "@/lib/status";
 import TopBar from "@/components/TopBar";
+import { getAdmin } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
 export default async function Dashboard() {
+  // Only a Super Admin sees earnings (revenue cards + revenue chart).
+  const me = await getAdmin();
+  const isSuper = !!me?.isSuperAdmin;
+
   const patients = await db.patient.findMany({
     include: { activities: { orderBy: { createdAt: "desc" } } },
     orderBy: { createdAt: "desc" },
@@ -25,8 +30,15 @@ export default async function Dashboard() {
 
   const statCards = [
     { label: "Active patients", value: String(patients.length), delta: "+3 this wk", deltaColor: "#1C7C3A", deltaBg: "#E6F6EA", iconBg: "#EAF0FE", iconFg: "#2E6BFF", d: "M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8z" },
-    { label: "Revenue collected", value: fmt(collected), delta: "+12%", deltaColor: "#1C7C3A", deltaBg: "#E6F6EA", iconBg: "#E3F6F0", iconFg: "#0B7A6E", d: "M12 1v22M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" },
-    { label: "Pending revenue", value: fmt(pending), delta: overdueCount + " overdue", deltaColor: "#C23B34", deltaBg: "#FBE9E8", iconBg: "#FBF3E2", iconFg: "#B7791F", d: "M12 7v5l3 2M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0z" },
+    // Earnings — Super Admin only.
+    ...(isSuper
+      ? [
+          { label: "Revenue collected", value: fmt(collected), delta: "+12%", deltaColor: "#1C7C3A", deltaBg: "#E6F6EA", iconBg: "#E3F6F0", iconFg: "#0B7A6E", d: "M12 1v22M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" },
+          { label: "Pending revenue", value: fmt(pending), delta: overdueCount + " overdue", deltaColor: "#C23B34", deltaBg: "#FBE9E8", iconBg: "#FBF3E2", iconFg: "#B7791F", d: "M12 7v5l3 2M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0z" },
+        ]
+      : [
+          { label: "Awaiting payment", value: String(active.filter((c) => c.status !== "paid" && c.status !== "deposit").length), delta: overdueCount + " overdue", deltaColor: "#C23B34", deltaBg: "#FBE9E8", iconBg: "#FBF3E2", iconFg: "#B7791F", d: "M12 7v5l3 2M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0z" },
+        ]),
     { label: "Conversion rate", value: conv + "%", delta: won + "/" + active.length + " won", deltaColor: "#1D4FD8", deltaBg: "#EAF0FE", iconBg: "#F3EBFC", iconFg: "#9B51E0", d: "M23 6l-9.5 9.5-5-5L1 18M17 6h6v6" },
   ];
 
@@ -75,7 +87,7 @@ export default async function Dashboard() {
       <div className="ds-scroll" style={{ flex: 1, overflow: "auto", padding: 28 }}>
         <div className="ds-view">
           {/* stat cards */}
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 18 }}>
+          <div style={{ display: "grid", gridTemplateColumns: `repeat(${statCards.length},1fr)`, gap: 18 }}>
             {statCards.map((s) => (
               <div key={s.label} className="card" style={{ padding: 20, boxShadow: "0 1px 2px rgba(16,32,54,.03)" }}>
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
@@ -90,26 +102,28 @@ export default async function Dashboard() {
             ))}
           </div>
 
-          {/* chart + pipeline */}
-          <div style={{ display: "grid", gridTemplateColumns: "1.6fr 1fr", gap: 18, marginTop: 18 }}>
-            <div className="card" style={{ padding: 22 }}>
-              <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between" }}>
-                <div>
-                  <div style={{ fontSize: 15, fontWeight: 800 }}>Revenue collected</div>
-                  <div style={{ fontSize: 12.5, color: "#7A8696", marginTop: 2 }}>Last 6 months</div>
-                </div>
-                <div style={{ fontSize: 22, fontWeight: 800 }}>{chartTotal}</div>
-              </div>
-              <div style={{ display: "flex", alignItems: "flex-end", gap: 14, height: 150, marginTop: 22 }}>
-                {monthly.map((b, i) => (
-                  <div key={b.month + i} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 8, height: "100%", justifyContent: "flex-end" }}>
-                    <div style={{ fontSize: 11, fontWeight: 700, color: "#5C6a79" }}>{fmt(b.v)}</div>
-                    <div style={{ width: "100%", borderRadius: "8px 8px 3px 3px", background: i === 5 ? "#0E9384" : "#CDE9E4", height: Math.round(18 + (b.v / max) * 82) + "%" }} />
-                    <div style={{ fontSize: 11, color: "#9AA6B4", fontWeight: 600 }}>{b.month}</div>
+          {/* chart (Super Admin only) + pipeline */}
+          <div style={{ display: "grid", gridTemplateColumns: isSuper ? "1.6fr 1fr" : "1fr", gap: 18, marginTop: 18 }}>
+            {isSuper && (
+              <div className="card" style={{ padding: 22 }}>
+                <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between" }}>
+                  <div>
+                    <div style={{ fontSize: 15, fontWeight: 800 }}>Revenue collected</div>
+                    <div style={{ fontSize: 12.5, color: "#7A8696", marginTop: 2 }}>Last 6 months</div>
                   </div>
-                ))}
+                  <div style={{ fontSize: 22, fontWeight: 800 }}>{chartTotal}</div>
+                </div>
+                <div style={{ display: "flex", alignItems: "flex-end", gap: 14, height: 150, marginTop: 22 }}>
+                  {monthly.map((b, i) => (
+                    <div key={b.month + i} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 8, height: "100%", justifyContent: "flex-end" }}>
+                      <div style={{ fontSize: 11, fontWeight: 700, color: "#5C6a79" }}>{fmt(b.v)}</div>
+                      <div style={{ width: "100%", borderRadius: "8px 8px 3px 3px", background: i === 5 ? "#0E9384" : "#CDE9E4", height: Math.round(18 + (b.v / max) * 82) + "%" }} />
+                      <div style={{ fontSize: 11, color: "#9AA6B4", fontWeight: 600 }}>{b.month}</div>
+                    </div>
+                  ))}
+                </div>
               </div>
-            </div>
+            )}
             <div className="card" style={{ padding: 22 }}>
               <div style={{ fontSize: 15, fontWeight: 800 }}>Pipeline</div>
               <div style={{ fontSize: 12.5, color: "#7A8696", marginTop: 2 }}>Patients by stage</div>

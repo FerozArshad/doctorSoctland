@@ -31,6 +31,7 @@ export async function runSeed(db: PrismaClient): Promise<SeedResult> {
       passwordHash: await bcrypt.hash("dental123", 10),
       name: "Dr. Rhona Sinclair",
       role: "Treatment Coordinator",
+      isSuperAdmin: true, // primary account sees revenue
     },
   });
 

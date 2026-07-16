@@ -4,7 +4,8 @@ import { notFound } from "next/navigation";
 import { Suspense } from "react";
 import { db } from "@/lib/db";
 import { getAdmin, getPatientSession } from "@/lib/auth";
-import { DEPOSIT_PENCE, estMonths, finance36Pence, fmt, fullPricePence, instalmentPence, netPricePence } from "@/lib/pricing";
+import { estMonths, finance36Pence, fmt, fullPricePence, instalmentPence, netPricePence } from "@/lib/pricing";
+import { getPricing } from "@/lib/pricing-settings";
 import { COMP_ITEMS, COMP_TOTAL, WHY_US } from "@/lib/content";
 import { bookCall } from "@/app/p/actions";
 import CreateAccountCard from "@/components/CreateAccountCard";
@@ -48,9 +49,10 @@ export default async function ProposalPage({
 
   // Net total = treatment price minus any £250 upfront already paid. Every
   // payment option is calculated on this so the charge matches what's shown.
+  const cfg = await getPricing();
   const net = netPricePence(c.pricePence, c.upfrontPaidPence);
   const full = fullPricePence(net, c.discountPct);
-  const instal = instalmentPence(net);
+  const instal = instalmentPence(net, cfg.depositPence);
   const fin36 = finance36Pence(net);
   const paid = c.status === "paid";
   const depositPaid = c.status === "deposit";
@@ -75,11 +77,11 @@ export default async function ProposalPage({
     {
       key: "deposit",
       title: "Deposit + 3 instalments",
-      desc: `${fmt(DEPOSIT_PENCE)} today, then 3 monthly payments collected automatically. No credit checks.`,
+      desc: `${fmt(cfg.depositPence)} today, then 3 monthly payments collected automatically. No credit checks.`,
       priceTop: "then",
       price: fmt(instal),
       priceSub: "/mo",
-      cta: `Pay ${fmt(DEPOSIT_PENCE)} deposit →`,
+      cta: `Pay ${fmt(cfg.depositPence)} deposit →`,
     },
     {
       key: "finance",

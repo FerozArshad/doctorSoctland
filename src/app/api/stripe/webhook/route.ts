@@ -5,6 +5,7 @@ import type Stripe from "stripe";
 import { db } from "@/lib/db";
 import { stripe } from "@/lib/stripe";
 import { fmt, fullPricePence, instalmentPence, netPricePence } from "@/lib/pricing";
+import { getPricing } from "@/lib/pricing-settings";
 import { notifyAdmin, receiptEmailHtml, sendEmail } from "@/lib/notify";
 
 export const runtime = "nodejs";
@@ -88,7 +89,8 @@ async function handleCheckoutPaid(
     }
   }
 
-  const per = instalmentPence(netPricePence(patient.pricePence, patient.upfrontPaidPence));
+  const cfg = await getPricing();
+  const per = instalmentPence(netPricePence(patient.pricePence, patient.upfrontPaidPence), cfg.depositPence);
   const dueDates = [1, 2, 3].map((m) => {
     const d = new Date();
     d.setMonth(d.getMonth() + m);
@@ -101,11 +103,12 @@ async function handleCheckoutPaid(
       where: { id: patientId },
       data: {
         status: "deposit",
-        amountPaidPence: 70_000,
+        // Record what Stripe actually took, not a hardcoded figure.
+        amountPaidPence: amount,
         stripePaymentMethodId: pmId,
         activities: {
           create: [
-            { text: "£700 deposit paid via secure link" },
+            { text: `${fmt(amount)} deposit paid via secure link` },
             { text: `3 monthly instalments of ${fmt(per)} scheduled` },
           ],
         },
@@ -124,7 +127,7 @@ async function handleCheckoutPaid(
     receiptEmailHtml(patient, amount, `deposit — 3 monthly instalments of ${fmt(per)} will follow automatically`)
   ).catch(console.error);
   await notifyAdmin(
-    `💚 ${patient.firstName} ${patient.lastName} paid the £700 deposit`,
+    `💚 ${patient.firstName} ${patient.lastName} paid the ${fmt(amount)} deposit`,
     `3 instalments of ${fmt(per)} scheduled monthly on their saved card.`
   );
 }

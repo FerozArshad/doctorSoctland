@@ -5,6 +5,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { reminderEmailHtml, reminderWhatsAppText, sendEmail, sendWhatsApp } from "@/lib/notify";
+import { getPricing } from "@/lib/pricing-settings";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -19,6 +20,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: "unauthorised" }, { status: 401 });
   }
 
+  const cfg = await getPricing();
   const patients = await db.patient.findMany({ where: { status: { in: UNPAID_STATUSES } } });
 
   const results: Array<{ patient: string; email: boolean; whatsapp: boolean }> = [];
@@ -26,13 +28,13 @@ export async function GET(req: NextRequest) {
     let emailOk = false;
     let waOk = false;
     try {
-      await sendEmail(p.email, `Your Invisalign plan is waiting, ${p.firstName}`, reminderEmailHtml(p));
+      await sendEmail(p.email, `Your Invisalign plan is waiting, ${p.firstName}`, reminderEmailHtml(p, cfg));
       emailOk = true;
     } catch (e) {
       console.error(`reminder email to ${p.email} failed:`, e);
     }
     if (p.phone && p.phone !== "—") {
-      const r = await sendWhatsApp(p.phone, reminderWhatsAppText(p));
+      const r = await sendWhatsApp(p.phone, reminderWhatsAppText(p, cfg));
       waOk = !("error" in r && r.error);
     }
     await db.patient.update({

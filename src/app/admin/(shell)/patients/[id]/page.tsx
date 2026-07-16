@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { db } from "@/lib/db";
 import { estMonths, fmt } from "@/lib/pricing";
+import { getPricing } from "@/lib/pricing-settings";
 import { avatarBg, initials, statusOf, timeAgo } from "@/lib/status";
 import { COMP_ITEMS, COMP_TOTAL } from "@/lib/content";
 import { approveFinance, markPaid, recordDeposit, sendProposal } from "@/app/admin/actions";
@@ -28,6 +29,7 @@ export default async function PatientProfile({ params }: { params: { id: string 
     },
   });
   if (!c) notFound();
+  const cfg = await getPricing();
 
   const st = statusOf(c.status);
   const overdue = c.status === "overdue";
@@ -161,7 +163,7 @@ export default async function PatientProfile({ params }: { params: { id: string 
                 {c.paymentPreference && (
                   <div style={{ marginBottom: 14, padding: "11px 14px", borderRadius: 11, background: "#F3EBFC", border: "1px solid #E4D3F7", fontSize: 13.5, color: "#7A3EC0", fontWeight: 700 }}>
                     Patient&apos;s choice:{" "}
-                    {{ full: "Pay in full", deposit: "£700 deposit + 3 instalments", monthly: "Monthly payment plan — send them a schedule", finance: "0% finance — send the application link" }[c.paymentPreference] ?? c.paymentPreference}
+                    {{ full: "Pay in full", deposit: `${fmt(cfg.depositPence)} deposit + 3 instalments`, monthly: "Monthly payment plan — send them a schedule", finance: "0% finance — send the application link" }[c.paymentPreference] ?? c.paymentPreference}
                   </div>
                 )}
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 10 }}>
@@ -193,7 +195,7 @@ export default async function PatientProfile({ params }: { params: { id: string 
                 <div style={{ marginTop: 14, display: "flex", gap: 10 }}>
                   <form action={recordDeposit} style={{ flex: 1, display: "flex" }}>
                     <input type="hidden" name="patientId" value={c.id} />
-                    <button className="btn btn-outline" style={{ flex: 1, padding: 11, borderRadius: 10, fontSize: 13.5 }}>Record £700 deposit</button>
+                    <button className="btn btn-outline" style={{ flex: 1, padding: 11, borderRadius: 10, fontSize: 13.5 }}>Record {fmt(cfg.depositPence)} deposit</button>
                   </form>
                   <form action={markPaid} style={{ flex: 1, display: "flex" }}>
                     <input type="hidden" name="patientId" value={c.id} />

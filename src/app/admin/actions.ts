@@ -4,7 +4,8 @@ import { redirect } from "next/navigation";
 import bcrypt from "bcryptjs";
 import { db } from "@/lib/db";
 import { clearAdminSession, createAdminSession, requireAdmin } from "@/lib/auth";
-import { defaultDiscountPct, fmt, fullPricePence, netPricePence, priceForPence, UPFRONT_PENCE } from "@/lib/pricing";
+import { fmt, fullPricePence, netPricePence, priceForPence } from "@/lib/pricing";
+import { getPricing } from "@/lib/pricing-settings";
 import { financeLinkEmailHtml, proposalEmailHtml, proposalWhatsAppText, sendEmail, sendWhatsApp } from "@/lib/notify";
 
 function toastUrl(base: string, msg: string, icon = "✓", bg = "#0E9384") {
@@ -35,9 +36,49 @@ export async function adminLogout() {
   redirect("/admin/login");
 }
 
+// ── Pricing settings ────────────────────────────────────────────────────
+// Editable by any admin. Changing these affects NEW/edited proposals only —
+// existing patients keep the pricePence/discountPct captured at proposal time,
+// so no one's agreed price ever changes retroactively.
+export async function updatePricing(formData: FormData) {
+  const admin = await requireAdmin();
+  const cur = await getPricing();
+
+  // Form takes pounds; we store pence.
+  const pence = (key: string, fallback: number) => {
+    const n = Math.round(parseFloat(String(formData.get(key) ?? "")) * 100);
+    return Number.isFinite(n) && n >= 0 ? n : fallback;
+  };
+  const whole = (key: string, fallback: number, max: number) => {
+    const n = parseInt(String(formData.get(key) ?? ""), 10);
+    return Number.isFinite(n) && n >= 0 && n <= max ? n : fallback;
+  };
+
+  const data = {
+    tier1MaxAligners: whole("tier1MaxAligners", cur.tier1MaxAligners, 40),
+    tier1Pence: pence("tier1Pounds", cur.tier1Pence),
+    tier2MaxAligners: whole("tier2MaxAligners", cur.tier2MaxAligners, 40),
+    tier2Pence: pence("tier2Pounds", cur.tier2Pence),
+    tier3Pence: pence("tier3Pounds", cur.tier3Pence),
+    depositPence: pence("depositPounds", cur.depositPence),
+    upfrontPence: pence("upfrontPounds", cur.upfrontPence),
+    discountPct: whole("discountPct", cur.discountPct, 100),
+    updatedByEmail: admin.email,
+  };
+
+  // A deposit above the cheapest treatment would make instalments negative.
+  if (data.depositPence >= data.tier1Pence) {
+    redirect(toastUrl("/admin/settings", "Deposit must be less than the lowest treatment price", "!", "#E0A429"));
+  }
+
+  await db.pricing.upsert({ where: { id: "default" }, update: data, create: { id: "default", ...data } });
+  redirect(toastUrl("/admin/settings", "Pricing updated — applies to new & edited proposals", "✓"));
+}
+
 // ── Patients ────────────────────────────────────────────────────────────
 export async function createPatient(formData: FormData) {
   await requireAdmin();
+  const cfg = await getPricing();
   const send = formData.get("intent") === "send";
   const firstName = String(formData.get("firstName") || "").trim();
   const lastName = String(formData.get("lastName") || "").trim();
@@ -66,8 +107,8 @@ export async function createPatient(formData: FormData) {
       videoUrl,
       notes,
       status: "draft",
-      pricePence: priceForPence(alignerCount),
-      discountPct: defaultDiscountPct(),
+      pricePence: priceForPence(alignerCount, cfg),
+      discountPct: cfg.discountPct,
       activities: { create: { text: "Draft proposal created" } },
     },
   });
@@ -82,6 +123,7 @@ export async function createPatient(formData: FormData) {
 // Edit an existing patient — allowed at any status (even after paid/done).
 export async function updatePatient(formData: FormData) {
   await requireAdmin();
+  const cfg = await getPricing();
   const id = String(formData.get("patientId"));
   const firstName = String(formData.get("firstName") || "").trim();
   const lastName = String(formData.get("lastName") || "").trim();
@@ -112,8 +154,8 @@ export async function updatePatient(formData: FormData) {
       pkg,
       videoUrl,
       notes,
-      pricePence: priceForPence(alignerCount),
-      upfrontPaidPence: paidUpfront ? UPFRONT_PENCE : 0,
+      pricePence: priceForPence(alignerCount, cfg),
+      upfrontPaidPence: paidUpfront ? cfg.upfrontPence : 0,
       activities: { create: { text: "Patient details updated by admin" } },
     },
   });
@@ -153,10 +195,11 @@ export async function approveFinance(formData: FormData) {
 
 // Sends the proposal by email + WhatsApp and logs activity.
 async function deliverProposal(patientId: string) {
+  const cfg = await getPricing();
   const patient = await db.patient.findUniqueOrThrow({ where: { id: patientId } });
   const results: string[] = [];
   try {
-    await sendEmail(patient.email, "Your Invisalign Treatment Proposal — Dental Scotland", proposalEmailHtml(patient));
+    await sendEmail(patient.email, "Your Invisalign Treatment Proposal — Dental Scotland", proposalEmailHtml(patient, cfg));
     results.push(`Proposal emailed to ${patient.email}`);
   } catch (e) {
     console.error(e);
@@ -185,17 +228,19 @@ export async function sendProposal(formData: FormData) {
 
 export async function recordDeposit(formData: FormData) {
   await requireAdmin();
+  const cfg = await getPricing();
+  const dep = cfg.depositPence;
   const id = String(formData.get("patientId"));
   await db.patient.update({
     where: { id },
     data: {
       status: "deposit",
-      amountPaidPence: 70_000,
-      activities: { create: { text: "£700 deposit recorded" } },
-      payments: { create: { amountPence: 70_000, type: "manual", status: "paid", paidAt: new Date() } },
+      amountPaidPence: dep,
+      activities: { create: { text: `${fmt(dep)} deposit recorded` } },
+      payments: { create: { amountPence: dep, type: "manual", status: "paid", paidAt: new Date() } },
     },
   });
-  redirect(toastUrl(`/admin/patients/${id}`, "£700 deposit recorded"));
+  redirect(toastUrl(`/admin/patients/${id}`, `${fmt(dep)} deposit recorded`));
 }
 
 export async function markPaid(formData: FormData) {

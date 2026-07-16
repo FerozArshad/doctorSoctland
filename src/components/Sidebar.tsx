@@ -8,6 +8,7 @@ const NAV = [
   { key: "patients", label: "Patients", href: "/admin/patients", d: "M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75" },
   { key: "add", label: "New patient", href: "/admin/patients/new", d: "M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM19 8v6M22 11h-6" },
   { key: "proposals", label: "Proposals", href: "/admin/patients", d: "M7 3h7l5 5v12a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1zM14 3v5h5M9 13h6M9 17h4" },
+  { key: "settings", label: "Settings", href: "/admin/settings", d: "M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.6a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" },
 ];
 
 export default function Sidebar({
@@ -27,11 +28,13 @@ export default function Sidebar({
   const activeKey =
     pathname === "/admin"
       ? "dashboard"
-      : pathname.startsWith("/admin/patients/new")
-        ? "add"
-        : pathname.startsWith("/admin/patients")
-          ? "patients"
-          : "dashboard";
+      : pathname.startsWith("/admin/settings")
+        ? "settings"
+        : pathname.startsWith("/admin/patients/new")
+          ? "add"
+          : pathname.startsWith("/admin/patients")
+            ? "patients"
+            : "dashboard";
 
   return (
     <aside style={{ width: 248, flex: "none", background: "#0E1A2B", display: "flex", flexDirection: "column", position: "sticky", top: 0, height: "100vh" }}>

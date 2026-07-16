@@ -3,7 +3,7 @@
 // so the app is fully usable in dev before credentials are added.
 import { Resend } from "resend";
 import type { Patient } from "@prisma/client";
-import { estMonths, fmt, fullPricePence, instalmentPence, netPricePence } from "./pricing";
+import { estMonths, fmt, fullPricePence, instalmentPence, netPricePence, PRICING_DEFAULTS, type PricingConfig } from "./pricing";
 import { gmailConfigured, sendGmail } from "./google";
 
 const appUrl = () => process.env.APP_URL || "http://localhost:3000";
@@ -126,10 +126,10 @@ export function brandedEmail(title: string, bodyHtml: string) {
 </body></html>`;
 }
 
-export function proposalEmailHtml(p: Patient) {
+export function proposalEmailHtml(p: Patient, cfg: PricingConfig = PRICING_DEFAULTS) {
   const net = netPricePence(p.pricePence, p.upfrontPaidPence);
   const full = fullPricePence(net, p.discountPct);
-  const instal = instalmentPence(net);
+  const instal = instalmentPence(net, cfg.depositPence);
   const link = proposalLink(p);
   const row = (l: string, v: string, hl = false) =>
     `<tr><td style="padding:12px 16px;border-bottom:1px solid #F1F4F8;font-size:13px;color:${hl ? "#0B7A6E" : "#7A8696"};${hl ? "background:#F0FBF8;font-weight:600;" : ""}">${l}</td><td style="padding:12px 16px;border-bottom:1px solid #F1F4F8;font-size:14px;font-weight:800;text-align:right;color:${hl ? "#0B7A6E" : "#16202E"};${hl ? "background:#F0FBF8;" : ""}">${v}</td></tr>`;
@@ -152,7 +152,7 @@ export function proposalEmailHtml(p: Patient) {
      <p style="font-size:14px;line-height:1.7;color:#3C4a59;margin:20px 0 6px;"><strong>Your payment options:</strong></p>
      <ul style="font-size:14px;line-height:1.9;color:#3C4a59;margin:0 0 24px;padding-left:20px;">
        <li>Pay in full today — <strong>${fmt(full)}</strong> (${p.discountPct}% discount)</li>
-       <li>£700 deposit, then 3 monthly instalments of <strong>${fmt(instal)}</strong></li>
+       <li>${fmt(cfg.depositPence)} deposit, then 3 monthly instalments of <strong>${fmt(instal)}</strong></li>
        <li>0% interest-free finance over 12, 24 or 36 months</li>
      </ul>
      <div style="text-align:center;">
@@ -177,7 +177,7 @@ export function receiptEmailHtml(p: Patient, amountPence: number, what: string) 
 
 // ── Payment reminder (for patients who've had a proposal but not yet paid) ──
 // Written in a warm, personal coordinator's voice — deliberately not generic.
-export function reminderEmailHtml(p: Patient) {
+export function reminderEmailHtml(p: Patient, cfg: PricingConfig = PRICING_DEFAULTS) {
   const net = netPricePence(p.pricePence, p.upfrontPaidPence);
   const full = fullPricePence(net, p.discountPct);
   const link = proposalLink(p);
@@ -190,7 +190,7 @@ export function reminderEmailHtml(p: Patient) {
     `<p style="font-size:15px;line-height:1.7;color:#3C4a59;margin:0 0 16px;">Hi ${p.firstName},</p>
      <p style="font-size:15px;line-height:1.7;color:#3C4a59;margin:0 0 16px;">It's Dental Scotland here — just a friendly note to say your personalised Invisalign plan is still ready and waiting whenever you are. There's no rush, but we didn't want you to miss it.</p>
      ${creditLine}
-     <p style="font-size:15px;line-height:1.7;color:#3C4a59;margin:16px 0;">Prefer to pay in one go? You'll save 5% and settle at <strong>${fmt(full)}</strong>. Or spread it with our £700-deposit plan or 0% finance — whatever feels right for you.</p>
+     <p style="font-size:15px;line-height:1.7;color:#3C4a59;margin:16px 0;">Prefer to pay in one go? You'll save ${p.discountPct}% and settle at <strong>${fmt(full)}</strong>. Or spread it with our ${fmt(cfg.depositPence)}-deposit plan or 0% finance — whatever feels right for you.</p>
      <div style="text-align:center;margin-top:8px;">
        <a href="${link}" style="display:inline-block;background:#0E9384;color:#ffffff;text-decoration:none;padding:15px 34px;border-radius:11px;font-weight:800;font-size:15px;">Review your plan &amp; choose a payment option →</a>
      </div>
@@ -214,9 +214,9 @@ export function financeLinkEmailHtml(p: Patient, link: string) {
   );
 }
 
-export function reminderWhatsAppText(p: Patient) {
+export function reminderWhatsAppText(p: Patient, cfg: PricingConfig = PRICING_DEFAULTS) {
   const net = netPricePence(p.pricePence, p.upfrontPaidPence);
   const full = fullPricePence(net, p.discountPct);
   const balance = p.upfrontPaidPence > 0 ? `just ${fmt(net)} left (your ${fmt(p.upfrontPaidPence)} booking is already credited)` : `${fmt(net)}`;
-  return `Hi ${p.firstName}, it's Dental Scotland 🦷 Your Invisalign plan is still saved for you — no rush at all, we just didn't want you to miss it.\n\nThere's ${balance}, and paying in full saves 5% (${fmt(full)}). You can also spread it with a £700 deposit or 0% finance.\n\nHave a look and pick what suits you here:\n${proposalLink(p)}\n\nAny questions, just reply — a real person will help. 😊`;
+  return `Hi ${p.firstName}, it's Dental Scotland 🦷 Your Invisalign plan is still saved for you — no rush at all, we just didn't want you to miss it.\n\nThere's ${balance}, and paying in full saves ${p.discountPct}% (${fmt(full)}). You can also spread it with a ${fmt(cfg.depositPence)} deposit or 0% finance.\n\nHave a look and pick what suits you here:\n${proposalLink(p)}\n\nAny questions, just reply — a real person will help. 😊`;
 }

@@ -7,7 +7,8 @@ import bcrypt from "bcryptjs";
 import { db } from "@/lib/db";
 import { createPatientSession, getAdmin, getPatientSession } from "@/lib/auth";
 import { rateLimit } from "@/lib/ratelimit";
-import { DEPOSIT_PENCE, fmt, fullPricePence, netPricePence } from "@/lib/pricing";
+import { fmt, fullPricePence, netPricePence } from "@/lib/pricing";
+import { getPricing } from "@/lib/pricing-settings";
 import { brandedEmail, notifyAdmin, sendEmail, sendWhatsApp } from "@/lib/notify";
 import { stripe, stripeConfigured } from "@/lib/stripe";
 
@@ -179,14 +180,15 @@ async function launchCheckout(token: string, type: "full" | "deposit"): Promise<
     await db.patient.update({ where: { id: patient.id }, data: { stripeCustomerId: customerId } });
   }
 
-  // Charge on the net total (treatment price minus any £250 upfront already paid).
+  // Charge on the net total (treatment price minus any upfront already paid).
+  const cfg = await getPricing();
   const net = netPricePence(patient.pricePence, patient.upfrontPaidPence);
   const full = fullPricePence(net, patient.discountPct);
-  const amount = type === "full" ? full : DEPOSIT_PENCE;
+  const amount = type === "full" ? full : cfg.depositPence;
   const name =
     type === "full"
       ? `Invisalign ${patient.pkg} — pay in full (${patient.discountPct}% discount)`
-      : `Invisalign ${patient.pkg} — £700 deposit (3 monthly instalments to follow)`;
+      : `Invisalign ${patient.pkg} — ${fmt(cfg.depositPence)} deposit (3 monthly instalments to follow)`;
 
   const session = await s.checkout.sessions.create({
     mode: "payment",
@@ -226,9 +228,10 @@ export async function selectPaymentOption(formData: FormData) {
   const note = String(formData.get("note") || "").trim().slice(0, 500);
   const patient = await requireVerified(token);
 
+  const optCfg = await getPricing();
   const labels: Record<string, string> = {
     full: "Pay in full",
-    deposit: "£700 deposit + 3 instalments",
+    deposit: `${fmt(optCfg.depositPence)} deposit + 3 instalments`,
     finance: "0% finance",
   };
   if (!labels[choice]) redirect(`/p/${token}`);

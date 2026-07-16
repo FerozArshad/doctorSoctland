@@ -11,6 +11,23 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+/// Practice-wide pricing, editable by admins. Single row (id = "default").
+/// Patients keep their own pricePence/discountPct captured at proposal time,
+/// so changing these only affects NEW/edited proposals — never existing charges.
+model Pricing {
+  id               String   @id @default("default")
+  tier1MaxAligners Int      @default(7)
+  tier1Pence       Int      @default(150000)
+  tier2MaxAligners Int      @default(20)
+  tier2Pence       Int      @default(225000)
+  tier3Pence       Int      @default(275000)
+  depositPence     Int      @default(70000)
+  upfrontPence     Int      @default(25000)
+  discountPct      Int      @default(5)
+  updatedAt        DateTime @updatedAt
+  updatedByEmail   String   @default("")
+}
+
 model Admin {
   id           String   @id @default(cuid())
   email        String   @unique

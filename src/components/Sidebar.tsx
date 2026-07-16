@@ -14,11 +14,13 @@ export default function Sidebar({
   patientCount,
   adminName,
   adminRole,
+  isSuperAdmin,
   adminInitials,
 }: {
   patientCount: number;
   adminName: string;
   adminRole: string;
+  isSuperAdmin: boolean;
   adminInitials: string;
 }) {
   const pathname = usePathname();
@@ -68,7 +70,20 @@ export default function Sidebar({
         <div style={{ width: 36, height: 36, borderRadius: "50%", background: "#0E9384", color: "#fff", display: "grid", placeItems: "center", fontWeight: 800, fontSize: 13, flex: "none" }}>{adminInitials}</div>
         <div style={{ minWidth: 0 }}>
           <div style={{ color: "#fff", fontSize: 13.5, fontWeight: 700, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{adminName}</div>
-          <div style={{ color: "#6E819A", fontSize: 12 }}>{adminRole}</div>
+          <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 2 }}>
+            <span
+              title={isSuperAdmin ? "Full access, including revenue" : "No access to revenue figures"}
+              style={{
+                fontSize: 10, fontWeight: 800, letterSpacing: ".04em", textTransform: "uppercase",
+                padding: "2px 7px", borderRadius: 20, whiteSpace: "nowrap",
+                background: isSuperAdmin ? "#0E9384" : "#33465F",
+                color: isSuperAdmin ? "#fff" : "#B9C7D9",
+              }}
+            >
+              {isSuperAdmin ? "Super Admin" : "Admin"}
+            </span>
+            <span style={{ color: "#6E819A", fontSize: 11.5, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{adminRole}</span>
+          </div>
         </div>
       </div>
     </aside>

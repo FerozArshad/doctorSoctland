@@ -18,6 +18,7 @@ export default async function AdminShell({ children }: { children: React.ReactNo
         patientCount={patientCount}
         adminName={admin.name}
         adminRole={admin.role}
+        isSuperAdmin={admin.isSuperAdmin}
         adminInitials={initials(first || "?", rest.join(" "))}
       />
       <main style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", height: "100vh" }}>

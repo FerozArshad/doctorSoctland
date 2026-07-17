@@ -109,15 +109,15 @@ export default async function ProposalPage({
         </div>
       )}
 
-      <div className="ds-scroll ds-view" style={{ flex: 1, overflow: "auto", padding: "36px 20px 60px" }}>
+      <div className="ds-scroll ds-view ds-shell-pad" style={{ flex: 1, overflow: "auto", padding: "36px 20px 60px" }}>
         <div style={{ maxWidth: 720, margin: "0 auto", background: "#fff", borderRadius: 20, overflow: "hidden", boxShadow: "0 30px 60px -30px rgba(11,24,40,.4)" }}>
           {/* brand header */}
-          <div style={{ background: "#0E1A2B", padding: "30px 40px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+          <div className="ds-pad-header" style={{ background: "#0E1A2B", padding: "30px 40px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
             <Image src="/logo.webp" alt="Dental Scotland" width={170} height={46} style={{ height: 46, width: "auto" }} />
             <div style={{ textAlign: "right", color: "#8FA6C0", fontSize: 12, fontWeight: 600, letterSpacing: ".04em", textTransform: "uppercase" }}>Invisalign Proposal</div>
           </div>
 
-          <div style={{ padding: "40px 44px" }}>
+          <div className="ds-pad-lg" style={{ padding: "40px 44px" }}>
             <div style={{ fontSize: 12, fontWeight: 700, letterSpacing: ".1em", textTransform: "uppercase", color: "#0E9384" }}>Your Personalised Plan</div>
             <h1 style={{ fontSize: 30, fontWeight: 800, margin: "10px 0 0", letterSpacing: "-.02em", lineHeight: 1.15 }}>Your Invisalign Treatment Proposal</h1>
 
@@ -143,7 +143,7 @@ export default async function ProposalPage({
             {/* plan summary */}
             <div style={{ marginTop: 28, border: "1px solid #E7ECF2", borderRadius: 16, overflow: "hidden" }}>
               <div style={{ background: "#F6F9FA", padding: "14px 20px", fontWeight: 700, fontSize: 13, letterSpacing: ".06em", textTransform: "uppercase", color: "#0E1A2B", borderBottom: "1px solid #E7ECF2" }}>Your Invisalign Plan</div>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr" }}>
+              <div className="ds-grid-2" style={{ display: "grid", gridTemplateColumns: "1fr 1fr" }}>
                 <div style={{ padding: "18px 20px", borderRight: "1px solid #EEF2F6", borderBottom: "1px solid #EEF2F6" }}>
                   <div style={{ fontSize: 12, color: "#7A8696", fontWeight: 600 }}>Number of Aligners</div>
                   <div style={{ fontSize: 22, fontWeight: 800, marginTop: 4 }}>{c.alignerCount}</div>
@@ -217,7 +217,7 @@ export default async function ProposalPage({
 
             {/* why us */}
             <h2 style={{ fontSize: 19, fontWeight: 800, margin: "36px 0 14px" }}>Why Dental Scotland?</h2>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+            <div className="ds-grid-2" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
               {WHY_US.map((w) => (
                 <div key={w.title} style={{ padding: "16px 18px", borderRadius: 14, background: "#F6F9FA", border: "1px solid #EEF2F6" }}>
                   <div style={{ fontWeight: 800, fontSize: 14.5, color: "#16202E" }}>{w.title}</div>

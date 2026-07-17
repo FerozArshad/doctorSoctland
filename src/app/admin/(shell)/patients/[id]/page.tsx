@@ -107,12 +107,12 @@ export default async function PatientProfile({ params }: { params: { id: string 
             </div>
           </div>
 
-          <div style={{ display: "grid", gridTemplateColumns: "1.55fr 1fr", gap: 18, marginTop: 18, alignItems: "start" }}>
+          <div className="ds-split" style={{ display: "grid", gridTemplateColumns: "1.55fr 1fr", gap: 18, marginTop: 18, alignItems: "start" }}>
             <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
               {/* plan */}
               <div className="card" style={{ padding: 24 }}>
                 <div style={{ fontSize: 15, fontWeight: 800, marginBottom: 18 }}>Treatment plan</div>
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 14 }}>
+                <div className="ds-quad" style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 14 }}>
                   <div style={{ background: "#FBFCFD", border: "1px solid #EEF2F6", borderRadius: 12, padding: 14 }}>
                     <div style={{ fontSize: 12, color: "#8A96A5", fontWeight: 600 }}>Aligners</div>
                     <div style={{ fontSize: 22, fontWeight: 800, marginTop: 4 }}>{c.alignerCount}</div>

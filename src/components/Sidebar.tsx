@@ -37,12 +37,12 @@ export default function Sidebar({
             : "dashboard";
 
   return (
-    <aside style={{ width: 248, flex: "none", background: "#0E1A2B", display: "flex", flexDirection: "column", position: "sticky", top: 0, height: "100vh" }}>
-      <div style={{ padding: "26px 22px 18px" }}>
+    <aside className="ds-sidebar" style={{ width: 248, flex: "none", background: "#0E1A2B", display: "flex", flexDirection: "column", position: "sticky", top: 0, height: "100vh" }}>
+      <div className="ds-sb-logo" style={{ padding: "26px 22px 18px" }}>
         <Image src="/logo.webp" alt="Dental Scotland" width={140} height={38} style={{ height: 38, width: "auto" }} />
       </div>
       <div style={{ padding: "6px 14px", flex: 1 }}>
-        <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: ".1em", textTransform: "uppercase", color: "#4E6178", padding: "8px 12px 6px" }}>Practice</div>
+        <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: ".1em", textTransform: "uppercase", color: "#4E6178", padding: "8px 12px 6px" }} className="ds-sb-label">Practice</div>
         {NAV.map((n) => {
           const active = n.key === activeKey;
           return (
@@ -61,7 +61,7 @@ export default function Sidebar({
               <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" style={{ flex: "none" }}>
                 <path d={n.d} />
               </svg>
-              <span style={{ flex: 1, textAlign: "left" }}>{n.label}</span>
+              <span className="ds-sb-label" style={{ flex: 1, textAlign: "left" }}>{n.label}</span>
               {n.key === "patients" && (
                 <span style={{ background: "#0E9384", color: "#fff", fontSize: 11, fontWeight: 700, padding: "1px 7px", borderRadius: 20 }}>{patientCount}</span>
               )}
@@ -71,7 +71,7 @@ export default function Sidebar({
       </div>
       <div style={{ padding: 14, borderTop: "1px solid rgba(255,255,255,.07)", display: "flex", alignItems: "center", gap: 11 }}>
         <div style={{ width: 36, height: 36, borderRadius: "50%", background: "#0E9384", color: "#fff", display: "grid", placeItems: "center", fontWeight: 800, fontSize: 13, flex: "none" }}>{adminInitials}</div>
-        <div style={{ minWidth: 0 }}>
+        <div className="ds-sb-label" style={{ minWidth: 0 }}>
           <div style={{ color: "#fff", fontSize: 13.5, fontWeight: 700, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{adminName}</div>
           <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 2 }}>
             <span

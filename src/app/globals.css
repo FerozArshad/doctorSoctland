@@ -57,3 +57,39 @@ a { color: inherit; }
   font-size: 12.5px; font-weight: 700; padding: 4px 10px; border-radius: 20px;
 }
 .row-hover:hover { background: #F8FAFC; }
+
+/* ── Responsive ───────────────────────────────────────────────────────────
+   This app styles inline, and inline styles beat class selectors — so the
+   mobile overrides below need !important to take effect. Breakpoints:
+   900px = tablet/small laptop, 640px = phone. */
+
+/* Two-column blocks that should stack on a phone */
+@media (max-width: 640px) {
+  .ds-grid-2 { grid-template-columns: 1fr !important; }
+}
+
+/* Generous desktop padding wastes ~23% of a 375px screen */
+@media (max-width: 640px) {
+  .ds-pad-lg { padding: 26px 20px !important; }
+  .ds-pad-header { padding: 22px 20px !important; }
+  .ds-shell-pad { padding: 18px 14px 40px !important; }
+}
+
+/* Admin: stat cards and split layouts collapse before they get unreadable */
+@media (max-width: 1000px) {
+  .ds-stats { grid-template-columns: 1fr 1fr !important; }
+  .ds-split { grid-template-columns: 1fr !important; }
+}
+@media (max-width: 560px) {
+  .ds-stats { grid-template-columns: 1fr !important; }
+  .ds-quad { grid-template-columns: 1fr 1fr !important; }
+}
+
+/* Admin sidebar: 248px fixed leaves only 127px of content on a phone.
+   Collapse it to an icon rail and hide the labels. */
+@media (max-width: 900px) {
+  .ds-sidebar { width: 68px !important; padding-left: 8px !important; padding-right: 8px !important; }
+  .ds-sidebar .ds-sb-label { display: none !important; }
+  .ds-sidebar .ds-sb-logo { display: none !important; }
+  .ds-admin-pad { padding: 16px 12px !important; }
+}

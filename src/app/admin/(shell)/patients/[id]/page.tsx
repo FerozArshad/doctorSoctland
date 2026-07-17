@@ -81,10 +81,21 @@ export default async function PatientProfile({ params }: { params: { id: string 
                   {c.passwordHash && (
                     <span className="badge" style={{ color: "#1B7F6B", background: "#E3F6F0", padding: "4px 11px" }}>Account active</span>
                   )}
+                  {c.priceLockExpired && (
+                    <span className="badge" title="The 30-day quote window closed — follow-ups have stopped. Requote to re-engage." style={{ color: "#B7791F", background: "#FBF3E2", padding: "4px 11px" }}>
+                      Price lock expired — requote
+                    </span>
+                  )}
+                  {!c.priceLockExpired && c.sequenceTouch > 0 && (
+                    <span className="badge" title={`Follow-up sequence: ${c.sequenceTouch} of 7 sent`} style={{ color: "#5C6a79", background: "#F1F4F8", padding: "4px 11px" }}>
+                      Follow-up {c.sequenceTouch}/7
+                    </span>
+                  )}
                 </div>
                 <div style={{ fontSize: 13.5, color: "#7A8696", marginTop: 4, display: "flex", gap: 16, flexWrap: "wrap" }}>
                   <span>{c.email}</span>
                   <span>{c.phone || "—"}</span>
+                  {c.sentByName && <span>Sent by {c.sentByName}</span>}
                 </div>
               </div>
             </div>

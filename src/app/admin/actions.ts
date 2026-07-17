@@ -6,6 +6,7 @@ import { db } from "@/lib/db";
 import { clearAdminSession, createAdminSession, requireAdmin } from "@/lib/auth";
 import { fmt, fullPricePence, netPricePence, priceForPence } from "@/lib/pricing";
 import { getPricing } from "@/lib/pricing-settings";
+import { COORDINATORS, coordinatorFor, fromHeader, FALLBACK_COORDINATOR, type Coordinator } from "@/lib/coordinators";
 import { financeLinkEmailHtml, proposalEmailHtml, proposalWhatsAppText, sendEmail, sendWhatsApp } from "@/lib/notify";
 
 function toastUrl(base: string, msg: string, icon = "✓", bg = "#0E9384") {
@@ -75,6 +76,19 @@ export async function updatePricing(formData: FormData) {
   redirect(toastUrl("/admin/settings", "Pricing updated — applies to new & edited proposals", "✓"));
 }
 
+// Reads the "sent by" picker: a known coordinator key, or "other" + free text.
+function pickCoordinator(formData: FormData): Coordinator {
+  const key = String(formData.get("sentByKey") || "");
+  const known = COORDINATORS.find((c) => c.key === key);
+  if (known) return known;
+  if (key === "other") {
+    const name = String(formData.get("sentByOtherName") || "").trim();
+    const email = String(formData.get("sentByOtherEmail") || "").trim().toLowerCase();
+    if (name && /.+@.+\..+/.test(email)) return { key: "other", name, email, title: "Treatment Coordinator" };
+  }
+  return FALLBACK_COORDINATOR;
+}
+
 // ── Patients ────────────────────────────────────────────────────────────
 export async function createPatient(formData: FormData) {
   await requireAdmin();
@@ -114,7 +128,7 @@ export async function createPatient(formData: FormData) {
   });
 
   if (send) {
-    await deliverProposal(patient.id);
+    await deliverProposal(patient.id, pickCoordinator(formData));
     redirect(toastUrl(`/admin/patients/${patient.id}`, `Patient created & proposal sent to ${firstName}`, "✉"));
   }
   redirect(toastUrl(`/admin/patients/${patient.id}`, `Draft saved for ${firstName}`));
@@ -194,16 +208,24 @@ export async function approveFinance(formData: FormData) {
 }
 
 // Sends the proposal by email + WhatsApp and logs activity.
-async function deliverProposal(patientId: string) {
+// `sentBy` is the coordinator the proposal goes out from; it also starts the
+// 30-day price lock and the 7-touch follow-up sequence.
+async function deliverProposal(patientId: string, sentBy?: Coordinator) {
   const cfg = await getPricing();
   const patient = await db.patient.findUniqueOrThrow({ where: { id: patientId } });
+  const co = sentBy ?? coordinatorFor(patient.sentByName, patient.sentByEmail);
   const results: string[] = [];
   try {
-    await sendEmail(patient.email, "Your Invisalign Treatment Proposal — Dental Scotland", proposalEmailHtml(patient, cfg));
-    results.push(`Proposal emailed to ${patient.email}`);
+    await sendEmail(
+      patient.email,
+      "Your Invisalign Treatment Proposal — Dental Scotland",
+      proposalEmailHtml(patient, cfg),
+      fromHeader(co)
+    );
+    results.push(`Proposal emailed to ${patient.email} from ${co.name}`);
   } catch (e) {
     console.error(e);
-    results.push(`Email to ${patient.email} failed — check RESEND_API_KEY`);
+    results.push(`Email to ${patient.email} failed — check the email configuration`);
   }
   if (patient.phone && patient.phone !== "—") {
     const r = await sendWhatsApp(patient.phone, proposalWhatsAppText(patient));
@@ -213,6 +235,12 @@ async function deliverProposal(patientId: string) {
     where: { id: patientId },
     data: {
       status: patient.status === "draft" ? "sent" : patient.status,
+      // Restart the clock + sequence on every (re)send so the price lock is honest.
+      proposalSentAt: new Date(),
+      sequenceTouch: 0,
+      priceLockExpired: false,
+      sentByName: co.name,
+      sentByEmail: co.email,
       activities: { create: results.map((text) => ({ text })) },
     },
   });
@@ -222,8 +250,9 @@ export async function sendProposal(formData: FormData) {
   await requireAdmin();
   const id = String(formData.get("patientId"));
   const patient = await db.patient.findUniqueOrThrow({ where: { id } });
-  await deliverProposal(id);
-  redirect(toastUrl(`/admin/patients/${id}`, `Proposal emailed to ${patient.firstName}`, "✉"));
+  const co = pickCoordinator(formData);
+  await deliverProposal(id, co);
+  redirect(toastUrl(`/admin/patients/${id}`, `Proposal emailed to ${patient.firstName} from ${co.name}`, "✉"));
 }
 
 export async function recordDeposit(formData: FormData) {

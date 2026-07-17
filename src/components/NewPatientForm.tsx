@@ -3,6 +3,7 @@
 // Pricing: ≤7 → £1,500 · 8–20 → £2,250 · 20+ → £2,750
 import { useState } from "react";
 import { createPatient } from "@/app/admin/actions";
+import SentByPicker from "./SentByPicker";
 
 function priceFor(c: number) {
   if (c <= 7) return 1500;
@@ -103,6 +104,9 @@ export default function NewPatientForm() {
           <label className="label">Notes</label>
           <textarea className="input" name="notes" value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Anything the coordinator should know…" rows={3} style={{ resize: "vertical" }} />
         </div>
+
+        <div style={{ height: 1, background: "#EEF2F6", margin: "24px 0" }} />
+        <SentByPicker />
 
         <div style={{ display: "flex", gap: 12, marginTop: 26 }}>
           <button className="btn btn-outline" name="intent" value="draft" disabled={submitting} style={{ flex: 1 }}>Save as draft</button>

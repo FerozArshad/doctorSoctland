@@ -56,6 +56,15 @@ model Patient {
   amountPaidPence       Int          @default(0)
   // £250 consultation/booking paid before the proposal — deducted from the total.
   upfrontPaidPence      Int          @default(0)
+  // ── 7-touch follow-up sequence ──
+  // proposalSentAt is the clock: touches fire on days 1,4,10,20,26,29,30 after it.
+  // The quoted price is locked for 30 days from this date.
+  proposalSentAt        DateTime?
+  sequenceTouch         Int          @default(0) // highest touch sent (0 = none, 7 = done)
+  priceLockExpired      Boolean      @default(false) // set at day 30 — admin should requote
+  // Which coordinator the proposal was sent from (emails come from / are signed by them)
+  sentByName            String       @default("")
+  sentByEmail           String       @default("")
   // Consent & finance application (captured when patient applies for finance / registers interest)
   dateOfBirth           String       @default("")
   consentSignedAt       DateTime?

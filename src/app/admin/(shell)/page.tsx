@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { db } from "@/lib/db";
-import { fmt } from "@/lib/pricing";
+import { fmt, netPricePence } from "@/lib/pricing";
 import { avatarBg, initials, statusOf, timeAgo, STATUS, StatusKey } from "@/lib/status";
 import TopBar from "@/components/TopBar";
 import { getAdmin } from "@/lib/auth";
@@ -21,19 +21,33 @@ export default async function Dashboard() {
   // ── Stats ──
   const collected = patients.reduce((a, c) => a + c.amountPaidPence, 0);
   const active = patients.filter((c) => c.status !== "draft");
+  // Outstanding must be net of any booking credit — using the gross price here
+  // overstated pending revenue by the credit for every affected patient.
   const pending = active
     .filter((c) => c.status !== "paid")
-    .reduce((a, c) => a + (c.pricePence - c.amountPaidPence), 0);
+    .reduce((a, c) => a + Math.max(0, netPricePence(c.pricePence, c.upfrontPaidPence) - c.amountPaidPence), 0);
   const won = patients.filter((c) => c.status === "paid" || c.status === "deposit").length;
   const conv = active.length ? Math.round((100 * won) / active.length) : 0;
   const overdueCount = patients.filter((c) => c.status === "overdue").length;
 
+  // Real deltas — these were previously hardcoded ("+3 this wk" / "+12%") and
+  // shown as if they were live figures.
+  const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+  const newThisWeek = patients.filter((c) => c.createdAt >= weekAgo).length;
+  const monthStart = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
+  const prevMonthStart = new Date(new Date().getFullYear(), new Date().getMonth() - 1, 1);
+  const sumPaid = (from: Date, to: Date) =>
+    paidPayments.filter((p) => p.paidAt && p.paidAt >= from && p.paidAt < to).reduce((a, p) => a + p.amountPence, 0);
+  const thisMonthRev = sumPaid(monthStart, new Date(8640000000000000));
+  const lastMonthRev = sumPaid(prevMonthStart, monthStart);
+  const revDeltaPct = lastMonthRev > 0 ? Math.round((100 * (thisMonthRev - lastMonthRev)) / lastMonthRev) : thisMonthRev > 0 ? 100 : 0;
+
   const statCards = [
-    { label: "Active patients", value: String(patients.length), delta: "+3 this wk", deltaColor: "#1C7C3A", deltaBg: "#E6F6EA", iconBg: "#EAF0FE", iconFg: "#2E6BFF", d: "M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8z" },
+    { label: "Active patients", value: String(patients.length), delta: `+${newThisWeek} this wk`, deltaColor: newThisWeek > 0 ? "#1C7C3A" : "#7A8696", deltaBg: newThisWeek > 0 ? "#E6F6EA" : "#F1F4F8", iconBg: "#EAF0FE", iconFg: "#2E6BFF", d: "M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8z" },
     // Earnings — Super Admin only.
     ...(isSuper
       ? [
-          { label: "Revenue collected", value: fmt(collected), delta: "+12%", deltaColor: "#1C7C3A", deltaBg: "#E6F6EA", iconBg: "#E3F6F0", iconFg: "#0B7A6E", d: "M12 1v22M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" },
+          { label: "Revenue collected", value: fmt(collected), delta: `${revDeltaPct >= 0 ? "+" : ""}${revDeltaPct}% vs last mo`, deltaColor: revDeltaPct >= 0 ? "#1C7C3A" : "#C23B34", deltaBg: revDeltaPct >= 0 ? "#E6F6EA" : "#FBE9E8", iconBg: "#E3F6F0", iconFg: "#0B7A6E", d: "M12 1v22M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" },
           { label: "Pending revenue", value: fmt(pending), delta: overdueCount + " overdue", deltaColor: "#C23B34", deltaBg: "#FBE9E8", iconBg: "#FBF3E2", iconFg: "#B7791F", d: "M12 7v5l3 2M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0z" },
         ]
       : [

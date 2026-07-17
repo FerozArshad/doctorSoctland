@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { db } from "@/lib/db";
-import { estMonths, fmt } from "@/lib/pricing";
+import { estMonths, fmt, netPricePence } from "@/lib/pricing";
 import { getPricing } from "@/lib/pricing-settings";
 import { avatarBg, initials, statusOf, timeAgo } from "@/lib/status";
 import { COMP_ITEMS, COMP_TOTAL } from "@/lib/content";
@@ -34,7 +34,10 @@ export default async function PatientProfile({ params }: { params: { id: string 
   const st = statusOf(c.status);
   const overdue = c.status === "overdue";
   const curOrder = st.order;
-  const paidPct = Math.min(100, Math.round((100 * c.amountPaidPence) / c.pricePence));
+  // Progress is against what they actually owe (net of any booking credit).
+  // Guard the divide — a zero price would render width:"NaN%" and break the bar.
+  const netOwed = netPricePence(c.pricePence, c.upfrontPaidPence);
+  const paidPct = netOwed > 0 ? Math.min(100, Math.max(0, Math.round((100 * c.amountPaidPence) / netOwed))) : 0;
   const hasPhone = !!c.phone && c.phone !== "—";
 
   const timeline = TIMELINE_STEPS.map((label, i) => {

@@ -53,7 +53,7 @@ Settings → Environment Variables.
 | **7-touch follow-up sequence** | ✅ working | days 1,4,10,20,26,29,30 + 30-day price lock |
 | **Per-coordinator sending** | ⚠️ verify | Millie/Rochelle/Other — confirm Gmail isn't rewriting the From |
 | **Responsive** | ✅ done | first media queries; verified 375px + 1280px |
-| Payment reminders (email + WhatsApp) | ✅ email works | `/api/cron/reminders`, twice daily (09:00 + 17:00). WhatsApp part waits on keys. See cron-plan note in §9 |
+| Payment reminders (email + WhatsApp) | ✅ email works | `/api/cron/reminders` drives the 7-touch sequence, daily 09:00 (2 crons total — fits Vercel Hobby). WhatsApp part waits on keys |
 
 ## 5. Environment variables (names only — values in `.env` / Vercel)
 Core: `DATABASE_URL`* , `AUTH_SECRET`, `APP_URL`, `CRON_SECRET`
@@ -111,9 +111,9 @@ Expose via ngrok (optional): `ngrok http 3000` → grab URL from http://localhos
 - **Edit patient (any status):** `/admin/patients/[id]/edit` +
   `src/components/EditPatientForm.tsx` + `updatePatient` action; "Edit" button on
   the profile.
-- **Twice-daily reminders:** `/api/cron/reminders` (statuses sent/interested/
-  awaiting/overdue). Personalised templates `reminderEmailHtml` /
-  `reminderWhatsAppText`. Scheduled in `vercel.json` at 09:00 + 17:00.
+- **Follow-up cron:** `/api/cron/reminders` (statuses sent/interested/
+  awaiting/overdue) now drives the 7-touch sequence. Scheduled in `vercel.json`
+  daily at 09:00 (the 17:00 entry was dropped — the sequence only needs daily).
 - **Consent + signature + finance:** selecting 0% finance or "I'm interested"
   opens `src/components/ConsentModal.tsx` (Invisalign consent text in
   `src/lib/consent.ts`, drawn-signature pad, basic info + DOB). Submits via
@@ -134,11 +134,11 @@ Expose via ngrok (optional): `ngrok http 3000` → grab URL from http://localhos
 - [ ] Set `ADMIN_NOTIFY_EMAIL` + `EMAIL_FROM` = concierge@ in **Vercel** (local done).
 - [ ] Delete the downloaded `client_secret_*.json` from Downloads (secret in plaintext).
 - [ ] Optional: change admin password from the default.
-- [ ] **Reminders cron plan:** there are now 3 Vercel crons (instalments + 2
-      reminders). Vercel **Hobby** allows only ~2 crons and runs them once/day, so
-      true twice-daily reminders need **Vercel Pro** — or drop the 17:00 entry and
-      hit `/api/cron/reminders` from an external scheduler with the CRON_SECRET.
-      `CRON_SECRET` must be set in Vercel (Vercel auto-sends it as the Bearer token).
+- [x] **Reminders cron: resolved (2026-07-17).** `vercel.json` has exactly 2 crons
+      (instalments + reminders, both daily 09:00) — within Hobby limits — and the
+      crons are registered in Vercel. The 7-touch sequence only needs a daily run,
+      so twice-daily is no longer required. `CRON_SECRET` must remain set in Vercel
+      (Vercel auto-sends it as the Bearer token).
 - [ ] Visually confirm the signature pad in a browser (build-verified; the in-app
       browser tool was unavailable when it was built).
 
@@ -212,10 +212,15 @@ Expose via ngrok (optional): `ngrok http 3000` → grab URL from http://localhos
   was 127px on a phone, now 307px).
 
 # 13. Open items / next steps
-- 🔴 **Demo patients will be emailed.** The sequence is armed and the 9 seeded demo
-  patients have real-looking Gmail addresses (`emma.macleod@gmail.com`…). At 09:00
-  they'll receive follow-ups. **Delete them or set status to `draft` before this
-  matters.** NOT yet done.
+- ✅ **Demo patients neutralized (2026-07-17).** The 5 demo patients in
+  sequence-eligible statuses (Aiden Ross, Ava Docherty, Isla Campbell, Jack Wilson,
+  Sophie Brown) were set to `draft` directly in the shared DB, with an activity-log
+  note on each. All had `sequenceTouch=0` — **no sequence email had been sent to any
+  demo patient**. Emma MacLeod & Callum Fraser (`deposit`) and Liam Murray (`paid`)
+  were left as-is: the sequence cron excludes those statuses, and the instalments
+  cron can't touch them (no saved Stripe card, no scheduled instalments). To use a
+  demo patient in a walkthrough again, set their status via the Edit form — and
+  remember the sequence will then see them.
 - ⚠️ **Verify the Gmail send-as**: check the `[SEND-AS TEST]` emails in `concierge@`.
   If the From was rewritten to `concierge@`, the millie@/rochelle@ aliases aren't
   verified → switch to Reply-To instead.

@@ -1,6 +1,6 @@
 # Session Handoff — Dental Scotland (Invisalign Proposal & Payments)
 
-Last updated: 2026-07-14. This file captures the current working state so anyone
+Last updated: 2026-07-17. This file captures the current working state so anyone
 (or a new session) can pick up without re-deriving context. **No secrets are in
 this file** — real values live only in local `.env` (gitignored) and in Vercel →
 Settings → Environment Variables.
@@ -29,8 +29,12 @@ Settings → Environment Variables.
   `https://aida-snaky-unvisibly.ngrok-free.dev`
 
 ## 3. Logins
-- **Admin:** `concierge@dentalscotland.com` / `dental123`
-  (change the password later via `npm run admin:password -- NewPass123`)
+- **Super Admin** (sees revenue): `concierge@dentalscotland.com` / `superadmin2026`
+- **Admin** (revenue hidden): `coordinator@dentalscotland.com` / `admin2026`
+  ⚠️ Login allows 10 attempts / 15 min per email. A lockout says "Too many
+  attempts" (distinct from a wrong password). The limiter is in-memory, so a
+  redeploy clears it instantly. Passwords are NOT trimmed — don't paste with a
+  trailing space.
 - **Demo patients:** 9 seeded, password `dental123`. Emails are fake gmail
   addresses (emma.macleod@gmail.com, sophie.b@, etc.) — see `src/lib/seed-data.ts`.
   ⚠️ **Never trigger real patient-facing email/WhatsApp to these** — they could be
@@ -43,7 +47,12 @@ Settings → Environment Variables.
 | Auth (`AUTH_SECRET`) | ✅ working | set in Vercel + local |
 | **Email (Gmail send)** | ✅ working | Google OAuth `gmail.send`; verified live send. Falls back to Resend → simulated |
 | WhatsApp (Meta Cloud API) | ⏳ pending keys | code ready; simulated to console until keys set |
-| Stripe (payments) | ⏳ pending keys | code ready; buttons show "not configured" toast until `STRIPE_SECRET_KEY` set |
+| **Stripe (payments)** | ✅ **verified end-to-end** | test keys local, live keys in Vercel. Checkout amount, webhook signature, DB record + receipt all proven |
+| **Editable pricing** | ✅ working | `/admin/settings` — tiers, deposit, booking credit, discount |
+| **Super Admin / Admin roles** | ✅ working | plain Admin sees no revenue |
+| **7-touch follow-up sequence** | ✅ working | days 1,4,10,20,26,29,30 + 30-day price lock |
+| **Per-coordinator sending** | ⚠️ verify | Millie/Rochelle/Other — confirm Gmail isn't rewriting the From |
+| **Responsive** | ✅ done | first media queries; verified 375px + 1280px |
 | Payment reminders (email + WhatsApp) | ✅ email works | `/api/cron/reminders`, twice daily (09:00 + 17:00). WhatsApp part waits on keys. See cron-plan note in §9 |
 
 ## 5. Environment variables (names only — values in `.env` / Vercel)
@@ -156,3 +165,70 @@ Expose via ngrok (optional): `ngrok http 3000` → grab URL from http://localhos
   £2,000 balance → £1,900 pay-in-full).
 - **Jack Wilson** has a signed finance application (status "awaiting") so the admin
   finance-approval card is visible on his profile. Revert via the Edit form if needed.
+
+---
+
+# 12. Session 2 (2026-07-17) — what changed
+
+## Shipped
+| Commit | What |
+|---|---|
+| `96c2e7f` | **7-touch sequence** + per-coordinator sending |
+| `7f0bba7` | **Responsive** — first `@media` queries in the codebase |
+| `11428d7` | **QA fixes** — 3 real bugs (see below) |
+| `0912826` | **Admin-editable pricing** (`/admin/settings`) |
+| `88887f0` `ba3d22c` | **Super Admin vs Admin** + access badge |
+| `6b0721a` `e5dab31` | Login lockout made distinguishable; limit 5 → 10 |
+| `a745366` | Removed the "I'm interested" CTA |
+| `e17059c`…`7c3621d` | WhatsApp Embedded Signup page (now a dead end — see §13) |
+
+## Bugs found & fixed during QA
+- **Pending revenue was wrong**: subtracted payments from the GROSS price, ignoring
+  the booking credit — overstated by £250/patient (£500 live). Now net-based.
+- **Progress bar**: gross-based (84% instead of 95%) + divided by `pricePence`
+  unguarded → `width:"NaN%"` on a £0 price. Now net + guarded.
+- **Fake dashboard metrics**: `"+3 this wk"` and `"+12%"` were HARDCODED strings
+  shown as live figures (mockup leftovers). Now computed for real.
+- **£700 was hardcoded in 9 places** — incl. `recordDeposit` and the Stripe webhook
+  (both write money). The webhook recorded a fixed £700 instead of what Stripe
+  actually charged. All now use the configured deposit; `instalmentPence()`
+  *requires* the deposit so the compiler catches any future miss.
+
+## Key architecture notes
+- **Pricing**: `src/lib/pricing.ts` is pure/client-safe; `pricing-settings.ts`
+  (`getPricing()`) is server-only and reads the singleton `Pricing` row with a
+  safe fallback to defaults. **Changing pricing never alters an existing
+  patient's quote** — each patient's `pricePence`/`discountPct` is captured at
+  proposal time.
+- **Sequence**: `src/lib/sequence.ts`. Clock = `Patient.proposalSentAt`;
+  `sequenceTouch` tracks progress; day 30 sets `priceLockExpired` + alerts admin.
+  A late-added patient jumps to the current touch (no 4-email blast). Resending a
+  proposal **restarts** the clock so the 30-day lock claim stays honest.
+  WhatsApp only fires on touch 1 (7 WhatsApps would risk the number's quality rating).
+- **Coordinators**: `src/lib/coordinators.ts`. `sendEmail()` takes an optional
+  From override.
+- **Responsive**: inline styles beat class selectors, so the mobile overrides in
+  `globals.css` need `!important`. Sidebar → 68px icon rail <900px (admin content
+  was 127px on a phone, now 307px).
+
+# 13. Open items / next steps
+- 🔴 **Demo patients will be emailed.** The sequence is armed and the 9 seeded demo
+  patients have real-looking Gmail addresses (`emma.macleod@gmail.com`…). At 09:00
+  they'll receive follow-ups. **Delete them or set status to `draft` before this
+  matters.** NOT yet done.
+- ⚠️ **Verify the Gmail send-as**: check the `[SEND-AS TEST]` emails in `concierge@`.
+  If the From was rewritten to `concierge@`, the millie@/rochelle@ aliases aren't
+  verified → switch to Reply-To instead.
+- ⚠️ **Review the drafted copy** for sequence emails 4–7 (days 20/26/29/30) — sent
+  to `asadqureshi1908@gmail.com` tagged `[4/7]`…`[7/7]`.
+- **Test patient** `asadqureshi1908@gmail.com` (password `test1234`) exists in the
+  shared prod DB for end-to-end testing. Delete when done.
+- **WhatsApp is a dead end via self-build**: coexistence onboarding of the old
+  +44 number requires **Tech Provider status** (Meta docs, confirmed empirically —
+  the flow silently degrades to a plain login, no QR). `/admin/whatsapp-connect`
+  is dormant. Options: a BSP, or the new number `+44 7915 357177` — blocked by
+  Meta's **2-phone-number cap for unverified businesses** (test number can't be
+  removed, old +44 can't be removed) → **business verification is the unlock**.
+- **Stripe**: LIVE keys are in Vercel, TEST keys local. Keep it that way.
+- Dead `monthly` label lingers in the profile (trivial).
+- Rate limiter is in-memory → inconsistent on serverless (known gap; Redis fixes it).

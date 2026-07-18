@@ -65,7 +65,7 @@ export const TOUCHES: Touch[] = [
   // ── 1 · Day 1 — price-lock + micro-CTA ──
   {
     n: 1, day: 1, label: "Price-lock + micro-CTA",
-    subject: (p) => `${p.firstName} — Scotland's lowest-priced Invisalign, and it's locked in`,
+    subject: (p) => `Your personalised Invisalign plan, ${p.firstName} — price locked for ${LOCK_DAYS} days`,
     html: (p, v) =>
       brandedEmail(
         "Your price is locked in",
@@ -87,7 +87,7 @@ export const TOUCHES: Touch[] = [
   // ── 2 · Day 4 — monthly framing + proof ──
   {
     n: 2, day: 4, label: "Monthly framing + proof",
-    subject: (p, v) => `From ${v.fromMonth}/month — Scotland's lowest-priced Invisalign, ${p.firstName}`,
+    subject: (p, v) => `Invisalign from ${v.fromMonth}/month — your payment options, ${p.firstName}`,
     html: (p, v) =>
       brandedEmail(
         `From ${v.fromMonth}/month`,
@@ -109,7 +109,7 @@ export const TOUCHES: Touch[] = [
   // ── 3 · Day 10 — trust and reassurance ──
   {
     n: 3, day: 10, label: "Trust and reassurance",
-    subject: (p) => `${p.firstName}, here's why patients trust Scotland's largest Invisalign provider`,
+    subject: (p) => `Why patients choose Dental Scotland for Invisalign, ${p.firstName}`,
     html: (p, v) =>
       brandedEmail(
         "Why patients choose us",
@@ -131,7 +131,7 @@ export const TOUCHES: Touch[] = [
   // ── 4 · Day 20 — urgency begins (10 days left) ──
   {
     n: 4, day: 20, label: "Urgency begins (10 days left)",
-    subject: (p, v) => `${p.firstName} — 10 days left on your locked price`,
+    subject: (p, v) => `${v.daysLeft} days left on your locked-in Invisalign price, ${p.firstName}`,
     html: (p, v) =>
       brandedEmail(
         "10 days left on your price",
@@ -153,7 +153,7 @@ export const TOUCHES: Touch[] = [
   // ── 5 · Day 26 — urgency escalates (4 days left) ──
   {
     n: 5, day: 26, label: "Urgency escalates (4 days left)",
-    subject: (p, v) => `Only ${v.daysLeft} days left, ${p.firstName} — your Invisalign price expires ${v.lockDate}`,
+    subject: (p, v) => `Your Invisalign price is held until ${v.lockDate}, ${p.firstName}`,
     html: (p, v) =>
       brandedEmail(
         `${v.daysLeft} days left`,
@@ -171,7 +171,7 @@ export const TOUCHES: Touch[] = [
   // ── 6 · Day 29 — final chance (1 day left) ──
   {
     n: 6, day: 29, label: "Final chance (1 day left)",
-    subject: (p) => `${p.firstName} — your price expires tomorrow`,
+    subject: (p) => `Your locked-in Invisalign price expires tomorrow, ${p.firstName}`,
     html: (p, v) =>
       brandedEmail(
         "Your price expires tomorrow",
@@ -188,7 +188,7 @@ export const TOUCHES: Touch[] = [
   // ── 7 · Day 30 — last hours, short and blunt ──
   {
     n: 7, day: 30, label: "Last hours",
-    subject: (p) => `Last hours, ${p.firstName}`,
+    subject: (p) => `Your Invisalign price expires today, ${p.firstName}`,
     html: (p, v) =>
       brandedEmail(
         "Last hours",

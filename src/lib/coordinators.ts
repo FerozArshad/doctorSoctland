@@ -12,7 +12,7 @@ export const COORDINATORS: Coordinator[] = [
 
 export const FALLBACK_COORDINATOR: Coordinator = {
   key: "practice",
-  name: "The team at Dental Scotland",
+  name: "Dental Scotland",
   email: "concierge@dentalscotland.com",
   title: "Dental Scotland",
 };

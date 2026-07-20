@@ -3,7 +3,7 @@ import bcrypt from "bcryptjs";
 
 function priceFor(c: number) {
   if (c <= 7) return 150_000;
-  if (c <= 20) return 225_000;
+  if (c <= 15) return 225_000;
   return 275_000;
 }
 

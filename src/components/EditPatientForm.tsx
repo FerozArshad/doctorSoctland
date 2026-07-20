@@ -1,17 +1,10 @@
 "use client";
 // Edit an existing patient — mirrors the New-patient form, pre-filled, plus the
-// "£250 paid upfront" toggle. Editable at any status (even after paid/done).
+// booking-credit toggle. Editable at any status (even after paid/done).
+// Pricing tiers come from the editable config (admin → Settings), passed in by the page.
 import { useState } from "react";
 import { updatePatient } from "@/app/admin/actions";
-
-function priceFor(c: number) {
-  if (c <= 7) return 1500;
-  if (c <= 20) return 2250;
-  return 2750;
-}
-const estMonths = (c: number) => Math.max(3, Math.round((c * 2) / 4.345));
-const gbp = (n: number) => "£" + n.toLocaleString("en-GB");
-const UPFRONT = 250;
+import { estMonths, fmt, priceForPence, type PricingConfig } from "@/lib/pricing";
 
 export type EditPatientInitial = {
   id: string;
@@ -26,7 +19,7 @@ export type EditPatientInitial = {
   paidUpfront: boolean;
 };
 
-export default function EditPatientForm({ patient }: { patient: EditPatientInitial }) {
+export default function EditPatientForm({ patient, cfg }: { patient: EditPatientInitial; cfg: PricingConfig }) {
   const [firstName, setFirstName] = useState(patient.firstName);
   const [lastName, setLastName] = useState(patient.lastName);
   const [email, setEmail] = useState(patient.email);
@@ -39,8 +32,8 @@ export default function EditPatientForm({ patient }: { patient: EditPatientIniti
   const [errs, setErrs] = useState({ first: false, email: false });
   const [submitting, setSubmitting] = useState(false);
 
-  const price = priceFor(alignerCount);
-  const net = Math.max(0, price - (paidUpfront ? UPFRONT : 0));
+  const price = priceForPence(alignerCount, cfg);
+  const net = Math.max(0, price - (paidUpfront ? cfg.upfrontPence : 0));
 
   const validate = (e: React.FormEvent<HTMLFormElement>) => {
     const first = !firstName.trim();
@@ -115,8 +108,8 @@ export default function EditPatientForm({ patient }: { patient: EditPatientIniti
         <label style={{ display: "flex", gap: 12, alignItems: "flex-start", marginTop: 20, padding: "14px 16px", borderRadius: 12, border: "1.5px solid " + (paidUpfront ? "#0E9384" : "#E1E7EE"), background: paidUpfront ? "#F0FBF8" : "#fff", cursor: "pointer" }}>
           <input type="checkbox" name="paidUpfront" checked={paidUpfront} onChange={(e) => setPaidUpfront(e.target.checked)} style={{ width: 18, height: 18, accentColor: "#0E9384", marginTop: 1 }} />
           <span>
-            <span style={{ fontSize: 13.5, fontWeight: 700, color: "#16202E" }}>£250 booking paid upfront</span>
-            <span style={{ display: "block", fontSize: 12.5, color: "#7A8696", marginTop: 2 }}>Deducts £250 from the total. All payment options recalculate for the patient.</span>
+            <span style={{ fontSize: 13.5, fontWeight: 700, color: "#16202E" }}>{fmt(cfg.upfrontPence)} booking paid upfront</span>
+            <span style={{ display: "block", fontSize: 12.5, color: "#7A8696", marginTop: 2 }}>Deducts {fmt(cfg.upfrontPence)} from the total. All payment options recalculate for the patient.</span>
           </span>
         </label>
 
@@ -148,21 +141,21 @@ export default function EditPatientForm({ patient }: { patient: EditPatientIniti
           </div>
           <div style={{ display: "flex", justifyContent: "space-between", padding: "14px 16px", borderBottom: "1px solid #F1F4F8" }}>
             <span style={{ fontSize: 13, color: "#7A8696" }}>Treatment total</span>
-            <span style={{ fontSize: 14, fontWeight: 800 }}>{gbp(price)}</span>
+            <span style={{ fontSize: 14, fontWeight: 800 }}>{fmt(price)}</span>
           </div>
           {paidUpfront && (
             <div style={{ display: "flex", justifyContent: "space-between", padding: "14px 16px", borderBottom: "1px solid #F1F4F8" }}>
-              <span style={{ fontSize: 13, color: "#7A8696" }}>Less £250 upfront</span>
-              <span style={{ fontSize: 14, fontWeight: 800, color: "#B4530A" }}>− {gbp(UPFRONT)}</span>
+              <span style={{ fontSize: 13, color: "#7A8696" }}>Less {fmt(cfg.upfrontPence)} upfront</span>
+              <span style={{ fontSize: 14, fontWeight: 800, color: "#B4530A" }}>− {fmt(cfg.upfrontPence)}</span>
             </div>
           )}
           <div style={{ display: "flex", justifyContent: "space-between", padding: "14px 16px", background: "#F0FBF8" }}>
             <span style={{ fontSize: 13, color: "#0B7A6E", fontWeight: 600 }}>Balance remaining</span>
-            <span style={{ fontSize: 17, fontWeight: 800, color: "#0B7A6E" }}>{gbp(net)}</span>
+            <span style={{ fontSize: 17, fontWeight: 800, color: "#0B7A6E" }}>{fmt(net)}</span>
           </div>
         </div>
         <div style={{ fontSize: 12, color: "#9AA6B4", marginTop: 14, lineHeight: 1.6 }}>
-          Pay-in-full also applies a 5% discount on the balance at checkout.
+          Pay-in-full also applies a {cfg.discountPct}% discount on the balance at checkout.
         </div>
       </div>
     </form>

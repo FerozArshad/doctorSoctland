@@ -1,19 +1,12 @@
 "use client";
 // Add-patient form with live proposal preview — mirrors the design exactly.
-// Pricing: ≤7 → £1,500 · 8–20 → £2,250 · 20+ → £2,750
+// Pricing tiers come from the editable config (admin → Settings), passed in by the page.
 import { useState } from "react";
 import { createPatient } from "@/app/admin/actions";
+import { estMonths, fmt, priceForPence, type PricingConfig } from "@/lib/pricing";
 import SentByPicker from "./SentByPicker";
 
-function priceFor(c: number) {
-  if (c <= 7) return 1500;
-  if (c <= 20) return 2250;
-  return 2750;
-}
-const estMonths = (c: number) => Math.max(3, Math.round((c * 2) / 4.345));
-const gbp = (n: number) => "£" + n.toLocaleString("en-GB");
-
-export default function NewPatientForm() {
+export default function NewPatientForm({ cfg }: { cfg: PricingConfig }) {
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
   const [email, setEmail] = useState("");
@@ -140,7 +133,7 @@ export default function NewPatientForm() {
           </div>
           <div style={{ display: "flex", justifyContent: "space-between", padding: "14px 16px", background: "#F0FBF8" }}>
             <span style={{ fontSize: 13, color: "#0B7A6E", fontWeight: 600 }}>Total investment</span>
-            <span style={{ fontSize: 17, fontWeight: 800, color: "#0B7A6E" }}>{gbp(priceFor(alignerCount))}</span>
+            <span style={{ fontSize: 17, fontWeight: 800, color: "#0B7A6E" }}>{fmt(priceForPence(alignerCount, cfg))}</span>
           </div>
         </div>
         <div style={{ marginTop: 14, padding: "14px 16px", borderRadius: 12, background: "#FBFCFD", border: "1px solid #EEF2F6", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
@@ -148,7 +141,7 @@ export default function NewPatientForm() {
           <span style={{ fontSize: 15, fontWeight: 800, color: "#0B7A6E" }}>£875</span>
         </div>
         <div style={{ fontSize: 12, color: "#9AA6B4", marginTop: 14, lineHeight: 1.6 }}>
-          Pricing auto-calculates from aligner count · 7 → £1,500 · 8–20 → £2,250 · 20+ → £2,750
+          Pricing auto-calculates from aligner count · ≤{cfg.tier1MaxAligners} → {fmt(cfg.tier1Pence)} · {cfg.tier1MaxAligners + 1}–{cfg.tier2MaxAligners} → {fmt(cfg.tier2Pence)} · {cfg.tier2MaxAligners + 1}+ → {fmt(cfg.tier3Pence)}
         </div>
       </div>
     </form>

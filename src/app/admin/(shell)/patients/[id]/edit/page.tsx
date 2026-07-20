@@ -2,12 +2,14 @@ import { notFound } from "next/navigation";
 import TopBar from "@/components/TopBar";
 import EditPatientForm from "@/components/EditPatientForm";
 import { db } from "@/lib/db";
+import { getPricing } from "@/lib/pricing-settings";
 
 export const dynamic = "force-dynamic";
 
 export default async function EditPatientPage({ params }: { params: { id: string } }) {
   const p = await db.patient.findUnique({ where: { id: params.id } });
   if (!p) notFound();
+  const cfg = await getPricing();
 
   return (
     <>
@@ -26,6 +28,7 @@ export default async function EditPatientPage({ params }: { params: { id: string
             notes: p.notes,
             paidUpfront: p.upfrontPaidPence > 0,
           }}
+          cfg={cfg}
         />
       </div>
     </>

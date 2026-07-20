@@ -13,11 +13,11 @@ export type PricingConfig = {
   discountPct: number;
 };
 
-/// Fallbacks if the Pricing row is missing: 7 → £1,500 · 8–20 → £2,250 · 20+ → £2,750
+/// Fallbacks if the Pricing row is missing: ≤7 → £1,500 · 8–15 → £2,250 · 16+ → £2,750
 export const PRICING_DEFAULTS: PricingConfig = {
   tier1MaxAligners: 7,
   tier1Pence: 150_000,
-  tier2MaxAligners: 20,
+  tier2MaxAligners: 15,
   tier2Pence: 225_000,
   tier3Pence: 275_000,
   depositPence: 70_000, // £700

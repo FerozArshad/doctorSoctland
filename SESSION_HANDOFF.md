@@ -1,239 +1,257 @@
-# Session Handoff — Dental Scotland (Invisalign Proposal & Payments)
+# Session Handoff — Dental Scotland (Invisalign Proposals, Payments & Reporting)
 
-Last updated: 2026-07-17. This file captures the current working state so anyone
-(or a new session) can pick up without re-deriving context. **No secrets are in
-this file** — real values live only in local `.env` (gitignored) and in Vercel →
-Settings → Environment Variables.
+Last updated: **2026-07-21**. Complete working state — anyone (or a new session) can
+pick up from this file without re-deriving context. **No secrets live here** — real
+values are only in local `.env` (gitignored) and Vercel → Settings → Environment Variables.
 
 ---
 
 ## 1. What this is
-- Next.js 14 (App Router) + Prisma + Postgres app for dentalscotland.com.
-- Admin side: dashboard, patient list, proposal builder, **edit patient (any status)**,
-  payment tracking, messaging, **finance-application approval**.
-- Patient side: OTP-gated proposal page (`/p/[token]`) with payment options,
-  **£250 upfront credit**, **consent + signature modal** for finance/interest.
-- Payment options: Pay-in-full (5% off), £700 deposit + 3 instalments, 0% finance.
-  ("Monthly payments" was removed.)
-- **Repo:** https://github.com/FerozArshad/doctorSoctland (branch `main`, auto-deploys to Vercel)
+
+Next.js 14 (App Router) + Prisma + Postgres app for dentalscotland.com:
+
+- **Admin side**: dashboard, patient list (status + sent-by filters), proposal builder,
+  edit patient (any status, incl. owner reassignment), payment tracking, messaging,
+  finance approval, **team management (create admins)**, **monthly per-admin reports**,
+  editable pricing settings.
+- **Patient side**: OTP-gated proposal page (`/p/[token]`) with payment options,
+  £250 upfront credit, **required T&C tick before any payment route**, consent +
+  signature modal for finance.
+- **Payment options**: Pay-in-full (5% off), £700 deposit + 3 auto-collected
+  instalments, 0% finance.
+
+- **Repo:** https://github.com/FerozArshad/doctorSoctland (branch `main` auto-deploys to Vercel)
 - **Live URL:** https://dashboard.dentalscotland.com
 - **Local clone:** `D:\Work\doctorSoctland`
 
 ## 2. Environments & database
-- **Single shared database (Supabase)** across local *and* production — per project
-  design. **Any local change writes to the same DB production reads.** Be careful.
-- Supabase project host: `db.mkzauukubdxsuadiwcvv.supabase.co` (pooler:
+
+- **Single shared Supabase Postgres across local AND production** — any local change
+  writes to the same DB production reads. Be careful.
+- Supabase host: `db.mkzauukubdxsuadiwcvv.supabase.co` (pooler:
   `aws-1-eu-west-2.pooler.supabase.com`). Values in `.env` / Vercel.
-- Local dev server: `http://localhost:3000`
-- Public demo tunnel (ephemeral — dies if machine sleeps / ngrok restarts):
-  `https://aida-snaky-unvisibly.ngrok-free.dev`
+- Local dev: `http://localhost:3000`. Prod deploys automatically on push to `main`;
+  env-var changes need a manual Redeploy.
 
 ## 3. Logins
-- **Super Admin** (sees revenue): `concierge@dentalscotland.com` / `superadmin2026`
-- **Admin** (revenue hidden): `coordinator@dentalscotland.com` / `admin2026`
-  ⚠️ Login allows 10 attempts / 15 min per email. A lockout says "Too many
-  attempts" (distinct from a wrong password). The limiter is in-memory, so a
-  redeploy clears it instantly. Passwords are NOT trimmed — don't paste with a
-  trailing space.
-- **Demo patients:** 9 seeded, password `dental123`. Emails are fake gmail
-  addresses (emma.macleod@gmail.com, sophie.b@, etc.) — see `src/lib/seed-data.ts`.
-  ⚠️ **Never trigger real patient-facing email/WhatsApp to these** — they could be
-  real strangers. Test sends only to `concierge@dentalscotland.com` / your own number.
 
-## 4. Integration status
+| Account | Email | Password | Access |
+|---|---|---|---|
+| Super Admin | concierge@dentalscotland.com | superadmin2026 | Everything: all patients, revenue, Team, all reports |
+| Plain Admin | coordinator@dentalscotland.com | admin2026 | Own patients only, own reports, no revenue |
+
+- **Millie / Rochelle have NO admin logins yet** — create at `/admin/team` (Super Admin).
+- Login: 10 attempts / 15 min per email. "Too many attempts" = lockout (in-memory —
+  a redeploy clears it). Passwords are NOT trimmed — beware trailing spaces.
+- Patient test record: `asadqureshi1908@gmail.com` / `test1234` (delete when done).
+- Demo patients password: `dental123`.
+- ⚠️ Default admin passwords should still be changed.
+
+## 4. Per-admin isolation (added 2026-07-21)
+
+- `Patient.ownerId` → owning `Admin`. **Plain admins see only patients they own OR
+  sent** (`sentByEmail` matches their email); Super Admins see everything. Enforced
+  via `patientWhere()` / `canAccessPatient()` in `src/lib/auth.ts` on: dashboard,
+  patient list, profile, edit page, sidebar count, and ALL server actions
+  (`requireOwnedPatient` in `src/app/admin/actions.ts`).
+- Patient ownership is set automatically on creation; a **Super Admin can reassign**
+  via Edit patient → "Belongs to admin" dropdown.
+- Legacy patients (null owner, no sender) are Super-Admin-only.
+- Demo state: **Grace Stewart is assigned to coordinator@** as an isolation demo.
+- `/admin/team` (Super Admin only): lists admins with patient counts; creates new
+  admin logins (name, email, password ≥8 chars, role title, optional Super Admin).
+
+## 5. Monthly reports (added 2026-07-21)
+
+`/admin/reports` (sidebar → "Monthly reports"):
+
+- **Computed live** per admin+month (attribution = owned OR sent-by): Invisalign
+  orders (patients whose *first* successful payment fell in the month), income
+  collected that month, avg treatment value per new aligner patient.
+- **Manual template fields**: Invisalign consults seen / went ahead; composite
+  bonding consults / went ahead / income; veneers the same; notes. Derived: consult
+  conversion %, avg per bonding patient, avg per veneer patient.
+- **Held records**: one `MonthlyReport` row per admin+month (unique), filed/adjusted
+  timestamps shown in the Report log; saving again adjusts the record.
+- **Notifications**: save → confirmation email to that admin with figures + next due
+  date. **1st of each month 09:00** the reminders cron emails every admin who hasn't
+  filed the previous month (skips those who have).
+- Super Admin switches admins via name chips; months via ‹ › (future months blocked).
+- ⚠️ A **demo July 2026 report** was filed under Rhona (notes say "Demo entry") —
+  replace with real figures.
+
+## 6. Pricing & treatment months (updated 2026-07-21)
+
+- **Tiers: ≤7 → £1,500 · 8–15 → £2,250 · 16+ → £2,750** (boundary changed from 20→15
+  in both the DB `Pricing` row and code defaults).
+- Editable at `/admin/settings`; `src/lib/pricing.ts` is pure/client-safe;
+  `pricing-settings.ts` (`getPricing()`) is server-only with fallback defaults.
+- **The New/Edit patient forms read the live config** (they previously had hardcoded
+  price tables — fixed). Hint text, £250 labels, discount % all follow Settings.
+- **Estimated treatment time is tier-based**: ≤7 → 6 months · 8–15 → 10 · 16+ → 12
+  (`estMonths` in pricing.ts; used by proposal page, forms, emails).
+- **Changing pricing never alters an existing patient's quote** — `pricePence` /
+  `discountPct` are captured at proposal time.
+
+## 7. Integration status
+
 | Integration | Status | Notes |
 |---|---|---|
-| Database (Supabase Postgres) | ✅ working | schema pushed + seeded from local |
-| Auth (`AUTH_SECRET`) | ✅ working | set in Vercel + local |
-| **Email (Gmail send)** | ✅ working | Google OAuth `gmail.send`; verified live send. Falls back to Resend → simulated |
-| WhatsApp (Meta Cloud API) | ⏳ pending keys | code ready; simulated to console until keys set |
-| **Stripe (payments)** | ✅ **verified end-to-end** | test keys local, live keys in Vercel. Checkout amount, webhook signature, DB record + receipt all proven |
-| **Editable pricing** | ✅ working | `/admin/settings` — tiers, deposit, booking credit, discount |
-| **Super Admin / Admin roles** | ✅ working | plain Admin sees no revenue |
-| **7-touch follow-up sequence** | ✅ working | days 1,4,10,20,26,29,30 + 30-day price lock |
-| **Per-coordinator sending** | ⚠️ verify | Millie/Rochelle/Other — confirm Gmail isn't rewriting the From |
-| **Responsive** | ✅ done | first media queries; verified 375px + 1280px |
-| Payment reminders (email + WhatsApp) | ✅ email works | `/api/cron/reminders` drives the 7-touch sequence, daily 09:00 (2 crons total — fits Vercel Hobby). WhatsApp part waits on keys |
+| Database (Supabase) | ✅ | schema pushed incl. `ownerId` + `MonthlyReport` |
+| Auth (`AUTH_SECRET`) | ✅ | Vercel + local |
+| Email (Gmail send) | ✅ | OAuth `gmail.send`, falls back Resend → simulated |
+| WhatsApp (Meta Cloud API) | ⏳ | code ready, simulated until keys. **Business verification approved** — see §11 |
+| Stripe | ✅ verified e2e | LIVE keys in Vercel, TEST keys local — keep it that way |
+| Editable pricing | ✅ | `/admin/settings` |
+| Super Admin / Admin roles | ✅ | now with full patient isolation |
+| 7-touch sequence | ✅ | days 1,4,10,20,26,29,30 + 30-day price lock |
+| Per-coordinator sending | ⚠️ verify | check `[SEND-AS TEST]` emails in concierge@ — if From was rewritten, aliases unverified → use Reply-To |
+| Responsive | ✅ | 375px + 1280px verified |
+| Crons | ✅ | 2 daily @ 09:00 (Hobby-compatible): instalments + reminders/sequence/report-reminders |
+| Monthly reports | ✅ | see §5 |
+| T&C tick | ✅ | see §8 — **needs the real T&C document/URL** |
 
-## 5. Environment variables (names only — values in `.env` / Vercel)
-Core: `DATABASE_URL`* , `AUTH_SECRET`, `APP_URL`, `CRON_SECRET`
-Email/Gmail: `EMAIL_FROM`, `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GMAIL_REFRESH_TOKEN`, (`RESEND_API_KEY` optional)
-Notifications: `ADMIN_NOTIFY_EMAIL` (=concierge@), `ADMIN_NOTIFY_WHATSAPP`
+## 8. Patient payment flow
+
+- **T&C tick (added 2026-07-20)**: proposal page payment options require a ticked
+  "I agree to the Terms & Conditions" before the button enables (all 3 routes);
+  server-side enforced in `selectPaymentOption`; logged to the activity timeline
+  ("Accepted the Terms & Conditions") for audit. ⚠️ The label links to no document
+  yet — **provide the T&C text or URL**.
+- **Instalments are fully automatic**: deposit checkout saves the card
+  (`setup_future_usage: off_session`), webhook schedules 3 monthly instalments, the
+  daily instalments cron charges the saved card off-session; receipts emailed;
+  failures mark patient `overdue` + admin alert.
+- **£250 upfront credit**: `Patient.upfrontPaidPence`, toggled on the edit form;
+  everything charges on net (price − credit); pay-in-full = net then 5% off.
+- **Consent + finance**: 0% finance opens `ConsentModal` (consent text in
+  `src/lib/consent.ts`, drawn signature, DOB); admin approves → finance link emailed.
+
+## 9. Follow-up sequence & sender
+
+- `src/lib/sequence.ts` — 7 touches, clock = `proposalSentAt`, price locked 30 days,
+  day-30 sets `priceLockExpired` + admin alert. Resending restarts the clock.
+  WhatsApp only on touch 1. **Subjects rewritten professional (2026-07-20)** — e.g.
+  "Your personalised Invisalign plan, Emma — price locked for 30 days".
+- **Fallback sender is "Dental Scotland"** (was "The team at Dental Scotland") —
+  `FALLBACK_COORDINATOR` in `src/lib/coordinators.ts`. Used when no coordinator
+  picked; otherwise From = Millie/Rochelle (needs verified send-as aliases, §7).
+- Patients list has a **"Sent by" filter** (Anyone/Millie/Rochelle/Other) —
+  populates as proposals are sent through the picker.
+
+## 10. Where notifications fire (all via `src/lib/notify.ts`)
+
+- Proposal sent / free-form message: `src/app/admin/actions.ts`
+- OTP code, interested / call-back / payment-option alerts: `src/app/p/actions.ts`
+- Paid / deposit alerts + receipts: `src/app/api/stripe/webhook/route.ts`
+- Instalment collection + receipts / failures: `src/app/api/cron/instalments/route.ts`
+- Sequence touches + price-lock expiry + **monthly-report reminders (1st)**:
+  `src/app/api/cron/reminders/route.ts`
+- Report-saved confirmation: `saveMonthlyReport` in `src/app/admin/actions.ts`
+- Finance link on approval: `approveFinance` in `src/app/admin/actions.ts`
+
+## 11. WhatsApp — current plan (discussed 2026-07-20)
+
+Business verification is **approved**. To go live, in Meta/WhatsApp Manager:
+1. Register **+44 7915 357177** to the WABA (2-number cap lifted post-verification;
+   the old practice number can't be used — it's on the consumer app, and coexistence
+   needs a Tech Provider/BSP — `/admin/whatsapp-connect` is a dormant dead end).
+2. Set env vars (Vercel + `.env`): `WHATSAPP_PHONE_NUMBER_ID` (API Setup page),
+   `WHATSAPP_TOKEN` (**permanent** System-User token with `whatsapp_business_messaging`
+   + `whatsapp_business_management` — the API-Setup token dies in 24h),
+   `ADMIN_NOTIFY_WHATSAPP`.
+3. Create templates: `proposal_ready` (Utility), `payment_reminder` (Utility),
+   `login_code` (**Authentication** category — required for OTP). Then a code change
+   swaps `type:"text"` → `type:"template"` in `sendWhatsApp` (`src/lib/notify.ts`).
+4. **Agreed direction for human replies**: our own webhook (`/api/whatsapp/webhook`,
+   to build) + admin-dashboard inbox — free, official, one number. Conditional/AI
+   auto-replies live in our code (no n8n/BSP). Free-form replies allowed inside the
+   24h service window; outside it, templates only. The phone app CANNOT share the
+   API number without a BSP/Tech Provider — ruled out unofficial libraries (ban risk).
+
+## 12. Cron jobs (`vercel.json` — exactly 2, fits Hobby)
+
+| Path | Schedule | Does |
+|---|---|---|
+| `/api/cron/instalments` | 09:00 daily | charges due instalments off-session |
+| `/api/cron/reminders` | 09:00 daily | 7-touch sequence; day-30 lock expiry; **on the 1st: monthly-report reminder emails** |
+
+Auth: `Authorization: Bearer <CRON_SECRET>` (Vercel sends automatically; must be set).
+Crons are registered in Vercel (confirmed firing 2026-07-21, ~10:17 first observed).
+
+## 13. Demo data state
+
+- 9 seeded demo patients (`src/lib/seed-data.ts`, fake-looking Gmail addresses).
+  **Neutralized 2026-07-17**: the 5 in sequence-eligible statuses were set to
+  `draft`; none had received a sequence email (`sequenceTouch=0`). Statuses now:
+  drafts + Emma/Callum `deposit`, Liam `paid`. ⚠️ Never send real email/WhatsApp to
+  these addresses — they could be real strangers. Test only with concierge@ / own number.
+- Millie Buchanan + Rochelle Copland exist as **test patients** (millie@/rochelle@
+  addresses) for send-as testing — they receive sequence touches (internal, fine).
+- Grace Stewart → owned by coordinator@ (isolation demo). Demo July report under
+  Rhona (§5). Test patient Asad (§3).
+
+## 14. Environment variables (names only)
+
+Core: `DATABASE_URL`*, `AUTH_SECRET`, `APP_URL`, `CRON_SECRET`
+Gmail: `EMAIL_FROM`, `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GMAIL_REFRESH_TOKEN`, (`RESEND_API_KEY` optional)
+Notify: `ADMIN_NOTIFY_EMAIL` (=concierge@), `ADMIN_NOTIFY_WHATSAPP`
 WhatsApp: `WHATSAPP_TOKEN`, `WHATSAPP_PHONE_NUMBER_ID`
 Stripe: `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`
-Finance/pricing: `FINANCE_APPLY_URL`, `PAY_DISCOUNT_PCT`
+Finance: `FINANCE_APPLY_URL`, `PAY_DISCOUNT_PCT`
 
-\* **`DATABASE_URL` is optional on Vercel:** the app now falls back to the
-Supabase integration's `POSTGRES_PRISMA_URL` / `POSTGRES_URL` automatically
-(see `src/lib/database-url.ts`). Set `DATABASE_URL` locally (session-pooler /
-port-5432 URL) for `prisma db push`.
+\* Optional on Vercel — falls back to Supabase `POSTGRES_PRISMA_URL`/`POSTGRES_URL`
+(`src/lib/database-url.ts`). Needed locally (port-5432 session pooler) for `db push`.
 
-## 6. Run locally
+## 15. Run locally
+
 ```bash
 cd D:\Work\doctorSoctland
-npm install
-# .env must exist with DATABASE_URL etc. (gitignored — not in repo)
-npm run dev            # http://localhost:3000
-# schema/seed (stop the dev server first on Windows — Prisma engine file lock):
+npm install          # .env must exist (gitignored)
+npm run dev          # http://localhost:3000
+# schema/seed — STOP the dev server first (Windows Prisma DLL lock):
 npm run db:push
 npm run db:seed
 ```
-Expose via ngrok (optional): `ngrok http 3000` → grab URL from http://localhost:4040/api/tunnels
 
-## 7. Gmail send — how it was set up
-- OAuth client (Google Cloud project `valued-ceiling-502310-j6`), scope `gmail.send`.
-- **Authorized redirect URI** (must match `<APP_URL>/api/auth/google/callback`):
-  - `https://dashboard.dentalscotland.com/api/auth/google/callback` (prod)
-  - `https://aida-snaky-unvisibly.ngrok-free.dev/api/auth/google/callback` (local test)
-- Flow: admin logs in → visits `/api/auth/google` → consent → callback shows the
-  refresh token → stored as `GMAIL_REFRESH_TOKEN` (in Vercel + local `.env`).
-- Code: `src/lib/google.ts` (OAuth + Gmail REST send), wired into
-  `src/lib/notify.ts` `sendEmail` (Gmail → Resend → simulated).
-- Sender address = `EMAIL_FROM` (`concierge@dentalscotland.com`) — must be the
-  authorised mailbox or a verified send-as alias.
+Gmail OAuth (if re-authing): admin login → `/api/auth/google` → consent → refresh
+token → `GMAIL_REFRESH_TOKEN`. Redirect URI must match `<APP_URL>/api/auth/google/callback`
+(Google Cloud project `valued-ceiling-502310-j6`).
 
-## 8. Where notifications fire (all use `src/lib/notify.ts`)
-- Proposal sent (email + WhatsApp): `src/app/admin/actions.ts`
-- Free-form message (email + WhatsApp): `src/app/admin/actions.ts`
-- OTP login code (email + WhatsApp): `src/app/p/actions.ts`
-- Admin alerts — interested / call-back / payment-option chosen: `src/app/p/actions.ts`
-- Admin alerts — paid / deposit (+ receipts): `src/app/api/stripe/webhook/route.ts`
-- Admin alert — overdue instalment (+ receipt): `src/app/api/cron/instalments/route.ts`
-- Admin alert — consent signed / finance applied: `submitApplication` in `src/app/p/actions.ts`
-- Payment reminders (email + WhatsApp) to unpaid patients: `src/app/api/cron/reminders/route.ts`
-- Finance link to patient (on admin approval): `approveFinance` in `src/app/admin/actions.ts`
+## 16. Open items / next steps
 
-## 8b. Feature map (added this session)
-- **£250 upfront credit:** `Patient.upfrontPaidPence`; toggled on the edit form. Net
-  total = price − £250; helper `netPricePence()` in `src/lib/pricing.ts`. Rule is
-  "minus £250, then 5% off" for pay-in-full. All charge sites use net (proposal
-  page, Stripe checkout, mark-paid, webhook, instalments cron, proposal email).
-- **Edit patient (any status):** `/admin/patients/[id]/edit` +
-  `src/components/EditPatientForm.tsx` + `updatePatient` action; "Edit" button on
-  the profile.
-- **Follow-up cron:** `/api/cron/reminders` (statuses sent/interested/
-  awaiting/overdue) now drives the 7-touch sequence. Scheduled in `vercel.json`
-  daily at 09:00 (the 17:00 entry was dropped — the sequence only needs daily).
-- **Consent + signature + finance:** selecting 0% finance or "I'm interested"
-  opens `src/components/ConsentModal.tsx` (Invisalign consent text in
-  `src/lib/consent.ts`, drawn-signature pad, basic info + DOB). Submits via
-  `submitApplication`; patient sees "check inbox, email in 2–3 hours". Admin
-  approves on the profile → `approveFinance` auto-emails the finance link
-  (`financeLinkEmailHtml`). Fields: `dateOfBirth`, `consentSignedAt`,
-  `consentSignature`, `financeLink`, `financeApprovedAt`.
+- [ ] **T&C document**: get the terms text or URL and link it from the payment tick.
+- [ ] **Create Millie & Rochelle admin logins** at `/admin/team`; optionally assign
+      their existing patients via Edit → "Belongs to admin".
+- [ ] **WhatsApp go-live** (§11): number, 3 env vars, 3 templates → then the
+      `type:"template"` code change; later the webhook + admin inbox.
+- [ ] **Verify Gmail send-as** for millie@/rochelle@ (`[SEND-AS TEST]` emails in
+      concierge@) — the touch-1 emails to Millie/Rochelle test patients came from the
+      concierge fallback, so this is STILL unanswered.
+- [ ] Review sequence emails 4–7 copy (tagged `[4/7]`…`[7/7]` in asadqureshi1908@ inbox).
+- [ ] Replace the demo July 2026 report with real figures.
+- [ ] Change default admin passwords; delete Downloads `client_secret_*.json`.
+- [ ] Delete test patient asadqureshi1908@ when testing is done.
+- [ ] Rate limiter is in-memory → inconsistent on serverless (Redis would fix).
+- [ ] Dead `monthly` label lingers on the profile (trivial).
 
-## 9. Pending / next steps
-- [ ] **Stripe:** provide `STRIPE_SECRET_KEY` (test `sk_test_…`). Register webhook
-      `https://dashboard.dentalscotland.com/api/stripe/webhook` (event
-      `checkout.session.completed`) → `STRIPE_WEBHOOK_SECRET`. Then test card
-      `4242 4242 4242 4242`.
-- [ ] **WhatsApp:** provide `WHATSAPP_PHONE_NUMBER_ID`, `WHATSAPP_TOKEN`,
-      `ADMIN_NOTIFY_WHATSAPP`; add own number as verified test recipient. For
-      business-initiated sends outside the 24h window, create an approved Meta
-      template and swap `type:"text"` in `src/lib/notify.ts` (`sendWhatsApp`).
-- [ ] Set `ADMIN_NOTIFY_EMAIL` + `EMAIL_FROM` = concierge@ in **Vercel** (local done).
-- [ ] Delete the downloaded `client_secret_*.json` from Downloads (secret in plaintext).
-- [ ] Optional: change admin password from the default.
-- [x] **Reminders cron: resolved (2026-07-17).** `vercel.json` has exactly 2 crons
-      (instalments + reminders, both daily 09:00) — within Hobby limits — and the
-      crons are registered in Vercel. The 7-touch sequence only needs a daily run,
-      so twice-daily is no longer required. `CRON_SECRET` must remain set in Vercel
-      (Vercel auto-sends it as the Bearer token).
-- [ ] Visually confirm the signature pad in a browser (build-verified; the in-app
-      browser tool was unavailable when it was built).
+## 17. Gotchas
 
-## 10. Gotchas / operational notes
-- **Windows Prisma lock:** stop the dev server before `npm run db:push`
-  (Windows locks the query-engine DLL; `db push` succeeds but client regen EPERMs).
-- **`.next` cache corruption:** if you see `__webpack_require__.n is not a function`
-  or stale-chunk errors, stop the server, `rm -rf .next`, restart, hard-refresh browser.
-- **Shared DB:** local and prod use the SAME Supabase DB — local edits hit prod data.
-- **ngrok URL is ephemeral** — regenerate and re-register the OAuth redirect URI if it changes.
-- **Prod deploys** happen automatically on push to `main`. Env-var changes need a Redeploy.
-- **Never commit secrets** — `.env` is gitignored; keep it that way.
+- **Windows Prisma lock**: stop dev server before `npm run db:push`.
+- **`.next` cache corruption** (`__webpack_require__.n is not a function`): stop
+  server, delete `.next`, restart, hard-refresh.
+- **Shared DB**: local edits hit prod data (this is by design — stay careful).
+- **Never commit secrets** — `.env` stays gitignored.
+- Inline styles beat class selectors → mobile overrides in `globals.css` need `!important`.
 
-## 11. Changes made this session (git history)
-- `cc4518e` Add Gmail send via Google OAuth; remove "Monthly payments" option
-- `a7fc778` Use concierge@dentalscotland.com as the single practice email
-- `d867df8` Fall back to Supabase POSTGRES_* when DATABASE_URL is unset (fixed prod 500)
-- `2f0d731` Document Gmail-primary email, Supabase fallback, WhatsApp setup in .env.example
-- `f64f739` Editable patients, £250 upfront credit, twice-daily payment reminders
-- `9a70603` Consent + signature flow for finance / interest, with admin approval
+## 18. Commit history (newest first)
 
-## 12. Demo data notes
-- **Sophie Brown** has £250 marked as paid upfront (showcases the credit: £2,250 →
-  £2,000 balance → £1,900 pay-in-full).
-- **Jack Wilson** has a signed finance application (status "awaiting") so the admin
-  finance-approval card is visible on his profile. Revert via the Edit form if needed.
-
----
-
-# 12. Session 2 (2026-07-17) — what changed
-
-## Shipped
 | Commit | What |
 |---|---|
-| `96c2e7f` | **7-touch sequence** + per-coordinator sending |
-| `7f0bba7` | **Responsive** — first `@media` queries in the codebase |
-| `11428d7` | **QA fixes** — 3 real bugs (see below) |
-| `0912826` | **Admin-editable pricing** (`/admin/settings`) |
-| `88887f0` `ba3d22c` | **Super Admin vs Admin** + access badge |
-| `6b0721a` `e5dab31` | Login lockout made distinguishable; limit 5 → 10 |
-| `a745366` | Removed the "I'm interested" CTA |
-| `e17059c`…`7c3621d` | WhatsApp Embedded Signup page (now a dead end — see §13) |
-
-## Bugs found & fixed during QA
-- **Pending revenue was wrong**: subtracted payments from the GROSS price, ignoring
-  the booking credit — overstated by £250/patient (£500 live). Now net-based.
-- **Progress bar**: gross-based (84% instead of 95%) + divided by `pricePence`
-  unguarded → `width:"NaN%"` on a £0 price. Now net + guarded.
-- **Fake dashboard metrics**: `"+3 this wk"` and `"+12%"` were HARDCODED strings
-  shown as live figures (mockup leftovers). Now computed for real.
-- **£700 was hardcoded in 9 places** — incl. `recordDeposit` and the Stripe webhook
-  (both write money). The webhook recorded a fixed £700 instead of what Stripe
-  actually charged. All now use the configured deposit; `instalmentPence()`
-  *requires* the deposit so the compiler catches any future miss.
-
-## Key architecture notes
-- **Pricing**: `src/lib/pricing.ts` is pure/client-safe; `pricing-settings.ts`
-  (`getPricing()`) is server-only and reads the singleton `Pricing` row with a
-  safe fallback to defaults. **Changing pricing never alters an existing
-  patient's quote** — each patient's `pricePence`/`discountPct` is captured at
-  proposal time.
-- **Sequence**: `src/lib/sequence.ts`. Clock = `Patient.proposalSentAt`;
-  `sequenceTouch` tracks progress; day 30 sets `priceLockExpired` + alerts admin.
-  A late-added patient jumps to the current touch (no 4-email blast). Resending a
-  proposal **restarts** the clock so the 30-day lock claim stays honest.
-  WhatsApp only fires on touch 1 (7 WhatsApps would risk the number's quality rating).
-- **Coordinators**: `src/lib/coordinators.ts`. `sendEmail()` takes an optional
-  From override.
-- **Responsive**: inline styles beat class selectors, so the mobile overrides in
-  `globals.css` need `!important`. Sidebar → 68px icon rail <900px (admin content
-  was 127px on a phone, now 307px).
-
-# 13. Open items / next steps
-- ✅ **Demo patients neutralized (2026-07-17).** The 5 demo patients in
-  sequence-eligible statuses (Aiden Ross, Ava Docherty, Isla Campbell, Jack Wilson,
-  Sophie Brown) were set to `draft` directly in the shared DB, with an activity-log
-  note on each. All had `sequenceTouch=0` — **no sequence email had been sent to any
-  demo patient**. Emma MacLeod & Callum Fraser (`deposit`) and Liam Murray (`paid`)
-  were left as-is: the sequence cron excludes those statuses, and the instalments
-  cron can't touch them (no saved Stripe card, no scheduled instalments). To use a
-  demo patient in a walkthrough again, set their status via the Edit form — and
-  remember the sequence will then see them.
-- ⚠️ **Verify the Gmail send-as**: check the `[SEND-AS TEST]` emails in `concierge@`.
-  If the From was rewritten to `concierge@`, the millie@/rochelle@ aliases aren't
-  verified → switch to Reply-To instead.
-- ⚠️ **Review the drafted copy** for sequence emails 4–7 (days 20/26/29/30) — sent
-  to `asadqureshi1908@gmail.com` tagged `[4/7]`…`[7/7]`.
-- **Test patient** `asadqureshi1908@gmail.com` (password `test1234`) exists in the
-  shared prod DB for end-to-end testing. Delete when done.
-- **WhatsApp is a dead end via self-build**: coexistence onboarding of the old
-  +44 number requires **Tech Provider status** (Meta docs, confirmed empirically —
-  the flow silently degrades to a plain login, no QR). `/admin/whatsapp-connect`
-  is dormant. Options: a BSP, or the new number `+44 7915 357177` — blocked by
-  Meta's **2-phone-number cap for unverified businesses** (test number can't be
-  removed, old +44 can't be removed) → **business verification is the unlock**.
-- **Stripe**: LIVE keys are in Vercel, TEST keys local. Keep it that way.
-- Dead `monthly` label lingers in the profile (trivial).
-- Rate limiter is in-memory → inconsistent on serverless (known gap; Redis fixes it).
+| `c1f9cca` | Per-admin isolation, team management, monthly performance reports |
+| `47778ec` | T&C tick before payment, tier-based treatment months, sent-by filter |
+| `ec3077d` | New pricing tiers (8–15 / 16+); forms read live config |
+| `58aea25` | Professional sender name and follow-up subject lines |
+| `19bbaac` | Handoff: demo patients neutralized, cron plan resolved |
+| `96c2e7f`…`7c3621d` | Session 2: 7-touch sequence, responsive, QA fixes, editable pricing, roles, WhatsApp dead-end |
+| `cc4518e`…`9a70603` | Session 1: Gmail OAuth, £250 credit, editable patients, consent+signature |

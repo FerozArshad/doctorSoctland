@@ -1,4 +1,5 @@
 import { db } from "@/lib/db";
+import { COORDINATORS } from "@/lib/coordinators";
 import { fmt } from "@/lib/pricing";
 import { avatarBg, initials, timeAgo } from "@/lib/status";
 import TopBar from "@/components/TopBar";
@@ -23,6 +24,7 @@ export default async function PatientsPage() {
     priceFmt: fmt(c.pricePence),
     status: c.status,
     lastAgo: c.activities[0] ? timeAgo(c.activities[0].createdAt) : "—",
+    coord: COORDINATORS.find((x) => x.email === c.sentByEmail)?.key ?? "other",
   }));
 
   return (

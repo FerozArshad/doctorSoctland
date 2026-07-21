@@ -14,6 +14,7 @@ export type PatientRow = {
   priceFmt: string;
   status: string;
   lastAgo: string;
+  coord: string; // "millie" | "rochelle" | "other" — who the proposal was sent by
 };
 
 const CHIP_DEFS: Array<[string, string]> = [
@@ -21,10 +22,15 @@ const CHIP_DEFS: Array<[string, string]> = [
   ["awaiting", "Awaiting"], ["deposit", "Deposit"], ["paid", "Paid"], ["overdue", "Overdue"],
 ];
 
+const COORD_CHIPS: Array<[string, string]> = [
+  ["all", "Anyone"], ["millie", "Millie"], ["rochelle", "Rochelle"], ["other", "Other"],
+];
+
 export default function PatientsTable({ rows }: { rows: PatientRow[] }) {
   const router = useRouter();
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState("all");
+  const [coordFilter, setCoordFilter] = useState("all");
 
   const counts = useMemo(() => {
     const c: Record<string, number> = { all: rows.length };
@@ -32,12 +38,19 @@ export default function PatientsTable({ rows }: { rows: PatientRow[] }) {
     return c;
   }, [rows]);
 
+  const coordCounts = useMemo(() => {
+    const c: Record<string, number> = { all: rows.length };
+    for (const r of rows) c[r.coord] = (c[r.coord] || 0) + 1;
+    return c;
+  }, [rows]);
+
   const filtered = useMemo(() => {
     const q = search.toLowerCase();
     let f = rows.filter((r) => filter === "all" || r.status === filter);
+    f = f.filter((r) => coordFilter === "all" || r.coord === coordFilter);
     if (q) f = f.filter((r) => r.name.toLowerCase().includes(q) || r.email.toLowerCase().includes(q));
     return f;
-  }, [rows, search, filter]);
+  }, [rows, search, filter, coordFilter]);
 
   const grid = "2.4fr 1.3fr 1fr 1.4fr 1.2fr 0.5fr";
 
@@ -68,6 +81,27 @@ export default function PatientsTable({ rows }: { rows: PatientRow[] }) {
               }}
             >
               {label} <span style={{ opacity: 0.6 }}>{counts[k] || 0}</span>
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* sent-by filter */}
+      <div style={{ padding: "12px 20px", display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", borderBottom: "1px solid #EEF2F6", background: "#FBFCFD" }}>
+        <span style={{ fontSize: 11.5, fontWeight: 700, letterSpacing: ".05em", textTransform: "uppercase", color: "#8A96A5" }}>Sent by</span>
+        <div style={{ display: "flex", gap: 7, flexWrap: "wrap" }}>
+          {COORD_CHIPS.map(([k, label]) => (
+            <button
+              key={k}
+              onClick={() => setCoordFilter(k)}
+              style={{
+                padding: "6px 12px", borderRadius: 9, fontSize: 12.5, fontWeight: 700, cursor: "pointer",
+                border: "1px solid " + (coordFilter === k ? "#0E9384" : "#E1E7EE"),
+                background: coordFilter === k ? "#0E9384" : "#fff",
+                color: coordFilter === k ? "#fff" : "#5C6a79",
+              }}
+            >
+              {label} <span style={{ opacity: 0.6 }}>{coordCounts[k] || 0}</span>
             </button>
           ))}
         </div>

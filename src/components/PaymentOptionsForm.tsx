@@ -22,6 +22,7 @@ export default function PaymentOptionsForm({ token, options, applicant }: { toke
   const [choice, setChoice] = useState<PayOption["key"]>(options[0]?.key ?? "full");
   const [submitting, setSubmitting] = useState(false);
   const [showConsent, setShowConsent] = useState(false);
+  const [agreed, setAgreed] = useState(false);
   const selected = options.find((o) => o.key === choice)!;
 
   return (
@@ -91,7 +92,22 @@ export default function PaymentOptionsForm({ token, options, applicant }: { toke
         />
       </div>
 
-      <button className="btn btn-teal" disabled={submitting} style={{ marginTop: 14, width: "100%", padding: 14, fontSize: 15 }}>
+      {/* Terms & Conditions — required before any payment route can continue */}
+      <label style={{ display: "flex", gap: 10, alignItems: "flex-start", marginTop: 14, padding: "12px 14px", borderRadius: 11, border: "1.5px solid " + (agreed ? "#0E9384" : "#E1E7EE"), background: agreed ? "#F4FCFA" : "#FBFCFD", cursor: "pointer" }}>
+        <input
+          type="checkbox"
+          name="terms"
+          required
+          checked={agreed}
+          onChange={(e) => setAgreed(e.target.checked)}
+          style={{ width: 17, height: 17, accentColor: "#0E9384", marginTop: 1, flex: "none" }}
+        />
+        <span style={{ fontSize: 13, color: "#3C4a59", lineHeight: 1.55 }}>
+          I have read and agree to the <strong>Terms &amp; Conditions</strong> of my Invisalign treatment with Dental Scotland.
+        </span>
+      </label>
+
+      <button className="btn btn-teal" disabled={submitting || !agreed} style={{ marginTop: 14, width: "100%", padding: 14, fontSize: 15, opacity: agreed ? 1 : 0.55 }}>
         {submitting ? "One moment…" : selected.cta}
       </button>
       <div style={{ fontSize: 12, color: "#9AA6B4", marginTop: 10, textAlign: "center", lineHeight: 1.6 }}>

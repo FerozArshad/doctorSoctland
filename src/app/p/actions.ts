@@ -226,7 +226,13 @@ export async function selectPaymentOption(formData: FormData) {
   const token = String(formData.get("token"));
   const choice = String(formData.get("choice") || "");
   const note = String(formData.get("note") || "").trim().slice(0, 500);
+  const termsAccepted = formData.get("terms") === "on";
   const patient = await requireVerified(token);
+
+  // The T&C tick is enforced client-side too, but never trust the client.
+  if (!termsAccepted) {
+    redirect(toastUrl(`/p/${token}`, "Please accept the Terms & Conditions to continue", "!", "#E0A429"));
+  }
 
   const optCfg = await getPricing();
   const labels: Record<string, string> = {
@@ -243,6 +249,7 @@ export async function selectPaymentOption(formData: FormData) {
       paymentPreference: choice,
       activities: {
         create: [
+          { text: "Accepted the Terms & Conditions" },
           { text: `Chose payment option: ${labels[choice]}` },
           ...(note ? [{ text: `Message from patient: “${note}”` }] : []),
         ],

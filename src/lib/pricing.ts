@@ -37,8 +37,11 @@ export function priceForPence(alignerCount: number, cfg: PricingConfig = PRICING
   return cfg.tier3Pence;
 }
 
+// Estimated treatment time by tier: ≤7 → 6 months · 8–15 → 10 · 16+ → 12.
 export function estMonths(alignerCount: number): number {
-  return Math.max(3, Math.round((alignerCount * 2) / 4.345));
+  if (alignerCount <= 7) return 6;
+  if (alignerCount <= 15) return 10;
+  return 12;
 }
 
 // Pay-in-full price after discount

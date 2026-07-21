@@ -1,6 +1,7 @@
 import { SignJWT, jwtVerify } from "jose";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
+import type { Admin } from "@prisma/client";
 import { db } from "./db";
 
 const secret = () => {
@@ -72,4 +73,18 @@ export async function getPatientSession() {
   const id = await verify(cookies().get(PATIENT_COOKIE)?.value, "patient");
   if (!id) return null;
   return db.patient.findUnique({ where: { id } });
+}
+
+// ── Per-admin patient isolation ─────────────────────────────────────────
+// Super Admins see every patient. A plain admin sees only patients they own
+// or personally sent. Legacy patients (no owner, no sender) are Super-only.
+
+/** Prisma `where` fragment scoping patient queries to what this admin may see. */
+export function patientWhere(admin: Admin) {
+  return admin.isSuperAdmin ? {} : { OR: [{ ownerId: admin.id }, { sentByEmail: admin.email }] };
+}
+
+/** Whether this admin may view/act on a specific patient. */
+export function canAccessPatient(admin: Admin, p: { ownerId: string | null; sentByEmail: string }) {
+  return admin.isSuperAdmin || p.ownerId === admin.id || p.sentByEmail === admin.email;
 }

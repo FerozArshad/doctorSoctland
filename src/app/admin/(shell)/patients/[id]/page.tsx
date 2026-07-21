@@ -6,6 +6,7 @@ import { getPricing } from "@/lib/pricing-settings";
 import { avatarBg, initials, statusOf, timeAgo } from "@/lib/status";
 import { COMP_ITEMS, COMP_TOTAL } from "@/lib/content";
 import { approveFinance, markPaid, recordDeposit, sendProposal } from "@/app/admin/actions";
+import { canAccessPatient, requireAdmin } from "@/lib/auth";
 import TopBar from "@/components/TopBar";
 import MessageBox from "@/components/MessageBox";
 
@@ -21,6 +22,7 @@ const TIMELINE_STEPS = [
 ];
 
 export default async function PatientProfile({ params }: { params: { id: string } }) {
+  const admin = await requireAdmin();
   const c = await db.patient.findUnique({
     where: { id: params.id },
     include: {
@@ -28,7 +30,7 @@ export default async function PatientProfile({ params }: { params: { id: string 
       instalments: { orderBy: { number: "asc" } },
     },
   });
-  if (!c) notFound();
+  if (!c || !canAccessPatient(admin, c)) notFound();
   const cfg = await getPricing();
 
   const st = statusOf(c.status);

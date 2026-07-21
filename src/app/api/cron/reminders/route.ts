@@ -4,7 +4,8 @@
 // price lock expires — we stop emailing and flag the patient for a requote.
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { notifyAdmin, sendEmail, sendWhatsApp, reminderWhatsAppText } from "@/lib/notify";
+import { brandedEmail, notifyAdmin, sendEmail, sendWhatsApp, reminderWhatsAppText } from "@/lib/notify";
+import { firstNameOf } from "@/lib/status";
 import { getPricing } from "@/lib/pricing-settings";
 import { dueTouch, seqValues, LOCK_DAYS, TOUCHES } from "@/lib/sequence";
 import { fromHeader } from "@/lib/coordinators";
@@ -24,6 +25,32 @@ export async function GET(req: NextRequest) {
 
   const appUrl = process.env.APP_URL || "http://localhost:3000";
   const cfg = await getPricing();
+
+  // 1st of the month: remind every admin to file last month's report (this
+  // route runs daily at 09:00, so the reminder lands that morning).
+  const today = new Date();
+  if (today.getDate() === 1) {
+    const last = new Date(today.getFullYear(), today.getMonth() - 1, 1);
+    const monthName = last.toLocaleString("en-GB", { month: "long", year: "numeric" });
+    const link = `${appUrl}/admin/reports?m=${last.getFullYear()}-${String(last.getMonth() + 1).padStart(2, "0")}`;
+    const admins = await db.admin.findMany();
+    for (const a of admins) {
+      const filed = await db.monthlyReport.findUnique({
+        where: { adminId_year_month: { adminId: a.id, year: last.getFullYear(), month: last.getMonth() + 1 } },
+      });
+      if (filed) continue; // already on record — no nag needed
+      await sendEmail(
+        a.email,
+        `Monthly report due — ${monthName}`,
+        brandedEmail(
+          "Your monthly report is due",
+          `<p style="font-size:15px;line-height:1.7;color:#3C4a59;">Hi ${firstNameOf(a.name)},</p>
+           <p style="font-size:15px;line-height:1.7;color:#3C4a59;">Your <strong>${monthName}</strong> report is due today. It takes about two minutes — consults seen, how many went ahead, and bonding/veneer figures. Invisalign orders and income are calculated for you.</p>
+           <div style="text-align:center;margin:22px 0 8px;"><a href="${link}" style="display:inline-block;background:#0E9384;color:#fff;text-decoration:none;padding:13px 26px;border-radius:11px;font-weight:800;font-size:14.5px;">File your ${monthName} report →</a></div>`
+        )
+      ).catch(console.error);
+    }
+  }
   const patients = await db.patient.findMany({
     where: { status: { in: UNPAID_STATUSES }, sequenceTouch: { lt: TOUCHES.length }, priceLockExpired: false },
   });

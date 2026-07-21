@@ -17,9 +17,18 @@ export type EditPatientInitial = {
   videoUrl: string;
   notes: string;
   paidUpfront: boolean;
+  ownerId: string | null;
 };
 
-export default function EditPatientForm({ patient, cfg }: { patient: EditPatientInitial; cfg: PricingConfig }) {
+export default function EditPatientForm({
+  patient,
+  cfg,
+  owners, // only passed for Super Admins — enables reassigning the patient to an admin
+}: {
+  patient: EditPatientInitial;
+  cfg: PricingConfig;
+  owners?: Array<{ id: string; name: string }>;
+}) {
   const [firstName, setFirstName] = useState(patient.firstName);
   const [lastName, setLastName] = useState(patient.lastName);
   const [email, setEmail] = useState(patient.email);
@@ -112,6 +121,21 @@ export default function EditPatientForm({ patient, cfg }: { patient: EditPatient
             <span style={{ display: "block", fontSize: 12.5, color: "#7A8696", marginTop: 2 }}>Deducts {fmt(cfg.upfrontPence)} from the total. All payment options recalculate for the patient.</span>
           </span>
         </label>
+
+        {owners && (
+          <div style={{ marginTop: 20 }}>
+            <label className="label">Belongs to admin</label>
+            <select className="input" name="ownerId" defaultValue={patient.ownerId ?? ""}>
+              <option value="">— Unassigned (Super Admins only) —</option>
+              {owners.map((o) => (
+                <option key={o.id} value={o.id}>{o.name}</option>
+              ))}
+            </select>
+            <div style={{ fontSize: 12, color: "#8A96A5", marginTop: 4 }}>
+              The assigned admin sees this patient in their own dashboard, list and reports.
+            </div>
+          </div>
+        )}
 
         <div style={{ marginTop: 20 }}>
           <label className="label">ClinCheck video link</label>

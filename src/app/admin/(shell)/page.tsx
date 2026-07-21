@@ -3,20 +3,22 @@ import { db } from "@/lib/db";
 import { fmt, netPricePence } from "@/lib/pricing";
 import { avatarBg, initials, statusOf, timeAgo, STATUS, StatusKey } from "@/lib/status";
 import TopBar from "@/components/TopBar";
-import { getAdmin } from "@/lib/auth";
+import { patientWhere, requireAdmin } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
 export default async function Dashboard() {
   // Only a Super Admin sees earnings (revenue cards + revenue chart).
-  const me = await getAdmin();
-  const isSuper = !!me?.isSuperAdmin;
+  // Every figure below is scoped to the patients this admin may see.
+  const me = await requireAdmin();
+  const isSuper = me.isSuperAdmin;
 
   const patients = await db.patient.findMany({
+    where: patientWhere(me),
     include: { activities: { orderBy: { createdAt: "desc" } } },
     orderBy: { createdAt: "desc" },
   });
-  const paidPayments = await db.payment.findMany({ where: { status: "paid" } });
+  const paidPayments = await db.payment.findMany({ where: { status: "paid", patient: patientWhere(me) } });
 
   // ── Stats ──
   const collected = patients.reduce((a, c) => a + c.amountPaidPence, 0);

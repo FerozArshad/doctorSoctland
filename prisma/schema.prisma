@@ -29,14 +29,41 @@ model Pricing {
 }
 
 model Admin {
-  id           String   @id @default(cuid())
-  email        String   @unique
+  id           String          @id @default(cuid())
+  email        String          @unique
   passwordHash String
   name         String
-  role         String   @default("Treatment Coordinator")
-  // Super Admin sees revenue/earnings; a plain Admin sees patients & pipeline only.
-  isSuperAdmin Boolean  @default(false)
-  createdAt    DateTime @default(now())
+  role         String          @default("Treatment Coordinator")
+  // Super Admin sees revenue/earnings and ALL patients; a plain Admin sees only
+  // the patients they own (or sent), and no revenue.
+  isSuperAdmin Boolean         @default(false)
+  createdAt    DateTime        @default(now())
+  patients     Patient[]
+  reports      MonthlyReport[]
+}
+
+/// Monthly performance report per admin. Invisalign orders & income are computed
+/// live from the admin's patients/payments — these fields hold the manually
+/// entered consult and bonding/veneer numbers. One row per admin per month.
+model MonthlyReport {
+  id                 String   @id @default(cuid())
+  adminId            String
+  admin              Admin    @relation(fields: [adminId], references: [id], onDelete: Cascade)
+  year               Int
+  month              Int // 1-12
+  consultsSeen       Int      @default(0) // Invisalign consults seen
+  consultsProceeded  Int      @default(0) // ...that went ahead
+  bondingConsults    Int      @default(0)
+  bondingProceeded   Int      @default(0)
+  bondingIncomePence Int      @default(0)
+  veneerConsults     Int      @default(0)
+  veneerProceeded    Int      @default(0)
+  veneerIncomePence  Int      @default(0)
+  notes              String   @default("")
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  @@unique([adminId, year, month])
 }
 
 model Patient {
@@ -65,6 +92,10 @@ model Patient {
   // Which coordinator the proposal was sent from (emails come from / are signed by them)
   sentByName            String       @default("")
   sentByEmail           String       @default("")
+  // Owning admin — plain admins only see patients they own (or sent); null = legacy,
+  // visible to Super Admins only.
+  ownerId               String?
+  owner                 Admin?       @relation(fields: [ownerId], references: [id], onDelete: SetNull)
   // Consent & finance application (captured when patient applies for finance / registers interest)
   dateOfBirth           String       @default("")
   consentSignedAt       DateTime?

@@ -1,4 +1,5 @@
 import { db } from "@/lib/db";
+import { patientWhere, requireAdmin } from "@/lib/auth";
 import { COORDINATORS } from "@/lib/coordinators";
 import { fmt } from "@/lib/pricing";
 import { avatarBg, initials, timeAgo } from "@/lib/status";
@@ -8,7 +9,9 @@ import PatientsTable, { PatientRow } from "@/components/PatientsTable";
 export const dynamic = "force-dynamic";
 
 export default async function PatientsPage() {
+  const admin = await requireAdmin();
   const patients = await db.patient.findMany({
+    where: patientWhere(admin),
     include: { activities: { orderBy: { createdAt: "desc" }, take: 1 } },
     orderBy: { updatedAt: "desc" },
   });

@@ -40,6 +40,11 @@ export function initials(first: string, last: string): string {
   return (((first || "?")[0] || "?") + ((last || "")[0] || "")).toUpperCase().slice(0, 2);
 }
 
+/** First name from a full name, ignoring a "Dr." prefix ("Dr. Rhona Sinclair" → "Rhona"). */
+export function firstNameOf(name: string): string {
+  return name.replace(/^Dr\.?\s+/i, "").split(" ")[0] || name;
+}
+
 export function avatarBg(id: string): string {
   let h = 0;
   for (const ch of id || "") h = (h * 31 + ch.charCodeAt(0)) >>> 0;

@@ -3,11 +3,12 @@
 import { redirect } from "next/navigation";
 import bcrypt from "bcryptjs";
 import { db } from "@/lib/db";
-import { clearAdminSession, createAdminSession, requireAdmin } from "@/lib/auth";
+import { canAccessPatient, clearAdminSession, createAdminSession, requireAdmin } from "@/lib/auth";
 import { fmt, fullPricePence, netPricePence, priceForPence } from "@/lib/pricing";
 import { getPricing } from "@/lib/pricing-settings";
 import { COORDINATORS, coordinatorFor, fromHeader, FALLBACK_COORDINATOR, type Coordinator } from "@/lib/coordinators";
-import { financeLinkEmailHtml, proposalEmailHtml, proposalWhatsAppText, sendEmail, sendWhatsApp } from "@/lib/notify";
+import { brandedEmail, financeLinkEmailHtml, proposalEmailHtml, proposalWhatsAppText, sendEmail, sendWhatsApp } from "@/lib/notify";
+import { firstNameOf } from "@/lib/status";
 
 function toastUrl(base: string, msg: string, icon = "✓", bg = "#0E9384") {
   const q = new URLSearchParams({ toast: msg, ticon: icon, tbg: bg });
@@ -76,6 +77,101 @@ export async function updatePricing(formData: FormData) {
   redirect(toastUrl("/admin/settings", "Pricing updated — applies to new & edited proposals", "✓"));
 }
 
+// ── Team (Super Admin only) ─────────────────────────────────────────────
+// Creates a new admin login. Each plain admin is isolated: they see only the
+// patients they own or sent, plus their own stats and monthly reports.
+export async function createAdminAccount(formData: FormData) {
+  const me = await requireAdmin();
+  if (!me.isSuperAdmin) redirect("/admin");
+  const name = String(formData.get("name") || "").trim();
+  const email = String(formData.get("email") || "").trim().toLowerCase();
+  const password = String(formData.get("password") || "");
+  const role = String(formData.get("role") || "").trim() || "Treatment Coordinator";
+  const isSuperAdmin = formData.get("isSuperAdmin") === "on";
+
+  if (!name || !/.+@.+\..+/.test(email)) {
+    redirect(toastUrl("/admin/team", "A name and a valid email are required", "!", "#E0A429"));
+  }
+  if (password.length < 8) {
+    redirect(toastUrl("/admin/team", "Password must be at least 8 characters", "!", "#E0A429"));
+  }
+  if (await db.admin.findUnique({ where: { email } })) {
+    redirect(toastUrl("/admin/team", "An admin with that email already exists", "!", "#E0A429"));
+  }
+
+  await db.admin.create({
+    data: { name, email, role, isSuperAdmin, passwordHash: await bcrypt.hash(password, 10) },
+  });
+  redirect(toastUrl("/admin/team", `${name} can now log in as ${email}`, "✓"));
+}
+
+// ── Monthly reports ─────────────────────────────────────────────────────
+// Saves (or updates) an admin's monthly report. Every save is a logged, held
+// record: createdAt/updatedAt timestamps show exactly when it was filed and
+// last adjusted. A confirmation email tells the admin it's saved and when the
+// next report is due.
+export async function saveMonthlyReport(formData: FormData) {
+  const me = await requireAdmin();
+  const adminId = String(formData.get("adminId") || me.id);
+  // A plain admin can only file their own report; a Super Admin can file anyone's.
+  if (adminId !== me.id && !me.isSuperAdmin) redirect("/admin/reports");
+  const target = adminId === me.id ? me : await db.admin.findUniqueOrThrow({ where: { id: adminId } });
+
+  const year = Math.min(2100, Math.max(2020, parseInt(String(formData.get("year")), 10) || new Date().getFullYear()));
+  const month = Math.min(12, Math.max(1, parseInt(String(formData.get("month")), 10) || new Date().getMonth() + 1));
+  const num = (k: string) => Math.max(0, parseInt(String(formData.get(k) ?? ""), 10) || 0);
+  const pounds = (k: string) => {
+    const n = Math.round(parseFloat(String(formData.get(k) ?? "")) * 100);
+    return Number.isFinite(n) && n >= 0 ? n : 0;
+  };
+
+  const data = {
+    consultsSeen: num("consultsSeen"),
+    consultsProceeded: num("consultsProceeded"),
+    bondingConsults: num("bondingConsults"),
+    bondingProceeded: num("bondingProceeded"),
+    bondingIncomePence: pounds("bondingIncome"),
+    veneerConsults: num("veneerConsults"),
+    veneerProceeded: num("veneerProceeded"),
+    veneerIncomePence: pounds("veneerIncome"),
+    notes: String(formData.get("notes") || "").trim().slice(0, 1000),
+  };
+
+  await db.monthlyReport.upsert({
+    where: { adminId_year_month: { adminId, year, month } },
+    update: data,
+    create: { adminId, year, month, ...data },
+  });
+
+  const monthName = new Date(year, month - 1, 1).toLocaleString("en-GB", { month: "long", year: "numeric" });
+  const now = new Date();
+  const nextDue = new Date(now.getFullYear(), now.getMonth() + 1, 1)
+    .toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" });
+  const savedAt = now.toLocaleString("en-GB", { day: "numeric", month: "long", year: "numeric", hour: "2-digit", minute: "2-digit" });
+  const row = (label: string, v: string) =>
+    `<tr><td style="padding:6px 12px 6px 0;color:#5C6a79;font-size:14px;">${label}</td><td style="padding:6px 0;font-weight:700;font-size:14px;color:#16202E;">${v}</td></tr>`;
+  await sendEmail(
+    target.email,
+    `Monthly report saved — ${monthName}`,
+    brandedEmail(
+      "Monthly report saved",
+      `<p style="font-size:15px;line-height:1.7;color:#3C4a59;">Hi ${firstNameOf(target.name)},</p>
+       <p style="font-size:15px;line-height:1.7;color:#3C4a59;">Your report for <strong>${monthName}</strong> was saved on ${savedAt} by ${me.name}. It's held on record — you can adjust it any time from the Monthly reports page.</p>
+       <table style="margin:10px 0;">
+         ${row("Invisalign consults seen", String(data.consultsSeen))}
+         ${row("…went ahead", String(data.consultsProceeded))}
+         ${row("Bonding consults / went ahead", `${data.bondingConsults} / ${data.bondingProceeded}`)}
+         ${row("Bonding income", fmt(data.bondingIncomePence))}
+         ${row("Veneer consults / went ahead", `${data.veneerConsults} / ${data.veneerProceeded}`)}
+         ${row("Veneer income", fmt(data.veneerIncomePence))}
+       </table>
+       <p style="font-size:14px;line-height:1.7;color:#5C6a79;">Your next report is due on <strong>${nextDue}</strong> — you'll get a reminder that morning.</p>`
+    )
+  ).catch(console.error);
+
+  redirect(toastUrl(`/admin/reports?m=${year}-${String(month).padStart(2, "0")}&a=${adminId}`, `Report for ${monthName} saved & logged`, "✓"));
+}
+
 // Reads the "sent by" picker: a known coordinator key, or "other" + free text.
 function pickCoordinator(formData: FormData): Coordinator {
   const key = String(formData.get("sentByKey") || "");
@@ -89,9 +185,18 @@ function pickCoordinator(formData: FormData): Coordinator {
   return FALLBACK_COORDINATOR;
 }
 
+// Loads a patient the current admin is allowed to act on — a plain admin is
+// bounced off patients that aren't theirs (isolation per admin).
+async function requireOwnedPatient(id: string) {
+  const admin = await requireAdmin();
+  const patient = await db.patient.findUniqueOrThrow({ where: { id } });
+  if (!canAccessPatient(admin, patient)) redirect("/admin/patients");
+  return { admin, patient };
+}
+
 // ── Patients ────────────────────────────────────────────────────────────
 export async function createPatient(formData: FormData) {
-  await requireAdmin();
+  const admin = await requireAdmin();
   const cfg = await getPricing();
   const send = formData.get("intent") === "send";
   const firstName = String(formData.get("firstName") || "").trim();
@@ -123,6 +228,7 @@ export async function createPatient(formData: FormData) {
       status: "draft",
       pricePence: priceForPence(alignerCount, cfg),
       discountPct: cfg.discountPct,
+      ownerId: admin.id,
       activities: { create: { text: "Draft proposal created" } },
     },
   });
@@ -136,9 +242,13 @@ export async function createPatient(formData: FormData) {
 
 // Edit an existing patient — allowed at any status (even after paid/done).
 export async function updatePatient(formData: FormData) {
-  await requireAdmin();
   const cfg = await getPricing();
   const id = String(formData.get("patientId"));
+  const { admin } = await requireOwnedPatient(id);
+  // Only a Super Admin may reassign ownership (the field only renders for them).
+  const ownerRaw = formData.get("ownerId");
+  const ownerChange =
+    admin.isSuperAdmin && ownerRaw !== null ? { ownerId: String(ownerRaw) || null } : {};
   const firstName = String(formData.get("firstName") || "").trim();
   const lastName = String(formData.get("lastName") || "").trim();
   const email = String(formData.get("email") || "").trim().toLowerCase();
@@ -170,6 +280,7 @@ export async function updatePatient(formData: FormData) {
       notes,
       pricePence: priceForPence(alignerCount, cfg),
       upfrontPaidPence: paidUpfront ? cfg.upfrontPence : 0,
+      ...ownerChange,
       activities: { create: { text: "Patient details updated by admin" } },
     },
   });
@@ -178,13 +289,12 @@ export async function updatePatient(formData: FormData) {
 
 // Approve a finance application: save the lender link and auto-email it to the patient.
 export async function approveFinance(formData: FormData) {
-  await requireAdmin();
   const id = String(formData.get("patientId"));
   const financeLink = String(formData.get("financeLink") || "").trim();
   if (!/^https?:\/\/.+/i.test(financeLink)) {
     redirect(toastUrl(`/admin/patients/${id}`, "Enter a valid finance link (https://…)", "!", "#E0A429"));
   }
-  const patient = await db.patient.findUniqueOrThrow({ where: { id } });
+  const { patient } = await requireOwnedPatient(id);
 
   await db.patient.update({
     where: { id },
@@ -247,19 +357,18 @@ async function deliverProposal(patientId: string, sentBy?: Coordinator) {
 }
 
 export async function sendProposal(formData: FormData) {
-  await requireAdmin();
   const id = String(formData.get("patientId"));
-  const patient = await db.patient.findUniqueOrThrow({ where: { id } });
+  const { patient } = await requireOwnedPatient(id);
   const co = pickCoordinator(formData);
   await deliverProposal(id, co);
   redirect(toastUrl(`/admin/patients/${id}`, `Proposal emailed to ${patient.firstName} from ${co.name}`, "✉"));
 }
 
 export async function recordDeposit(formData: FormData) {
-  await requireAdmin();
   const cfg = await getPricing();
   const dep = cfg.depositPence;
   const id = String(formData.get("patientId"));
+  await requireOwnedPatient(id);
   await db.patient.update({
     where: { id },
     data: {
@@ -273,9 +382,8 @@ export async function recordDeposit(formData: FormData) {
 }
 
 export async function markPaid(formData: FormData) {
-  await requireAdmin();
   const id = String(formData.get("patientId"));
-  const patient = await db.patient.findUniqueOrThrow({ where: { id } });
+  const { patient } = await requireOwnedPatient(id);
   const full = fullPricePence(netPricePence(patient.pricePence, patient.upfrontPaidPence), patient.discountPct);
   await db.patient.update({
     where: { id },
@@ -291,11 +399,10 @@ export async function markPaid(formData: FormData) {
 
 // Free-form admin message to the patient (email and/or WhatsApp).
 export async function sendMessage(formData: FormData) {
-  await requireAdmin();
   const id = String(formData.get("patientId"));
   const channel = String(formData.get("channel") || "email");
   const body = String(formData.get("body") || "").trim();
-  const patient = await db.patient.findUniqueOrThrow({ where: { id } });
+  const { patient } = await requireOwnedPatient(id);
   if (!body) redirect(`/admin/patients/${id}`);
 
   const logs: string[] = [];

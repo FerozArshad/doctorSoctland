@@ -220,6 +220,8 @@ token → `GMAIL_REFRESH_TOKEN`. Redirect URI must match `<APP_URL>/api/auth/goo
 
 ## 16. Open items / next steps
 
+(Full done / remaining / product-vision picture: see `ROADMAP.md`.)
+
 - [ ] **T&C document**: get the terms text or URL and link it from the payment tick.
 - [ ] **Create Millie & Rochelle admin logins** at `/admin/team`; optionally assign
       their existing patients via Edit → "Belongs to admin".

@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { db } from "@/lib/db";
 import { estMonths, fmt, netPricePence, paymentPreferenceLabel } from "@/lib/pricing";
 import { getPricing } from "@/lib/pricing-settings";
@@ -32,7 +32,15 @@ export default async function PatientProfile({ params }: { params: { id: string 
       uploads: { orderBy: { createdAt: "desc" } },
     },
   });
-  if (!c || !canAccessPatient(admin, c)) notFound();
+  if (!c) notFound();
+  if (!canAccessPatient(admin, c)) {
+    const q = new URLSearchParams({
+      toast: "You don't have access to that patient",
+      ticon: "!",
+      tbg: "#E0A429",
+    });
+    redirect(`/admin/patients?${q.toString()}`);
+  }
   const cfg = await getPricing();
 
   const st = statusOf(c.status);

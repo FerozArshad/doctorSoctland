@@ -212,7 +212,35 @@ export async function createPatient(formData: FormData) {
 
   const existing = await db.patient.findUnique({ where: { email } });
   if (existing) {
-    redirect(toastUrl(`/admin/patients/${existing.id}`, "A patient with that email already exists", "!", "#E0A429"));
+    if (!canAccessPatient(admin, existing)) {
+      redirect(
+        toastUrl(
+          "/admin/patients/new",
+          "A patient with that email already exists (owned by another admin). Ask a Super Admin to open or reassign them.",
+          "!",
+          "#E0A429"
+        )
+      );
+    }
+    // Same patient, accessible — if they chose Create & send, deliver on the existing record.
+    if (send) {
+      await deliverProposal(existing.id, pickCoordinator(formData));
+      redirect(
+        toastUrl(
+          `/admin/patients/${existing.id}`,
+          `That email is already on file — proposal sent to ${existing.firstName}`,
+          "✉"
+        )
+      );
+    }
+    redirect(
+      toastUrl(
+        `/admin/patients/${existing.id}`,
+        "A patient with that email already exists — use Send proposal on their profile",
+        "!",
+        "#E0A429"
+      )
+    );
   }
 
   const patient = await db.patient.create({

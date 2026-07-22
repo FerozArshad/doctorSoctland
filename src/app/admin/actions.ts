@@ -397,36 +397,3 @@ export async function markPaid(formData: FormData) {
   redirect(toastUrl(`/admin/patients/${id}`, "Marked paid in full"));
 }
 
-// Free-form admin message to the patient (email and/or WhatsApp).
-export async function sendMessage(formData: FormData) {
-  const id = String(formData.get("patientId"));
-  const channel = String(formData.get("channel") || "email");
-  const body = String(formData.get("body") || "").trim();
-  const { patient } = await requireOwnedPatient(id);
-  if (!body) redirect(`/admin/patients/${id}`);
-
-  const logs: string[] = [];
-  if (channel === "email" || channel === "both") {
-    try {
-      const { brandedEmail, escapeHtml } = await import("@/lib/notify");
-      await sendEmail(
-        patient.email,
-        "A message from Dental Scotland",
-        brandedEmail("A message from your Treatment Coordinator", `<p style="font-size:15px;line-height:1.7;color:#3C4a59;white-space:pre-wrap;">${escapeHtml(body)}</p>`)
-      );
-      logs.push("Email sent: “" + body.slice(0, 60) + (body.length > 60 ? "…" : "") + "”");
-    } catch (e) {
-      console.error(e);
-      logs.push("Email failed — check RESEND_API_KEY");
-    }
-  }
-  if ((channel === "whatsapp" || channel === "both") && patient.phone) {
-    await sendWhatsApp(patient.phone, body);
-    logs.push("WhatsApp sent: “" + body.slice(0, 60) + (body.length > 60 ? "…" : "") + "”");
-  }
-  await db.patient.update({
-    where: { id },
-    data: { activities: { create: logs.map((text) => ({ text })) } },
-  });
-  redirect(toastUrl(`/admin/patients/${id}`, `Message sent to ${patient.firstName}`, "✉"));
-}

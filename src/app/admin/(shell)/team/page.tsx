@@ -61,9 +61,10 @@ export default async function TeamPage() {
 
           {/* create admin */}
           <form action={createAdminAccount} className="card" style={{ padding: 24 }}>
-            <div style={{ fontSize: 16, fontWeight: 800 }}>Add an admin</div>
+            <div style={{ fontSize: 16, fontWeight: 800 }}>Add admin user</div>
             <div style={{ fontSize: 13, color: "#7A8696", marginTop: 2, lineHeight: 1.6 }}>
-              They log in at <strong>/admin</strong> with the email and password you set here.
+              Super Admins can create unlimited team logins. Each person signs in at <strong>/admin/login</strong> with the email and password you set here.
+              Patient accounts are created separately via <strong>New patient</strong>.
             </div>
             <div style={{ marginTop: 18 }}>
               <label className="label">Full name *</label>
@@ -87,7 +88,7 @@ export default async function TeamPage() {
                 <strong>Super Admin</strong> — sees all patients, revenue and every admin&apos;s reports
               </span>
             </label>
-            <button className="btn btn-teal" style={{ marginTop: 20, width: "100%", padding: 13 }}>Create admin</button>
+            <button className="btn btn-teal" style={{ marginTop: 20, width: "100%", padding: 13 }}>Create admin user</button>
           </form>
         </div>
       </div>

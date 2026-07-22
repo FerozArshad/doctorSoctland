@@ -1,6 +1,12 @@
+"use client";
+
 import Link from "next/link";
+import NotificationsBell from "@/components/NotificationsBell";
+import { useMessageNotifications } from "@/components/MessageNotificationsContext";
 
 export default function TopBar({ title, sub }: { title: string; sub: string }) {
+  const notifications = useMessageNotifications();
+
   return (
     <header style={{ height: 70, flex: "none", background: "#fff", borderBottom: "1px solid #E7ECF2", display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 28px" }}>
       <div>
@@ -8,12 +14,7 @@ export default function TopBar({ title, sub }: { title: string; sub: string }) {
         <div style={{ fontSize: 13, color: "#7A8696", marginTop: 1 }}>{sub}</div>
       </div>
       <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-        <button style={{ width: 40, height: 40, borderRadius: 11, border: "1px solid #E7ECF2", background: "#fff", display: "grid", placeItems: "center", cursor: "pointer", color: "#5C6a79", position: "relative" }}>
-          <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9M13.7 21a2 2 0 0 1-3.4 0" />
-          </svg>
-          <span style={{ position: "absolute", top: 9, right: 10, width: 7, height: 7, borderRadius: "50%", background: "#E5544B", border: "2px solid #fff" }} />
-        </button>
+        <NotificationsBell data={notifications} />
         <Link
           href="/admin/patients/new"
           style={{ background: "#0E9384", color: "#fff", border: "none", padding: "11px 18px", borderRadius: 11, fontWeight: 700, fontSize: 14, cursor: "pointer", display: "flex", alignItems: "center", gap: 8, textDecoration: "none" }}

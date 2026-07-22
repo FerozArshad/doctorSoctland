@@ -8,7 +8,8 @@ import { COMP_ITEMS, COMP_TOTAL } from "@/lib/content";
 import { approveFinance, markPaid, recordDeposit, sendProposal } from "@/app/admin/actions";
 import { canAccessPatient, requireAdmin } from "@/lib/auth";
 import TopBar from "@/components/TopBar";
-import MessageBox from "@/components/MessageBox";
+import MessageLog from "@/components/MessageLog";
+import { isMessageActivity } from "@/lib/messages";
 
 export const dynamic = "force-dynamic";
 
@@ -40,7 +41,6 @@ export default async function PatientProfile({ params }: { params: { id: string 
   // Guard the divide — a zero price would render width:"NaN%" and break the bar.
   const netOwed = netPricePence(c.pricePence, c.upfrontPaidPence);
   const paidPct = netOwed > 0 ? Math.min(100, Math.max(0, Math.round((100 * c.amountPaidPence) / netOwed))) : 0;
-  const hasPhone = !!c.phone && c.phone !== "—";
 
   const timeline = TIMELINE_STEPS.map((label, i) => {
     const isPaid = c.status === "paid";
@@ -253,8 +253,7 @@ export default async function PatientProfile({ params }: { params: { id: string 
                 </div>
               )}
 
-              {/* messaging */}
-              <MessageBox patientId={c.id} hasPhone={hasPhone} />
+              <MessageLog patient={c} activities={c.activities} />
             </div>
 
             <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
@@ -282,7 +281,7 @@ export default async function PatientProfile({ params }: { params: { id: string 
               <div className="card" style={{ padding: 24 }}>
                 <div style={{ fontSize: 15, fontWeight: 800, marginBottom: 14 }}>Activity</div>
                 <div style={{ display: "flex", flexDirection: "column" }}>
-                  {c.activities.map((a) => (
+                  {c.activities.filter((a) => !isMessageActivity(a.text)).map((a) => (
                     <div key={a.id} style={{ display: "flex", gap: 12, padding: "9px 0" }}>
                       <div style={{ width: 8, height: 8, borderRadius: "50%", background: "#0E9384", marginTop: 6, flex: "none" }} />
                       <div>

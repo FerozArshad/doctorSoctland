@@ -1,10 +1,69 @@
 "use client";
 // Add-patient form with live proposal preview — mirrors the design exactly.
 // Pricing tiers come from the editable config (admin → Settings), passed in by the page.
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { useFormStatus } from "react-dom";
 import { createPatient } from "@/app/admin/actions";
 import { estMonths, fmt, priceForPence, type PricingConfig } from "@/lib/pricing";
 import SentByPicker from "./SentByPicker";
+
+function NewPatientActions() {
+  const { pending } = useFormStatus();
+  const [intent, setIntent] = useState<"draft" | "send" | null>(null);
+
+  useEffect(() => {
+    if (!pending) setIntent(null);
+  }, [pending]);
+
+  const spinner = (dark: boolean) => (
+    <span className={dark ? "ds-spinner ds-spinner-dark" : "ds-spinner"} aria-hidden="true" />
+  );
+
+  return (
+    <div style={{ display: "flex", gap: 12, marginTop: 26 }}>
+      <button
+        type="submit"
+        className="btn btn-outline"
+        name="intent"
+        value="draft"
+        disabled={pending}
+        aria-busy={pending && intent === "draft"}
+        onClick={() => setIntent("draft")}
+        style={{ flex: 1 }}
+      >
+        {pending && intent === "draft" ? (
+          <span style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 10 }}>
+            {spinner(true)}
+            Saving…
+          </span>
+        ) : (
+          "Save as draft"
+        )}
+      </button>
+      <button
+        type="submit"
+        className="btn btn-teal"
+        name="intent"
+        value="send"
+        disabled={pending}
+        aria-busy={pending && intent === "send"}
+        onClick={() => setIntent("send")}
+        style={{ flex: 1.3 }}
+      >
+        {pending && intent === "send" ? (
+          <span style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 10 }}>
+            {spinner(false)}
+            Sending…
+          </span>
+        ) : pending ? (
+          "Please wait…"
+        ) : (
+          "Create & send proposal"
+        )}
+      </button>
+    </div>
+  );
+}
 
 export default function NewPatientForm({ cfg }: { cfg: PricingConfig }) {
   const [firstName, setFirstName] = useState("");
@@ -16,7 +75,6 @@ export default function NewPatientForm({ cfg }: { cfg: PricingConfig }) {
   const [video, setVideo] = useState("https://clincheck.invisalign.com/plan");
   const [notes, setNotes] = useState("");
   const [errs, setErrs] = useState({ first: false, email: false });
-  const [submitting, setSubmitting] = useState(false);
 
   const validate = (e: React.FormEvent<HTMLFormElement>) => {
     const first = !firstName.trim();
@@ -24,9 +82,7 @@ export default function NewPatientForm({ cfg }: { cfg: PricingConfig }) {
     if (first || em) {
       e.preventDefault();
       setErrs({ first, email: em });
-      return;
     }
-    setSubmitting(true);
   };
 
   const pkgBtn = (active: boolean): React.CSSProperties => ({
@@ -101,12 +157,7 @@ export default function NewPatientForm({ cfg }: { cfg: PricingConfig }) {
         <div style={{ height: 1, background: "#EEF2F6", margin: "24px 0" }} />
         <SentByPicker />
 
-        <div style={{ display: "flex", gap: 12, marginTop: 26 }}>
-          <button className="btn btn-outline" name="intent" value="draft" disabled={submitting} style={{ flex: 1 }}>Save as draft</button>
-          <button className="btn btn-teal" name="intent" value="send" disabled={submitting} style={{ flex: 1.3 }}>
-            {submitting ? "Sending…" : "Create & send proposal"}
-          </button>
-        </div>
+        <NewPatientActions />
         <div style={{ fontSize: 12, color: "#9AA6B4", marginTop: 12, lineHeight: 1.6 }}>
           “Create &amp; send” emails the secure proposal link and sends a WhatsApp message if a phone number is provided.
         </div>

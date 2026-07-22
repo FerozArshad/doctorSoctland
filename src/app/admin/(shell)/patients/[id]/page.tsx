@@ -9,6 +9,7 @@ import { approveFinance, markPaid, recordDeposit, sendProposal } from "@/app/adm
 import { canAccessPatient, requireAdmin } from "@/lib/auth";
 import TopBar from "@/components/TopBar";
 import MessageLog from "@/components/MessageLog";
+import FormSubmitButton from "@/components/FormSubmitButton";
 import { isMessageActivity } from "@/lib/messages";
 
 export const dynamic = "force-dynamic";
@@ -116,9 +117,12 @@ export default async function PatientProfile({ params }: { params: { id: string 
               </Link>
               <form action={sendProposal}>
                 <input type="hidden" name="patientId" value={c.id} />
-                <button className="btn btn-outline" style={{ padding: "11px 16px", fontSize: 13.5 }}>
-                  {c.status === "draft" ? "Send proposal" : "Resend proposal"}
-                </button>
+                <FormSubmitButton
+                  className="btn btn-outline"
+                  style={{ padding: "11px 16px", fontSize: 13.5 }}
+                  label={c.status === "draft" ? "Send proposal" : "Resend proposal"}
+                  pendingLabel="Sending…"
+                />
               </form>
               <Link href={`/p/${c.proposalToken}?preview=admin`} className="btn btn-teal" style={{ padding: "11px 18px", fontSize: 13.5, display: "flex", alignItems: "center", gap: 8, textDecoration: "none" }}>
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -219,11 +223,21 @@ export default async function PatientProfile({ params }: { params: { id: string 
                 <div style={{ marginTop: 14, display: "flex", gap: 10 }}>
                   <form action={recordDeposit} style={{ flex: 1, display: "flex" }}>
                     <input type="hidden" name="patientId" value={c.id} />
-                    <button className="btn btn-outline" style={{ flex: 1, padding: 11, borderRadius: 10, fontSize: 13.5 }}>Record {fmt(cfg.depositPence)} deposit</button>
+                    <FormSubmitButton
+                      className="btn btn-outline"
+                      style={{ flex: 1, padding: 11, borderRadius: 10, fontSize: 13.5 }}
+                      label={`Record ${fmt(cfg.depositPence)} deposit`}
+                      pendingLabel="Saving…"
+                    />
                   </form>
                   <form action={markPaid} style={{ flex: 1, display: "flex" }}>
                     <input type="hidden" name="patientId" value={c.id} />
-                    <button className="btn btn-dark" style={{ flex: 1, padding: 11, borderRadius: 10, fontSize: 13.5 }}>Mark paid in full</button>
+                    <FormSubmitButton
+                      className="btn btn-dark"
+                      style={{ flex: 1, padding: 11, borderRadius: 10, fontSize: 13.5 }}
+                      label="Mark paid in full"
+                      pendingLabel="Saving…"
+                    />
                   </form>
                 </div>
               </div>
@@ -255,7 +269,12 @@ export default async function PatientProfile({ params }: { params: { id: string 
                         <input type="hidden" name="patientId" value={c.id} />
                         <label className="label">Finance / info link to send</label>
                         <input className="input" name="financeLink" placeholder="https://lender.example.com/apply/…" defaultValue={c.financeLink} />
-                        <button className="btn btn-teal" style={{ marginTop: 10, width: "100%", padding: 11, fontSize: 13.5 }}>Approve &amp; email finance link</button>
+                        <FormSubmitButton
+                          className="btn btn-teal"
+                          style={{ marginTop: 10, width: "100%", padding: 11, fontSize: 13.5 }}
+                          label="Approve & email finance link"
+                          pendingLabel="Sending…"
+                        />
                       </form>
                     ))}
                 </div>

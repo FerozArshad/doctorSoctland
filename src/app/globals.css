@@ -68,6 +68,10 @@ a { color: inherit; }
   animation: ds-spin .7s linear infinite;
   flex: none;
 }
+.ds-spinner-dark {
+  border-color: rgba(14, 147, 132, 0.25);
+  border-top-color: #0E9384;
+}
 .ds-view { animation: ds-fade .32s var(--ease) both; }
 
 /* Shared components — brand-aligned */

@@ -367,7 +367,9 @@ async function deliverProposal(patientId: string, sentBy?: Coordinator) {
   }
   if (patient.phone && patient.phone !== "—") {
     const r = await sendProposalWhatsApp(patient);
-    if (!("error" in r && r.error)) results.push(`WhatsApp sent to ${patient.phone}`);
+    if (r.error) results.push(`WhatsApp to ${patient.phone} failed`);
+    else if (r.simulated) results.push(`WhatsApp to ${patient.phone} simulated (check keys)`);
+    else results.push(`WhatsApp sent to ${patient.phone}`);
   }
   await db.patient.update({
     where: { id: patientId },
@@ -382,14 +384,27 @@ async function deliverProposal(patientId: string, sentBy?: Coordinator) {
       activities: { create: results.map((text) => ({ text })) },
     },
   });
+  return results;
 }
 
 export async function sendProposal(formData: FormData) {
   const id = String(formData.get("patientId"));
-  const { patient } = await requireOwnedPatient(id);
+  await requireOwnedPatient(id);
   const co = pickCoordinator(formData);
-  await deliverProposal(id, co);
-  redirect(toastUrl(`/admin/patients/${id}`, `Proposal emailed to ${patient.firstName} from ${co.name}`, "✉"));
+  const results = await deliverProposal(id, co);
+  const wa = results.find((r) => r.startsWith("WhatsApp"));
+  const emailFailed = results.some((r) => r.includes("Email") && r.includes("failed"));
+  const msg = emailFailed
+    ? `Email failed — ${wa || "check configuration"}`
+    : wa?.includes("failed")
+      ? `Proposal emailed from ${co.name}, but WhatsApp failed`
+      : wa?.includes("simulated")
+        ? `Proposal emailed from ${co.name} (WhatsApp not live yet)`
+        : wa
+          ? `Proposal sent by email + WhatsApp from ${co.name}`
+          : `Proposal emailed to patient from ${co.name}`;
+  const warn = emailFailed || wa?.includes("failed") || wa?.includes("simulated");
+  redirect(toastUrl(`/admin/patients/${id}`, msg, warn ? "!" : "✉", warn ? "#E0A429" : "#0E9384"));
 }
 
 export async function recordDeposit(formData: FormData) {

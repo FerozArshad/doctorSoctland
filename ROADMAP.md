@@ -77,7 +77,9 @@ there). This is the product picture: what's built, what remains, where it ends u
 
 ### 4. Tech debt / smaller items
 - [ ] Rate limiter is in-memory → move to Redis/Upstash for serverless consistency
-- [ ] Dead "monthly" label on the patient profile
+- [x] Dead "monthly" label on the patient profile — removed / mapped to deposit
+- [x] Consent + e-signature on **all** payment routes (was finance-only)
+- [x] Patient file uploads on proposal page (visible on admin profile)
 - [ ] Report export (PDF / spreadsheet) if the practice wants reports outside the app
 
 ---

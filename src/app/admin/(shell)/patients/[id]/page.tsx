@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { db } from "@/lib/db";
-import { estMonths, fmt, netPricePence } from "@/lib/pricing";
+import { estMonths, fmt, netPricePence, paymentPreferenceLabel } from "@/lib/pricing";
 import { getPricing } from "@/lib/pricing-settings";
 import { avatarBg, initials, statusOf, timeAgo } from "@/lib/status";
 import { COMP_ITEMS, COMP_TOTAL } from "@/lib/content";
@@ -29,6 +29,7 @@ export default async function PatientProfile({ params }: { params: { id: string 
     include: {
       activities: { orderBy: { createdAt: "desc" } },
       instalments: { orderBy: { number: "asc" } },
+      uploads: { orderBy: { createdAt: "desc" } },
     },
   });
   if (!c || !canAccessPatient(admin, c)) notFound();
@@ -178,8 +179,7 @@ export default async function PatientProfile({ params }: { params: { id: string 
                 <div style={{ fontSize: 15, fontWeight: 800, marginBottom: 16 }}>Payment</div>
                 {c.paymentPreference && (
                   <div style={{ marginBottom: 14, padding: "11px 14px", borderRadius: 11, background: "#F3EBFC", border: "1px solid #E4D3F7", fontSize: 13.5, color: "#7A3EC0", fontWeight: 700 }}>
-                    Patient&apos;s choice:{" "}
-                    {{ full: "Pay in full", deposit: `${fmt(cfg.depositPence)} deposit + 3 instalments`, monthly: "Monthly payment plan — send them a schedule", finance: "0% finance — send the application link" }[c.paymentPreference] ?? c.paymentPreference}
+                    Patient&apos;s choice: {paymentPreferenceLabel(c.paymentPreference, cfg.depositPence)}
                   </div>
                 )}
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 10 }}>
@@ -254,6 +254,33 @@ export default async function PatientProfile({ params }: { params: { id: string 
               )}
 
               <MessageLog patient={c} activities={c.activities} />
+
+              {c.uploads.length > 0 && (
+                <div className="card" style={{ padding: 24 }}>
+                  <div style={{ fontSize: 15, fontWeight: 800, marginBottom: 4 }}>Patient uploads</div>
+                  <div style={{ fontSize: 12.5, color: "#7A8696", marginBottom: 14 }}>
+                    Files attached on the proposal page
+                  </div>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                    {c.uploads.map((u) => (
+                      <a
+                        key={u.id}
+                        href={`data:${u.mimeType};base64,${u.dataBase64}`}
+                        download={u.fileName}
+                        style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, padding: "12px 14px", borderRadius: 11, border: "1px solid #EEF2F6", background: "#FBFCFD", textDecoration: "none", color: "inherit" }}
+                      >
+                        <div style={{ minWidth: 0 }}>
+                          <div style={{ fontSize: 13.5, fontWeight: 700, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>📎 {u.fileName}</div>
+                          <div style={{ fontSize: 12, color: "#9AA6B4", marginTop: 2 }}>
+                            {Math.round(u.sizeBytes / 1024)} KB · {u.createdAt.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}
+                          </div>
+                        </div>
+                        <span style={{ fontSize: 12.5, fontWeight: 700, color: "#0E9384", flex: "none" }}>Download</span>
+                      </a>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
 
             <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>

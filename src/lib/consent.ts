@@ -11,4 +11,4 @@ export const CONSENT_PARAGRAPHS: string[] = [
 ];
 
 export const CONSENT_CHECKBOX_LABEL =
-  "I have read and understood the above and consent to the Invisalign treatment process.";
+  "I agree and consent to everything — Terms & Conditions, informed consent, and proceeding with Invisalign treatment with Dental Scotland.";

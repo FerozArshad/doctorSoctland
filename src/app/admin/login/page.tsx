@@ -1,5 +1,5 @@
 import Image from "next/image";
-import { adminLogin } from "../actions";
+import AdminLoginForm from "@/components/AdminLoginForm";
 
 export const dynamic = "force-dynamic";
 
@@ -22,15 +22,7 @@ export default function AdminLogin({ searchParams }: { searchParams: { error?: s
               Incorrect email or password — please try again.
             </div>
           ) : null}
-          <form action={adminLogin} style={{ marginTop: 20 }}>
-            <label className="label">Email</label>
-            <input className="input" name="email" type="email" required placeholder="concierge@dentalscotland.com" />
-            <div style={{ marginTop: 14 }}>
-              <label className="label">Password</label>
-              <input className="input" name="password" type="password" required placeholder="••••••••" />
-            </div>
-            <button className="btn btn-teal" style={{ width: "100%", marginTop: 22 }}>Sign in →</button>
-          </form>
+          <AdminLoginForm />
         </div>
         <div style={{ textAlign: "center", color: "#4E6178", fontSize: 12.5, marginTop: 18 }}>
           Dental Scotland · It&apos;s time to smile

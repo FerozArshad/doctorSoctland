@@ -221,69 +221,63 @@ export async function startCheckout(formData: FormData) {
   await launchCheckout(token, type);
 }
 
-// ── Payment option form: patient picks a route, admin is kept in the loop ──
-export async function selectPaymentOption(formData: FormData) {
-  const token = String(formData.get("token"));
-  const choice = String(formData.get("choice") || "");
-  const note = String(formData.get("note") || "").trim().slice(0, 500);
-  const termsAccepted = formData.get("terms") === "on";
-  const patient = await requireVerified(token);
+const UPLOAD_MAX_BYTES = 2 * 1024 * 1024;
+const UPLOAD_MAX_FILES = 5;
+const UPLOAD_TYPES = new Set(["image/jpeg", "image/png", "image/webp", "application/pdf"]);
 
-  // The T&C tick is enforced client-side too, but never trust the client.
-  if (!termsAccepted) {
-    redirect(toastUrl(`/p/${token}`, "Please accept the Terms & Conditions to continue", "!", "#E0A429"));
+/** Patient attaches a photo/PDF on their proposal page. */
+export async function uploadPatientFile(formData: FormData): Promise<
+  { error: string; upload?: undefined } | { error?: undefined; upload: { id: string; fileName: string; sizeBytes: number } }
+> {
+  const token = String(formData.get("token") || "");
+  const file = formData.get("file");
+  if (!token || !(file instanceof File)) return { error: "No file selected" };
+
+  const patient = await byToken(token);
+  const session = await getPatientSession();
+  if (session?.id !== patient.id) {
+    return { error: "Please verify your identity first" };
   }
 
-  const optCfg = await getPricing();
-  const labels: Record<string, string> = {
-    full: "Pay in full",
-    deposit: `${fmt(optCfg.depositPence)} deposit + 3 instalments`,
-    finance: "0% finance",
-  };
-  if (!labels[choice]) redirect(`/p/${token}`);
+  const count = await db.patientUpload.count({ where: { patientId: patient.id } });
+  if (count >= UPLOAD_MAX_FILES) return { error: `Maximum ${UPLOAD_MAX_FILES} files` };
+  if (!UPLOAD_TYPES.has(file.type)) return { error: "Only JPG, PNG, WebP or PDF allowed" };
+  if (file.size <= 0 || file.size > UPLOAD_MAX_BYTES) return { error: "Each file must be under 2 MB" };
 
-  // Record the preference + note, and tell the practice what was chosen.
-  await db.patient.update({
-    where: { id: patient.id },
+  const buf = Buffer.from(await file.arrayBuffer());
+  const created = await db.patientUpload.create({
     data: {
-      paymentPreference: choice,
-      activities: {
-        create: [
-          { text: "Accepted the Terms & Conditions" },
-          { text: `Chose payment option: ${labels[choice]}` },
-          ...(note ? [{ text: `Message from patient: “${note}”` }] : []),
-        ],
-      },
+      patientId: patient.id,
+      fileName: file.name.slice(0, 180),
+      mimeType: file.type,
+      sizeBytes: file.size,
+      dataBase64: buf.toString("base64"),
     },
   });
-  await notifyAdmin(
-    `💷 ${patient.firstName} ${patient.lastName} chose: ${labels[choice]}`,
-    `${patient.firstName} selected “${labels[choice]}” on their ${fmt(patient.pricePence)} proposal.` +
-      (note ? ` Their message: “${note}”` : "") +
-      ` View: ${appUrl()}/admin/patients/${patient.id}`
-  );
-
-  // Instant-pay routes go straight to Stripe Checkout.
-  if (choice === "full" || choice === "deposit") {
-    await launchCheckout(token, choice);
-  }
-
-  // Finance: log + hand over to the external lender's application.
-  await db.patient.update({
-    where: { id: patient.id },
-    data: { status: patient.status === "paid" || patient.status === "deposit" ? patient.status : "awaiting" },
+  await db.activity.create({
+    data: { patientId: patient.id, text: `Uploaded file: ${created.fileName}` },
   });
-  const financeUrl = process.env.FINANCE_APPLY_URL;
-  if (financeUrl && !financeUrl.includes("example.com")) redirect(financeUrl);
-  redirect(toastUrl(`/p/${token}`, "Finance application noted — our team will send your application link", "⏳", "#E0A429"));
+  await notifyAdmin(
+    `📎 ${patient.firstName} uploaded ${created.fileName}`,
+    `View: ${appUrl()}/admin/patients/${patient.id}`
+  ).catch(() => {});
+
+  return { upload: { id: created.id, fileName: created.fileName, sizeBytes: created.sizeBytes } };
 }
 
-// ── Consent + finance/interest application ──────────────────────────────
-// Patient signs the Invisalign consent and submits basic info; admin then
-// reviews and (for finance) sends the application link.
-export async function submitApplication(formData: FormData) {
+/**
+ * Consent + e-signature gate for every payment route.
+ * Previously only finance opened the modal — full/deposit skipped it.
+ */
+export async function completePaymentConsent(formData: FormData) {
   const token = String(formData.get("token"));
-  const intent = formData.get("intent") === "finance" ? "finance" : "interested";
+  const choiceRaw = String(formData.get("choice") || "");
+  const choice = (["full", "deposit", "finance", "interested"].includes(choiceRaw) ? choiceRaw : "") as
+    | "full"
+    | "deposit"
+    | "finance"
+    | "interested"
+    | "";
   const consent = formData.get("consent") === "on";
   const signature = String(formData.get("signature") || "");
   const firstName = String(formData.get("firstName") || "").trim();
@@ -293,12 +287,30 @@ export async function submitApplication(formData: FormData) {
   const note = String(formData.get("note") || "").trim().slice(0, 500);
   const patient = await requireVerified(token);
 
+  if (!choice) redirect(`/p/${token}`);
   if (!consent || !signature.startsWith("data:image")) {
-    redirect(toastUrl(`/p/${token}`, "Please tick the consent box and add your signature to continue", "!", "#E0A429"));
+    redirect(toastUrl(`/p/${token}`, "Please tick the consent box and add your e-signature to continue", "!", "#E0A429"));
   }
 
+  const optCfg = await getPricing();
+  const labels: Record<string, string> = {
+    full: "Pay in full",
+    deposit: `${fmt(optCfg.depositPence)} deposit + 3 instalments`,
+    finance: "0% finance",
+    interested: "Registered interest",
+  };
+
   const keep = patient.status === "paid" || patient.status === "deposit";
-  const status = keep ? patient.status : intent === "finance" ? "awaiting" : "interested";
+  const nextStatus =
+    keep
+      ? patient.status
+      : choice === "finance"
+        ? "awaiting"
+        : choice === "interested"
+          ? "interested"
+          : patient.status === "draft"
+            ? "sent"
+            : patient.status;
 
   await db.patient.update({
     where: { id: patient.id },
@@ -309,11 +321,12 @@ export async function submitApplication(formData: FormData) {
       dateOfBirth: dob || patient.dateOfBirth,
       consentSignedAt: new Date(),
       consentSignature: signature,
-      status,
-      paymentPreference: intent === "finance" ? "finance" : patient.paymentPreference,
+      status: nextStatus,
+      paymentPreference: choice === "interested" ? patient.paymentPreference : choice,
       activities: {
         create: [
-          { text: intent === "finance" ? "Signed Invisalign consent & applied for 0% finance" : "Signed Invisalign consent & registered interest" },
+          { text: "Agreed and consented (e-signed)" },
+          { text: `Chose payment option: ${labels[choice]}` },
           ...(note ? [{ text: `Message from patient: “${note}”` }] : []),
         ],
       },
@@ -322,14 +335,46 @@ export async function submitApplication(formData: FormData) {
 
   const name = `${firstName || patient.firstName} ${lastName || patient.lastName}`.trim();
   await notifyAdmin(
-    intent === "finance"
+    choice === "finance"
       ? `📝 ${name} applied for 0% finance (consent signed)`
-      : `⭐ ${name} is interested (consent signed)`,
-    `${name} signed the Invisalign consent${dob ? `, DOB ${dob}` : ""}. Review and send their ${intent === "finance" ? "finance application link" : "next steps"}: ${appUrl()}/admin/patients/${patient.id}` +
+      : choice === "interested"
+        ? `⭐ ${name} is interested (consent signed)`
+        : `💷 ${name} chose: ${labels[choice]} (consent signed)`,
+    `${name} signed consent${dob ? `, DOB ${dob}` : ""} and selected “${labels[choice]}”. View: ${appUrl()}/admin/patients/${patient.id}` +
       (note ? ` — Their message: “${note}”` : "")
   );
 
-  redirect(toastUrl(`/p/${token}`, "Thank you! Please check your inbox — you'll receive an email shortly (usually within 2–3 hours).", "✓"));
+  if (choice === "full" || choice === "deposit") {
+    await launchCheckout(token, choice);
+  }
+
+  if (choice === "finance") {
+    const financeUrl = process.env.FINANCE_APPLY_URL;
+    if (financeUrl && !financeUrl.includes("example.com")) redirect(financeUrl);
+    redirect(toastUrl(`/p/${token}`, "Thank you! We'll email your finance application link shortly.", "✓"));
+  }
+
+  redirect(toastUrl(`/p/${token}`, "Thank you! Please check your inbox — you'll hear from us shortly.", "✓"));
+}
+
+/** @deprecated use completePaymentConsent */
+export async function submitApplication(formData: FormData) {
+  const intent = formData.get("intent") === "finance" ? "finance" : "interested";
+  formData.set("choice", intent);
+  await completePaymentConsent(formData);
+}
+
+/** @deprecated payment form now uses completePaymentConsent via the modal */
+export async function selectPaymentOption(formData: FormData) {
+  const choice = String(formData.get("choice") || "");
+  formData.set("consent", "on");
+  // Legacy path without signature — force them back to sign.
+  if (!String(formData.get("signature") || "").startsWith("data:image")) {
+    const token = String(formData.get("token"));
+    redirect(toastUrl(`/p/${token}`, "Please agree and e-sign to continue", "!", "#E0A429"));
+  }
+  formData.set("choice", choice);
+  await completePaymentConsent(formData);
 }
 
 // ── Interest / finance / call-back ──────────────────────────────────────

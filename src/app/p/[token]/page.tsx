@@ -23,7 +23,10 @@ export default async function ProposalPage({
   params: { token: string };
   searchParams: { preview?: string; paid?: string; cancelled?: string; otp?: string; channel?: string; devcode?: string };
 }) {
-  const c = await db.patient.findUnique({ where: { proposalToken: params.token } });
+  const c = await db.patient.findUnique({
+    where: { proposalToken: params.token },
+    include: { uploads: { orderBy: { createdAt: "asc" }, select: { id: true, fileName: true, sizeBytes: true } } },
+  });
   if (!c) notFound();
 
   const admin = searchParams.preview === "admin" ? await getAdmin() : null;
@@ -212,7 +215,12 @@ export default async function ProposalPage({
                 </div>
               </div>
             ) : (
-              <PaymentOptionsForm token={c.proposalToken} options={payOptions} applicant={applicant} />
+              <PaymentOptionsForm
+                token={c.proposalToken}
+                options={payOptions}
+                applicant={applicant}
+                initialUploads={c.uploads}
+              />
             )}
 
             {/* why us */}

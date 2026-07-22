@@ -1,46 +1,72 @@
 "use client";
-// Compact payment chooser: the patient selects one of four routes and
-// continues. Full/deposit go straight to Stripe; monthly/finance notify
-// the practice, which sends the payment link or lender application.
-import { useState } from "react";
-import { selectPaymentOption } from "@/app/p/actions";
-import ConsentModal, { Applicant } from "./ConsentModal";
+// Patient proposal: pick a payment route → optional note + uploads → consent
+// popup with e-signature (required for full / deposit / finance).
+import { useRef, useState, useTransition } from "react";
+import ConsentModal, { Applicant, ConsentChoice } from "./ConsentModal";
+import { uploadPatientFile } from "@/app/p/actions";
 
 export type PayOption = {
-  key: "full" | "deposit" | "monthly" | "finance";
+  key: "full" | "deposit" | "finance";
   title: string;
   desc: string;
-  priceTop?: string; // small line above the price (e.g. "then" / "from")
+  priceTop?: string;
   price: string;
-  priceSub?: string; // e.g. "/mo"
-  strike?: string; // struck-through original price
-  tag?: string; // e.g. "Best value"
-  cta: string; // button label when selected
+  priceSub?: string;
+  strike?: string;
+  tag?: string;
+  cta: string;
 };
 
-export default function PaymentOptionsForm({ token, options, applicant }: { token: string; options: PayOption[]; applicant: Applicant }) {
+type Uploaded = { id: string; fileName: string; sizeBytes: number };
+
+export default function PaymentOptionsForm({
+  token,
+  options,
+  applicant,
+  initialUploads = [],
+}: {
+  token: string;
+  options: PayOption[];
+  applicant: Applicant;
+  initialUploads?: Uploaded[];
+}) {
   const [choice, setChoice] = useState<PayOption["key"]>(options[0]?.key ?? "full");
-  const [submitting, setSubmitting] = useState(false);
+  const [note, setNote] = useState("");
   const [showConsent, setShowConsent] = useState(false);
-  const [agreed, setAgreed] = useState(false);
+  const [uploads, setUploads] = useState<Uploaded[]>(initialUploads);
+  const [uploadError, setUploadError] = useState("");
+  const [pending, startTransition] = useTransition();
+  const fileRef = useRef<HTMLInputElement | null>(null);
   const selected = options.find((o) => o.key === choice)!;
 
+  const onPickFile = (file: File | null) => {
+    if (!file) return;
+    setUploadError("");
+    const fd = new FormData();
+    fd.set("token", token);
+    fd.set("file", file);
+    startTransition(async () => {
+      const res = await uploadPatientFile(fd);
+      if (res.error) {
+        setUploadError(res.error);
+        return;
+      }
+      if (res.upload) setUploads((u) => [...u, res.upload!]);
+      if (fileRef.current) fileRef.current.value = "";
+    });
+  };
+
   return (
-    <form
-      action={selectPaymentOption}
-      onSubmit={(e) => {
-        // Finance requires signed consent first — open the modal instead of submitting.
-        if (choice === "finance") {
-          e.preventDefault();
-          setShowConsent(true);
-          return;
-        }
-        setSubmitting(true);
-      }}
-    >
-      <ConsentModal open={showConsent} onClose={() => setShowConsent(false)} token={token} intent="finance" applicant={applicant} />
-      <input type="hidden" name="token" value={token} />
-      <input type="hidden" name="choice" value={choice} />
+    <>
+      <ConsentModal
+        open={showConsent}
+        onClose={() => setShowConsent(false)}
+        token={token}
+        choice={choice as ConsentChoice}
+        note={note}
+        applicant={applicant}
+      />
+
       <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
         {options.map((o) => {
           const active = o.key === choice;
@@ -48,15 +74,22 @@ export default function PaymentOptionsForm({ token, options, applicant }: { toke
             <label
               key={o.key}
               style={{
-                display: "flex", alignItems: "center", gap: 14, padding: "16px 18px",
-                borderRadius: 14, cursor: "pointer", position: "relative",
+                display: "flex",
+                alignItems: "center",
+                gap: 14,
+                padding: "16px 18px",
+                borderRadius: 14,
+                cursor: "pointer",
+                position: "relative",
                 border: active ? "2px solid #0E9384" : "1px solid #E7ECF2",
                 background: active ? "#F4FCFA" : "#fff",
                 margin: active && o.tag ? "6px 0 0" : 0,
               }}
             >
               {o.tag && (
-                <span style={{ position: "absolute", top: -10, left: 16, background: "#0E9384", color: "#fff", fontSize: 10.5, fontWeight: 800, letterSpacing: ".05em", padding: "3px 9px", borderRadius: 20, textTransform: "uppercase" }}>{o.tag}</span>
+                <span style={{ position: "absolute", top: -10, left: 16, background: "#0E9384", color: "#fff", fontSize: 10.5, fontWeight: 800, letterSpacing: ".05em", padding: "3px 9px", borderRadius: 20, textTransform: "uppercase" }}>
+                  {o.tag}
+                </span>
               )}
               <input
                 type="radio"
@@ -85,6 +118,8 @@ export default function PaymentOptionsForm({ token, options, applicant }: { toke
       <div style={{ marginTop: 14 }}>
         <textarea
           name="note"
+          value={note}
+          onChange={(e) => setNote(e.target.value)}
           rows={2}
           placeholder="Optional message for our team — questions, preferred start date, anything…"
           className="input"
@@ -92,27 +127,47 @@ export default function PaymentOptionsForm({ token, options, applicant }: { toke
         />
       </div>
 
-      {/* Terms & Conditions — required before any payment route can continue */}
-      <label style={{ display: "flex", gap: 10, alignItems: "flex-start", marginTop: 14, padding: "12px 14px", borderRadius: 11, border: "1.5px solid " + (agreed ? "#0E9384" : "#E1E7EE"), background: agreed ? "#F4FCFA" : "#FBFCFD", cursor: "pointer" }}>
+      {/* Uploads */}
+      <div style={{ marginTop: 14, padding: "14px 16px", borderRadius: 12, border: "1px dashed #CBD4DE", background: "#FBFCFD" }}>
+        <div style={{ fontSize: 13.5, fontWeight: 800, color: "#16202E" }}>Upload documents (optional)</div>
+        <div style={{ fontSize: 12.5, color: "#7A8696", marginTop: 4, lineHeight: 1.5 }}>
+          Photos, ID, or a PDF (max 2&nbsp;MB each). Your Treatment Coordinator can see these on your record.
+        </div>
         <input
-          type="checkbox"
-          name="terms"
-          required
-          checked={agreed}
-          onChange={(e) => setAgreed(e.target.checked)}
-          style={{ width: 17, height: 17, accentColor: "#0E9384", marginTop: 1, flex: "none" }}
+          ref={fileRef}
+          type="file"
+          accept="image/jpeg,image/png,image/webp,application/pdf"
+          disabled={pending || uploads.length >= 5}
+          onChange={(e) => onPickFile(e.target.files?.[0] ?? null)}
+          style={{ marginTop: 12, fontSize: 13, width: "100%" }}
         />
-        <span style={{ fontSize: 13, color: "#3C4a59", lineHeight: 1.55 }}>
-          I have read and agree to the <strong>Terms &amp; Conditions</strong> of my Invisalign treatment with Dental Scotland.
-        </span>
-      </label>
+        {uploadError && (
+          <div style={{ marginTop: 8, fontSize: 12.5, color: "#C23B34", fontWeight: 600 }}>{uploadError}</div>
+        )}
+        {pending && <div style={{ marginTop: 8, fontSize: 12.5, color: "#0E9384", fontWeight: 600 }}>Uploading…</div>}
+        {uploads.length > 0 && (
+          <ul style={{ margin: "10px 0 0", padding: 0, listStyle: "none", display: "flex", flexDirection: "column", gap: 6 }}>
+            {uploads.map((u) => (
+              <li key={u.id} style={{ fontSize: 13, color: "#2C3847", display: "flex", justifyContent: "space-between", gap: 10 }}>
+                <span style={{ fontWeight: 600 }}>📎 {u.fileName}</span>
+                <span style={{ color: "#9AA6B4", flex: "none" }}>{Math.round(u.sizeBytes / 1024)} KB</span>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
 
-      <button className="btn btn-teal" disabled={submitting || !agreed} style={{ marginTop: 14, width: "100%", padding: 14, fontSize: 15, opacity: agreed ? 1 : 0.55 }}>
-        {submitting ? "One moment…" : selected.cta}
+      <button
+        type="button"
+        className="btn btn-teal"
+        onClick={() => setShowConsent(true)}
+        style={{ marginTop: 14, width: "100%", padding: 14, fontSize: 15 }}
+      >
+        {selected.cta}
       </button>
       <div style={{ fontSize: 12, color: "#9AA6B4", marginTop: 10, textAlign: "center", lineHeight: 1.6 }}>
-        Whichever you choose, your Treatment Coordinator is notified and will confirm everything with you.
+        Next step: agree &amp; e-sign — then we continue to payment. Your Treatment Coordinator is notified.
       </div>
-    </form>
+    </>
   );
 }

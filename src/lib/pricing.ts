@@ -63,3 +63,16 @@ export function finance36Pence(pricePence: number): number {
 export function fmt(pence: number): string {
   return "£" + Math.round(pence / 100).toLocaleString("en-GB");
 }
+
+/** Human-readable label for a stored paymentPreference (admin profile view). */
+export function paymentPreferenceLabel(preference: string, depositPence: number): string {
+  const deposit = `${fmt(depositPence)} deposit + 3 instalments`;
+  const labels: Record<string, string> = {
+    full: "Pay in full",
+    deposit,
+    finance: "0% finance — application sent",
+    // Legacy — monthly route removed; same as deposit plan.
+    monthly: deposit,
+  };
+  return labels[preference] ?? preference;
+}

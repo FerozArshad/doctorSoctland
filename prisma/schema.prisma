@@ -116,6 +116,22 @@ model Patient {
   activities            Activity[]
   payments              Payment[]
   instalments           Instalment[]
+  uploads               PatientUpload[]
+}
+
+/// Files a patient attaches on their proposal (photos, ID, PDF). Stored as
+/// base64 so we don't need Blob storage for the first release — capped at 2MB.
+model PatientUpload {
+  id         String   @id @default(cuid())
+  patientId  String
+  patient    Patient  @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  fileName   String
+  mimeType   String
+  sizeBytes  Int
+  dataBase64 String
+  createdAt  DateTime @default(now())
+
+  @@index([patientId, createdAt])
 }
 
 model Activity {

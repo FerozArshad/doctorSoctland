@@ -100,7 +100,7 @@ Next.js 14 (App Router) + Prisma + Postgres app for dentalscotland.com:
 | Database (Supabase) | ✅ | schema pushed incl. `ownerId` + `MonthlyReport` |
 | Auth (`AUTH_SECRET`) | ✅ | Vercel + local |
 | Email (Gmail send) | ✅ | OAuth `gmail.send`, falls back Resend → simulated |
-| WhatsApp (Meta Cloud API) | ⏳ | code ready, simulated until keys. **Business verification approved** — see §11 |
+| WhatsApp (Meta Cloud API) | ⏳ | keys in place; templates gated by `WHATSAPP_TEMPLATES_ENABLED=0` until display name + 3 templates approved — see §11 |
 | Stripe | ✅ verified e2e | LIVE keys in Vercel, TEST keys local — keep it that way |
 | Editable pricing | ✅ | `/admin/settings` |
 | Super Admin / Admin roles | ✅ | now with full patient isolation |
@@ -150,24 +150,24 @@ Next.js 14 (App Router) + Prisma + Postgres app for dentalscotland.com:
 - Report-saved confirmation: `saveMonthlyReport` in `src/app/admin/actions.ts`
 - Finance link on approval: `approveFinance` in `src/app/admin/actions.ts`
 
-## 11. WhatsApp — current plan (discussed 2026-07-20)
+## 11. WhatsApp — current plan (discussed 2026-07-20; code ready 2026-07-22)
 
-Business verification is **approved**. To go live, in Meta/WhatsApp Manager:
-1. Register **+44 7915 357177** to the WABA (2-number cap lifted post-verification;
-   the old practice number can't be used — it's on the consumer app, and coexistence
-   needs a Tech Provider/BSP — `/admin/whatsapp-connect` is a dormant dead end).
-2. Set env vars (Vercel + `.env`): `WHATSAPP_PHONE_NUMBER_ID` (API Setup page),
-   `WHATSAPP_TOKEN` (**permanent** System-User token with `whatsapp_business_messaging`
-   + `whatsapp_business_management` — the API-Setup token dies in 24h),
-   `ADMIN_NOTIFY_WHATSAPP`.
-3. Create templates: `proposal_ready` (Utility), `payment_reminder` (Utility),
-   `login_code` (**Authentication** category — required for OTP). Then a code change
-   swaps `type:"text"` → `type:"template"` in `sendWhatsApp` (`src/lib/notify.ts`).
-4. **Agreed direction for human replies**: our own webhook (`/api/whatsapp/webhook`,
-   to build) + admin-dashboard inbox — free, official, one number. Conditional/AI
-   auto-replies live in our code (no n8n/BSP). Free-form replies allowed inside the
-   24h service window; outside it, templates only. The phone app CANNOT share the
-   API number without a BSP/Tech Provider — ruled out unofficial libraries (ban risk).
+Business verification is **approved**. Credentials are in Vercel + local `.env`.
+Template send path is **wired** in `src/lib/notify.ts` and gated by
+`WHATSAPP_TEMPLATES_ENABLED` (keep `0` until Meta finishes approval).
+
+Still waiting on Meta:
+1. Display name **Dental Scotland** approved (retry exact brand name if
+   "Dental Scotland Care" was rejected).
+2. Approve templates (`en_GB`): `proposal_ready` + `payment_reminder` (Utility,
+   `{{1}}` = first name, `{{2}}` = proposal URL) and `login_code` (Authentication,
+   `{{1}}` = OTP).
+3. Then set `WHATSAPP_TEMPLATES_ENABLED=1` on Vercel (+ local) and redeploy —
+   no further code change needed. Helpers:
+   `sendProposalWhatsApp` / `sendReminderWhatsApp` / `sendLoginCodeWhatsApp`.
+
+**Phase 2 — human replies** (later): webhook `/api/whatsapp/webhook` + admin inbox.
+Free-form replies only inside the 24h window; outside it, templates only.
 
 ## 12. Cron jobs (`vercel.json` — exactly 2, fits Hobby)
 
@@ -225,8 +225,9 @@ token → `GMAIL_REFRESH_TOKEN`. Redirect URI must match `<APP_URL>/api/auth/goo
 - [ ] **T&C document**: get the terms text or URL and link it from the payment tick.
 - [ ] **Create Millie & Rochelle admin logins** at `/admin/team`; optionally assign
       their existing patients via Edit → "Belongs to admin".
-- [ ] **WhatsApp go-live** (§11): number, 3 env vars, 3 templates → then the
-      `type:"template"` code change; later the webhook + admin inbox.
+- [ ] **WhatsApp go-live** (§11): display name + 3 templates approved → set
+      `WHATSAPP_TEMPLATES_ENABLED=1` and redeploy (code already wired); later
+      the webhook + admin inbox.
 - [ ] **Verify Gmail send-as** for millie@/rochelle@ (`[SEND-AS TEST]` emails in
       concierge@) — the touch-1 emails to Millie/Rochelle test patients came from the
       concierge fallback, so this is STILL unanswered.

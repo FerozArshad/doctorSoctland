@@ -1,6 +1,6 @@
 // Identity gate for the secure proposal link: the patient requests a
 // one-time code by email or WhatsApp, enters it, and the proposal unlocks.
-import Image from "next/image";
+import BrandLogo from "@/components/BrandLogo";
 import { Suspense } from "react";
 import { sendOtp, verifyOtp } from "@/app/p/actions";
 import Toast from "@/components/Toast";
@@ -37,9 +37,9 @@ export default function OtpGate({
     <div style={{ minHeight: "100vh", background: "#EAF0F2", display: "grid", placeItems: "center", padding: 20 }}>
       <div className="ds-view" style={{ width: "100%", maxWidth: 460 }}>
         <div style={{ background: "#fff", borderRadius: 20, overflow: "hidden", boxShadow: "0 30px 60px -30px rgba(11,24,40,.4)" }}>
-          <div style={{ background: "#0E1A2B", padding: "26px 34px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-            <Image src="/logo.webp" alt="Dental Scotland" width={150} height={40} style={{ height: 40, width: "auto" }} />
-            <div style={{ color: "#8FA6C0", fontSize: 11, fontWeight: 600, letterSpacing: ".05em", textTransform: "uppercase" }}>Secure access</div>
+          <div style={{ background: "#0B1828", padding: "22px 28px", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
+            <BrandLogo width={150} height={40} priority />
+            <div style={{ color: "#8FA6C0", fontSize: 11, fontWeight: 700, letterSpacing: ".05em", textTransform: "uppercase" }}>Secure access</div>
           </div>
           <div style={{ padding: "32px 34px" }}>
             <div style={{ fontSize: 22, fontWeight: 800, letterSpacing: "-.01em" }}>Hi {firstName} 👋</div>

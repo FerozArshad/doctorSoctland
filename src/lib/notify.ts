@@ -45,39 +45,133 @@ export async function sendEmail(to: string, subject: string, html: string, fromO
 }
 
 // ── WhatsApp (Meta Business Cloud API) ──────────────────────────────────
-// Note: business-initiated conversations outside a 24h window require an
-// approved message template. This sends a plain text message, which works
-// inside an open conversation window and in the API test environment.
-export async function sendWhatsApp(toPhone: string, body: string) {
-  const token = process.env.WHATSAPP_TOKEN;
-  const phoneId = process.env.WHATSAPP_PHONE_NUMBER_ID;
-  const to = normalisePhone(toPhone);
-  if (!token || !phoneId || !to) {
-    console.log(`[whatsapp:simulated] to=${toPhone} body="${body.slice(0, 80)}…"`);
-    return { simulated: true };
-  }
-  const res = await fetch(
-    `https://graph.facebook.com/v21.0/${phoneId}/messages`,
-    {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${token}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        messaging_product: "whatsapp",
-        to,
-        type: "text",
-        text: { preview_url: true, body },
-      }),
-    }
-  );
+// Keys: WHATSAPP_TOKEN + WHATSAPP_PHONE_NUMBER_ID (already in env).
+// Business-initiated messages need approved templates. Flip
+// WHATSAPP_TEMPLATES_ENABLED=1 after Meta approves display name + templates.
+// Until then we fall back to free-form text (works in test / open 24h window).
+
+export type WhatsAppSendResult = { simulated: boolean; error?: string; via?: "text" | "template" };
+
+/** True when Cloud API credentials are present. */
+export function whatsappConfigured() {
+  return !!(process.env.WHATSAPP_TOKEN && process.env.WHATSAPP_PHONE_NUMBER_ID);
+}
+
+/** True when we're allowed to send approved templates (go-live switch). */
+export function whatsappTemplatesEnabled() {
+  const v = (process.env.WHATSAPP_TEMPLATES_ENABLED || "").toLowerCase();
+  return v === "1" || v === "true" || v === "yes";
+}
+
+const waLang = () => process.env.WHATSAPP_TEMPLATE_LANG || "en_GB";
+
+/** Template names — must match Meta WhatsApp Manager exactly once approved. */
+export const WA_TEMPLATES = {
+  proposal: process.env.WHATSAPP_TPL_PROPOSAL || "proposal_ready",
+  reminder: process.env.WHATSAPP_TPL_REMINDER || "payment_reminder",
+  loginCode: process.env.WHATSAPP_TPL_LOGIN || "login_code",
+} as const;
+
+async function graphSend(to: string, payload: Record<string, unknown>): Promise<WhatsAppSendResult> {
+  const token = process.env.WHATSAPP_TOKEN!.trim();
+  const phoneId = process.env.WHATSAPP_PHONE_NUMBER_ID!.trim();
+  const res = await fetch(`https://graph.facebook.com/v21.0/${phoneId}/messages`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ messaging_product: "whatsapp", to, ...payload }),
+  });
   if (!res.ok) {
     const detail = await res.text();
     console.error("WhatsApp send failed:", detail);
     return { simulated: false, error: detail };
   }
   return { simulated: false };
+}
+
+/** Free-form text (24h service window / test numbers). */
+export async function sendWhatsApp(toPhone: string, body: string): Promise<WhatsAppSendResult> {
+  const to = normalisePhone(toPhone);
+  if (!whatsappConfigured() || !to) {
+    console.log(`[whatsapp:simulated] to=${toPhone} body="${body.slice(0, 80)}…"`);
+    return { simulated: true };
+  }
+  const r = await graphSend(to, { type: "text", text: { preview_url: true, body } });
+  return { ...r, via: "text" };
+}
+
+/** Named utility / auth template with body {{1}}, {{2}}, … parameters. */
+export async function sendWhatsAppTemplate(
+  toPhone: string,
+  templateName: string,
+  bodyParams: string[] = []
+): Promise<WhatsAppSendResult> {
+  const to = normalisePhone(toPhone);
+  if (!whatsappConfigured() || !to) {
+    console.log(`[whatsapp:simulated:template] to=${toPhone} name=${templateName} params=${JSON.stringify(bodyParams)}`);
+    return { simulated: true };
+  }
+  const components =
+    bodyParams.length > 0
+      ? [
+          {
+            type: "body",
+            parameters: bodyParams.map((text) => ({ type: "text", text })),
+          },
+        ]
+      : [];
+  const r = await graphSend(to, {
+    type: "template",
+    template: {
+      name: templateName,
+      language: { code: waLang() },
+      ...(components.length ? { components } : {}),
+    },
+  });
+  return { ...r, via: "template" };
+}
+
+/**
+ * Proposal outbound: template when enabled, else text fallback.
+ * Expected template `proposal_ready`: Hi {{1}} … link {{2}}
+ */
+export async function sendProposalWhatsApp(p: Patient): Promise<WhatsAppSendResult> {
+  const body = proposalWhatsAppText(p);
+  if (whatsappTemplatesEnabled()) {
+    return sendWhatsAppTemplate(p.phone, WA_TEMPLATES.proposal, [p.firstName, proposalLink(p)]);
+  }
+  if (whatsappConfigured()) {
+    console.warn("[whatsapp] WHATSAPP_TEMPLATES_ENABLED is off — sending free-form text (set to 1 after Meta approves templates)");
+  }
+  return sendWhatsApp(p.phone, body);
+}
+
+/**
+ * Day-1 sequence reminder.
+ * Expected template `payment_reminder`: Hi {{1}} … link {{2}}
+ */
+export async function sendReminderWhatsApp(p: Patient, cfg: PricingConfig = PRICING_DEFAULTS): Promise<WhatsAppSendResult> {
+  const body = reminderWhatsAppText(p, cfg);
+  if (whatsappTemplatesEnabled()) {
+    return sendWhatsAppTemplate(p.phone, WA_TEMPLATES.reminder, [p.firstName, proposalLink(p)]);
+  }
+  return sendWhatsApp(p.phone, body);
+}
+
+/**
+ * OTP / login code.
+ * Expected Authentication template `login_code` with body {{1}} = code.
+ */
+export async function sendLoginCodeWhatsApp(toPhone: string, code: string): Promise<WhatsAppSendResult> {
+  if (whatsappTemplatesEnabled()) {
+    return sendWhatsAppTemplate(toPhone, WA_TEMPLATES.loginCode, [code]);
+  }
+  return sendWhatsApp(
+    toPhone,
+    `Your Dental Scotland verification code is *${code}*. It expires in 10 minutes. Never share this code.`
+  );
 }
 
 // UK mobiles: 07700 900123 → +447700900123

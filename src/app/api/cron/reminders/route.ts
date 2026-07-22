@@ -4,7 +4,7 @@
 // price lock expires — we stop emailing and flag the patient for a requote.
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { brandedEmail, notifyAdmin, sendEmail, sendWhatsApp, reminderWhatsAppText } from "@/lib/notify";
+import { brandedEmail, notifyAdmin, sendEmail, sendReminderWhatsApp } from "@/lib/notify";
 import { firstNameOf } from "@/lib/status";
 import { getPricing } from "@/lib/pricing-settings";
 import { dueTouch, seqValues, LOCK_DAYS, TOUCHES } from "@/lib/sequence";
@@ -95,7 +95,7 @@ export async function GET(req: NextRequest) {
 
     // WhatsApp only on the first touch — daily WhatsApp would be intrusive.
     if (sent && touch.n === 1 && p.phone && p.phone !== "—") {
-      await sendWhatsApp(p.phone, reminderWhatsAppText(p, cfg)).catch(() => {});
+      await sendReminderWhatsApp(p, cfg).catch(() => {});
     }
 
     if (sent) {

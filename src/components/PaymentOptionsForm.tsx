@@ -24,11 +24,13 @@ export default function PaymentOptionsForm({
   options,
   applicant,
   initialUploads = [],
+  compact = false,
 }: {
   token: string;
   options: PayOption[];
   applicant: Applicant;
   initialUploads?: Uploaded[];
+  compact?: boolean;
 }) {
   const [choice, setChoice] = useState<PayOption["key"]>(options[0]?.key ?? "full");
   const [note, setNote] = useState("");
@@ -67,7 +69,7 @@ export default function PaymentOptionsForm({
         applicant={applicant}
       />
 
-      <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+      <div style={{ display: "flex", flexDirection: "column", gap: compact ? 8 : 10 }}>
         {options.map((o) => {
           const active = o.key === choice;
           return (
@@ -76,18 +78,19 @@ export default function PaymentOptionsForm({
               style={{
                 display: "flex",
                 alignItems: "center",
-                gap: 14,
-                padding: "16px 18px",
-                borderRadius: 14,
+                gap: compact ? 10 : 14,
+                padding: compact ? "12px 12px" : "16px 18px",
+                borderRadius: 13,
                 cursor: "pointer",
                 position: "relative",
-                border: active ? "2px solid #0E9384" : "1px solid #E7ECF2",
-                background: active ? "#F4FCFA" : "#fff",
+                border: active ? "2px solid #3CC7F7" : "1px solid #E1E7EE",
+                background: active ? "#F3FBFE" : "#fff",
+                boxShadow: active ? "0 6px 16px -10px rgba(60,199,247,.55)" : "none",
                 margin: active && o.tag ? "6px 0 0" : 0,
               }}
             >
               {o.tag && (
-                <span style={{ position: "absolute", top: -10, left: 16, background: "#0E9384", color: "#fff", fontSize: 10.5, fontWeight: 800, letterSpacing: ".05em", padding: "3px 9px", borderRadius: 20, textTransform: "uppercase" }}>
+                <span style={{ position: "absolute", top: -9, left: 12, background: "#3CC7F7", color: "#06101C", fontSize: 10, fontWeight: 800, letterSpacing: ".04em", padding: "2px 8px", borderRadius: 20, textTransform: "uppercase" }}>
                   {o.tag}
                 </span>
               )}
@@ -96,18 +99,18 @@ export default function PaymentOptionsForm({
                 name="choiceRadio"
                 checked={active}
                 onChange={() => setChoice(o.key)}
-                style={{ accentColor: "#0E9384", width: 17, height: 17, flex: "none", cursor: "pointer" }}
+                style={{ accentColor: "#3CC7F7", width: 16, height: 16, flex: "none", cursor: "pointer" }}
               />
               <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontWeight: 800, fontSize: 15 }}>{o.title}</div>
-                <div style={{ fontSize: 12.5, color: "#5C6a79", marginTop: 2, lineHeight: 1.5 }}>{o.desc}</div>
+                <div style={{ fontWeight: 800, fontSize: compact ? 13.5 : 15 }}>{o.title}</div>
+                <div style={{ fontSize: compact ? 11.5 : 12.5, color: "#5C6a79", marginTop: 2, lineHeight: 1.4 }}>{o.desc}</div>
               </div>
               <div style={{ textAlign: "right", flex: "none" }}>
-                {o.strike && <div style={{ fontSize: 12, color: "#9AA6B4", textDecoration: "line-through" }}>{o.strike}</div>}
-                {o.priceTop && <div style={{ fontSize: 11, color: "#9AA6B4" }}>{o.priceTop}</div>}
-                <div style={{ fontSize: 19, fontWeight: 800, color: active ? "#0B7A6E" : "#16202E" }}>
+                {o.strike && <div style={{ fontSize: 11, color: "#9AA6B4", textDecoration: "line-through" }}>{o.strike}</div>}
+                {o.priceTop && <div style={{ fontSize: 10.5, color: "#9AA6B4" }}>{o.priceTop}</div>}
+                <div style={{ fontSize: compact ? 17 : 19, fontWeight: 800, color: active ? "#1EA8D8" : "#16202E" }}>
                   {o.price}
-                  {o.priceSub && <span style={{ fontSize: 12, color: "#7A8696", fontWeight: 600 }}>{o.priceSub}</span>}
+                  {o.priceSub && <span style={{ fontSize: 11.5, color: "#7A8696", fontWeight: 600 }}>{o.priceSub}</span>}
                 </div>
               </div>
             </label>
@@ -115,41 +118,59 @@ export default function PaymentOptionsForm({
         })}
       </div>
 
-      <div style={{ marginTop: 14 }}>
+      <div style={{ marginTop: 12 }}>
         <textarea
           name="note"
           value={note}
           onChange={(e) => setNote(e.target.value)}
           rows={2}
-          placeholder="Optional message for our team — questions, preferred start date, anything…"
+          placeholder="Optional message for our team…"
           className="input"
-          style={{ marginTop: 0, resize: "vertical", fontSize: 13.5 }}
+          style={{ marginTop: 0, resize: "vertical", fontSize: 13 }}
         />
       </div>
 
-      {/* Uploads */}
-      <div style={{ marginTop: 14, padding: "14px 16px", borderRadius: 12, border: "1px dashed #CBD4DE", background: "#FBFCFD" }}>
-        <div style={{ fontSize: 13.5, fontWeight: 800, color: "#16202E" }}>Upload documents (optional)</div>
-        <div style={{ fontSize: 12.5, color: "#7A8696", marginTop: 4, lineHeight: 1.5 }}>
-          Photos, ID, or a PDF (max 2&nbsp;MB each). Your Treatment Coordinator can see these on your record.
+      <div style={{ marginTop: 12, padding: "12px 12px", borderRadius: 12, border: "1px dashed #C5D0DB", background: "#fff" }}>
+        <div style={{ fontSize: 13, fontWeight: 800, color: "#16202E" }}>Upload documents</div>
+        <div style={{ fontSize: 11.5, color: "#7A8696", marginTop: 3, lineHeight: 1.45 }}>
+          Optional — photos, ID or PDF (max 2&nbsp;MB each).
         </div>
-        <input
-          ref={fileRef}
-          type="file"
-          accept="image/jpeg,image/png,image/webp,application/pdf"
-          disabled={pending || uploads.length >= 5}
-          onChange={(e) => onPickFile(e.target.files?.[0] ?? null)}
-          style={{ marginTop: 12, fontSize: 13, width: "100%" }}
-        />
+        <label
+          style={{
+            marginTop: 10,
+            display: "inline-flex",
+            alignItems: "center",
+            gap: 8,
+            padding: "8px 12px",
+            borderRadius: 9,
+            border: "1px solid #D5DCE5",
+            background: "#F4F6F9",
+            fontSize: 12.5,
+            fontWeight: 700,
+            color: "#3C4a59",
+            cursor: pending || uploads.length >= 5 ? "not-allowed" : "pointer",
+            opacity: pending || uploads.length >= 5 ? 0.55 : 1,
+          }}
+        >
+          Choose file
+          <input
+            ref={fileRef}
+            type="file"
+            accept="image/jpeg,image/png,image/webp,application/pdf"
+            disabled={pending || uploads.length >= 5}
+            onChange={(e) => onPickFile(e.target.files?.[0] ?? null)}
+            style={{ display: "none" }}
+          />
+        </label>
         {uploadError && (
-          <div style={{ marginTop: 8, fontSize: 12.5, color: "#C23B34", fontWeight: 600 }}>{uploadError}</div>
+          <div style={{ marginTop: 8, fontSize: 12, color: "#C23B34", fontWeight: 600 }}>{uploadError}</div>
         )}
-        {pending && <div style={{ marginTop: 8, fontSize: 12.5, color: "#0E9384", fontWeight: 600 }}>Uploading…</div>}
+        {pending && <div style={{ marginTop: 8, fontSize: 12, color: "#0E9384", fontWeight: 600 }}>Uploading…</div>}
         {uploads.length > 0 && (
-          <ul style={{ margin: "10px 0 0", padding: 0, listStyle: "none", display: "flex", flexDirection: "column", gap: 6 }}>
+          <ul style={{ margin: "10px 0 0", padding: 0, listStyle: "none", display: "flex", flexDirection: "column", gap: 5 }}>
             {uploads.map((u) => (
-              <li key={u.id} style={{ fontSize: 13, color: "#2C3847", display: "flex", justifyContent: "space-between", gap: 10 }}>
-                <span style={{ fontWeight: 600 }}>📎 {u.fileName}</span>
+              <li key={u.id} style={{ fontSize: 12.5, color: "#2C3847", display: "flex", justifyContent: "space-between", gap: 8 }}>
+                <span style={{ fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>📎 {u.fileName}</span>
                 <span style={{ color: "#9AA6B4", flex: "none" }}>{Math.round(u.sizeBytes / 1024)} KB</span>
               </li>
             ))}
@@ -161,12 +182,12 @@ export default function PaymentOptionsForm({
         type="button"
         className="btn btn-teal"
         onClick={() => setShowConsent(true)}
-        style={{ marginTop: 14, width: "100%", padding: 14, fontSize: 15 }}
+        style={{ marginTop: 14, width: "100%", padding: 13, fontSize: 14.5 }}
       >
         {selected.cta}
       </button>
-      <div style={{ fontSize: 12, color: "#9AA6B4", marginTop: 10, textAlign: "center", lineHeight: 1.6 }}>
-        Next step: agree &amp; e-sign — then we continue to payment. Your Treatment Coordinator is notified.
+      <div style={{ fontSize: 11.5, color: "#8A96A5", marginTop: 8, textAlign: "center", lineHeight: 1.5 }}>
+        Next: agree &amp; e-sign, then continue to payment.
       </div>
     </>
   );

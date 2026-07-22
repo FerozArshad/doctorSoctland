@@ -1,14 +1,14 @@
-import Image from "next/image";
+import BrandLogo from "@/components/BrandLogo";
 import AdminLoginForm from "@/components/AdminLoginForm";
 
 export const dynamic = "force-dynamic";
 
 export default function AdminLogin({ searchParams }: { searchParams: { error?: string } }) {
   return (
-    <div style={{ minHeight: "100vh", background: "#0E1A2B", display: "grid", placeItems: "center", padding: 20 }}>
+    <div style={{ minHeight: "100vh", background: "linear-gradient(165deg,#06101C 0%,#0B1828 55%,#0F2035 100%)", display: "grid", placeItems: "center", padding: 20 }}>
       <div className="ds-view" style={{ width: "100%", maxWidth: 420 }}>
         <div style={{ textAlign: "center", marginBottom: 26 }}>
-          <Image src="/logo.webp" alt="Dental Scotland" width={190} height={52} style={{ height: 52, width: "auto" }} />
+          <BrandLogo width={190} height={52} priority />
         </div>
         <div style={{ background: "#fff", borderRadius: 20, padding: "34px 32px", boxShadow: "0 30px 60px -30px rgba(0,0,0,.6)" }}>
           <div style={{ fontSize: 22, fontWeight: 800, letterSpacing: "-.01em" }}>Practice login</div>
@@ -25,7 +25,10 @@ export default function AdminLogin({ searchParams }: { searchParams: { error?: s
           <AdminLoginForm />
         </div>
         <div style={{ textAlign: "center", color: "#4E6178", fontSize: 12.5, marginTop: 18 }}>
-          Dental Scotland · It&apos;s time to smile
+          Dental Scotland · It&apos;s time to smile ·{" "}
+          <a href="https://dentalscotland.com/" style={{ color: "#3CC7F7", fontWeight: 700, textDecoration: "none" }}>
+            dentalscotland.com
+          </a>
         </div>
       </div>
     </div>

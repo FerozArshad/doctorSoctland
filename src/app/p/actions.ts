@@ -9,7 +9,7 @@ import { createPatientSession, getAdmin, getPatientSession } from "@/lib/auth";
 import { rateLimit } from "@/lib/ratelimit";
 import { fmt, fullPricePence, netPricePence } from "@/lib/pricing";
 import { getPricing } from "@/lib/pricing-settings";
-import { brandedEmail, notifyAdmin, sendEmail, sendWhatsApp } from "@/lib/notify";
+import { brandedEmail, notifyAdmin, sendEmail, sendLoginCodeWhatsApp } from "@/lib/notify";
 import { stripe, stripeConfigured } from "@/lib/stripe";
 
 const appUrl = () => process.env.APP_URL || "http://localhost:3000";
@@ -69,10 +69,7 @@ export async function sendOtp(formData: FormData) {
 
   try {
     if (channel === "whatsapp" && patient.phone) {
-      await sendWhatsApp(
-        patient.phone,
-        `Your Dental Scotland verification code is *${code}*. It expires in 10 minutes. Never share this code.`
-      );
+      await sendLoginCodeWhatsApp(patient.phone, code);
     } else {
       await sendEmail(
         patient.email,
@@ -235,7 +232,9 @@ export async function uploadPatientFile(formData: FormData): Promise<
 
   const patient = await byToken(token);
   const session = await getPatientSession();
-  if (session?.id !== patient.id) {
+  const admin = await getAdmin();
+  // Patient session, or Super Admin / admin preview testing the link.
+  if (session?.id !== patient.id && !admin) {
     return { error: "Please verify your identity first" };
   }
 

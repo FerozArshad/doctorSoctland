@@ -92,7 +92,7 @@ Copy `.env.example` over `.env` and fill in:
 
 Until keys are added, email/WhatsApp sends are **simulated** (logged to the server console) and Stripe buttons show a friendly "not configured" toast — the rest of the app works fully.
 
-> **WhatsApp note:** Meta only allows free-form text inside a 24-hour customer-service window. For business-initiated proposal messages you'll need an approved **message template** in Meta Business Manager; swap the `type: "text"` payload in `src/lib/notify.ts` for your template name once approved.
+> **WhatsApp note:** Meta only allows free-form text inside a 24-hour customer-service window. For business-initiated proposal / reminder / OTP messages the app sends approved templates when `WHATSAPP_TEMPLATES_ENABLED=1` (see `src/lib/notify.ts`). Keep that flag off until Meta approves the display name and templates.
 
 ## How payments flow
 

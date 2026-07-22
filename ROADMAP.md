@@ -51,12 +51,18 @@ there). This is the product picture: what's built, what remains, where it ends u
 ## 🔜 Remaining
 
 ### 1. WhatsApp go-live (biggest missing piece — business verification approved ✅)
-- [ ] Register +44 7915 357177 in WhatsApp Manager (display name "Dental Scotland")
-- [ ] Env vars: `WHATSAPP_PHONE_NUMBER_ID`, permanent `WHATSAPP_TOKEN` (System User),
-      `ADMIN_NOTIFY_WHATSAPP` (Vercel + local)
-- [ ] Approve 3 templates: `proposal_ready` (Utility), `payment_reminder` (Utility),
-      `login_code` (Authentication) → then swap `type:"text"` → `type:"template"`
-      in `sendWhatsApp`
+- [x] Env vars: `WHATSAPP_PHONE_NUMBER_ID`, permanent `WHATSAPP_TOKEN` (System User),
+      `ADMIN_NOTIFY_WHATSAPP` (Vercel + local) — credentials in place
+- [x] Code ready: template send path in `src/lib/notify.ts`
+      (`sendProposalWhatsApp` / `sendReminderWhatsApp` / `sendLoginCodeWhatsApp`)
+      gated by `WHATSAPP_TEMPLATES_ENABLED`
+- [x] Display name approved as **Dental Scotland**
+- [x] Approve 3 templates in WhatsApp Manager (language `en_GB`):
+  - `proposal_ready` (Utility) — body: `Hi {{1}}…` + link `{{2}}`
+  - `payment_reminder` (Utility) — body: `Hi {{1}}…` + link `{{2}}`
+  - `login_code` (Authentication) — OTP as `{{1}}`
+- [ ] Set `WHATSAPP_TEMPLATES_ENABLED=1` on Vercel and redeploy (local already `1`)
+- [ ] Smoke-test: proposal WhatsApp + OTP to a real number
 - [ ] **Phase 2 — two-way WhatsApp**: `/api/whatsapp/webhook` receiving patient
       replies → conditional/AI auto-replies in our own code → admin inbox in the
       dashboard for human takeover (24h service window) → alerts when a human is

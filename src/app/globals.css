@@ -1,14 +1,38 @@
+/* Dental Scotland brand kit — tokens from dentalscotland.com */
+:root {
+  --ds-blue: #3CC7F7;
+  --ds-blue-dark: #1EA8D8;
+  --ds-blue-light: #7DE8FF;
+  --ds-navy: #06101C;
+  --ds-navy-800: #0B1828;
+  --ds-navy-700: #0F2035;
+  --ds-card: #0D1D30;
+  --ds-green: #22D3A8;
+  --ds-gold: #F7C948;
+  --ds-owh: #E8F4FB;
+  --ds-wh: #ffffff;
+  --ds-ink: #16202E;
+  --ds-muted: #5C6a79;
+  --ds-border: #E7ECF2;
+  --ds-surface: #F4F7F9;
+  --ds-teal: #0E9384; /* legacy success / accent (kept for charts) */
+  --ease: cubic-bezier(.4, 0, .2, 1);
+}
+
 * { box-sizing: border-box; }
 html, body { margin: 0; padding: 0; }
 body {
-  font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
-  background: #F4F6F9;
-  color: #16202E;
+  font-family: "DM Sans", system-ui, sans-serif;
+  background: var(--ds-surface);
+  color: var(--ds-ink);
   -webkit-font-smoothing: antialiased;
   font-variant-numeric: tabular-nums;
 }
 input, button, select, textarea { font-family: inherit; }
-input:focus, textarea:focus { outline: none; }
+input:focus, textarea:focus, select:focus {
+  outline: 2px solid rgba(60, 199, 247, 0.45);
+  outline-offset: 1px;
+}
 ::placeholder { color: #9AA6B4; }
 a { color: inherit; }
 
@@ -29,8 +53,8 @@ a { color: inherit; }
   to { opacity: 1; transform: translateY(0) scale(1); }
 }
 @keyframes ds-pulse {
-  0%, 100% { box-shadow: 0 0 0 0 rgba(14,147,132,.5); }
-  50% { box-shadow: 0 0 0 6px rgba(14,147,132,0); }
+  0%, 100% { box-shadow: 0 0 0 0 rgba(60, 199, 247, .45); }
+  50% { box-shadow: 0 0 0 6px rgba(60, 199, 247, 0); }
 }
 @keyframes ds-spin {
   to { transform: rotate(360deg); }
@@ -44,22 +68,45 @@ a { color: inherit; }
   animation: ds-spin .7s linear infinite;
   flex: none;
 }
-.ds-view { animation: ds-fade .32s cubic-bezier(.2,.7,.3,1) both; }
+.ds-view { animation: ds-fade .32s var(--ease) both; }
 
-/* Shared components from the design system */
-.card { background: #fff; border: 1px solid #E7ECF2; border-radius: 16px; }
-.btn {
-  border: none; border-radius: 11px; font-weight: 700; cursor: pointer;
-  font-size: 14.5px; padding: 13px; font-family: inherit;
+/* Shared components — brand-aligned */
+.card {
+  background: #fff;
+  border: 1px solid var(--ds-border);
+  border-radius: 16px;
 }
-.btn-teal { background: #0E9384; color: #fff; }
-.btn-dark { background: #0E1A2B; color: #fff; }
-.btn-outline { background: #fff; color: #16202E; border: 1.5px solid #CBD5E0; }
-.btn:disabled { opacity: .55; cursor: not-allowed; }
+.btn {
+  border: none;
+  border-radius: 999px;
+  font-weight: 800;
+  cursor: pointer;
+  font-size: 14.5px;
+  padding: 13px 18px;
+  font-family: inherit;
+  transition: background .15s var(--ease), transform .12s var(--ease), box-shadow .15s var(--ease);
+  min-height: 44px;
+}
+.btn:hover:not(:disabled) { transform: translateY(-1px); }
+.btn:active:not(:disabled) { transform: translateY(0); }
+.btn-teal {
+  background: var(--ds-blue);
+  color: #fff;
+  box-shadow: 0 8px 20px -10px rgba(60, 199, 247, .7);
+}
+.btn-teal:hover:not(:disabled) { background: var(--ds-blue-dark); }
+.btn-dark { background: var(--ds-navy-800); color: #fff; }
+.btn-outline {
+  background: #fff;
+  color: var(--ds-ink);
+  border: 1.5px solid #CBD5E0;
+}
+.btn:disabled { opacity: .55; cursor: not-allowed; box-shadow: none; transform: none; }
 
 .input {
   width: 100%; margin-top: 6px; padding: 11px 13px;
   border: 1px solid #E1E7EE; border-radius: 10px; font-size: 14px; background: #FBFCFD;
+  min-height: 44px;
 }
 .input.err { border: 1.5px solid #E5544B; background: #FEF6F5; }
 .label { font-size: 12.5px; font-weight: 700; color: #3C4a59; }
@@ -70,24 +117,39 @@ a { color: inherit; }
 }
 .row-hover:hover { background: #F8FAFC; }
 
-/* ── Responsive ───────────────────────────────────────────────────────────
-   This app styles inline, and inline styles beat class selectors — so the
-   mobile overrides below need !important to take effect. Breakpoints:
-   900px = tablet/small laptop, 640px = phone. */
+/* Brand accent helpers */
+.ds-accent { color: var(--ds-blue); }
+.ds-bg-navy { background: var(--ds-navy-800); }
 
-/* Two-column blocks that should stack on a phone */
+/* ── Responsive ───────────────────────────────────────────────────────────
+   Inline styles beat class selectors — mobile overrides need !important. */
+
 @media (max-width: 640px) {
   .ds-grid-2 { grid-template-columns: 1fr !important; }
 }
 
-/* Generous desktop padding wastes ~23% of a 375px screen */
+/* Patient proposal */
+@media (max-width: 900px) {
+  .ds-proposal-split {
+    grid-template-columns: 1fr !important;
+    grid-template-areas: "data" "pay" "video" !important;
+  }
+  .ds-proposal-why { grid-template-columns: 1fr 1fr !important; }
+}
 @media (max-width: 640px) {
-  .ds-pad-lg { padding: 26px 20px !important; }
-  .ds-pad-header { padding: 22px 20px !important; }
-  .ds-shell-pad { padding: 18px 14px 40px !important; }
+  .ds-proposal-pad { padding: 12px 10px 32px !important; }
+  .ds-proposal-body { padding: 16px 14px 22px !important; }
+  .ds-proposal-title { font-size: 20px !important; }
+  .ds-proposal-metrics { grid-template-columns: 1fr 1fr !important; }
+  .ds-proposal-why { grid-template-columns: 1fr !important; }
+  .ds-proposal-cta { flex-direction: column !important; align-items: stretch !important; text-align: center !important; }
+  .ds-proposal-cta button { width: 100% !important; }
+  .ds-proposal-shell { border-radius: 14px !important; }
+  .ds-pad-lg { padding: 22px 16px !important; }
+  .ds-pad-header { padding: 16px 16px !important; }
+  .ds-shell-pad { padding: 16px 12px 36px !important; }
 }
 
-/* Admin: stat cards and split layouts collapse before they get unreadable */
 @media (max-width: 1000px) {
   .ds-stats { grid-template-columns: 1fr 1fr !important; }
   .ds-split { grid-template-columns: 1fr !important; }
@@ -97,11 +159,52 @@ a { color: inherit; }
   .ds-quad { grid-template-columns: 1fr 1fr !important; }
 }
 
-/* Admin sidebar: 248px fixed leaves only 127px of content on a phone.
-   Collapse it to an icon rail and hide the labels. */
+/* Admin sidebar collapses on tablet/phone — icon rail, centered */
 @media (max-width: 900px) {
-  .ds-sidebar { width: 68px !important; padding-left: 8px !important; padding-right: 8px !important; }
+  .ds-sidebar {
+    width: 64px !important;
+    padding-left: 0 !important;
+    padding-right: 0 !important;
+  }
   .ds-sidebar .ds-sb-label { display: none !important; }
   .ds-sidebar .ds-sb-logo { display: none !important; }
+  .ds-sidebar .ds-sb-nav {
+    padding: 10px 8px !important;
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: center !important;
+  }
+  .ds-sidebar .ds-sb-link {
+    width: 44px !important;
+    height: 44px !important;
+    min-height: 44px !important;
+    margin: 3px 0 !important;
+    padding: 0 !important;
+    gap: 0 !important;
+    justify-content: center !important;
+    align-items: center !important;
+    border-radius: 12px !important;
+    box-shadow: none !important;
+    overflow: hidden !important;
+  }
+  .ds-sidebar .ds-sb-link.is-active {
+    background: rgba(60, 199, 247, 0.2) !important;
+    box-shadow: none !important;
+  }
+  .ds-sidebar .ds-sb-count { display: none !important; }
+  .ds-sidebar .ds-sb-footer {
+    padding: 10px 0 !important;
+    justify-content: center !important;
+  }
+  .ds-sidebar .ds-sb-avatar {
+    width: 32px !important;
+    height: 32px !important;
+    font-size: 11px !important;
+  }
   .ds-admin-pad { padding: 16px 12px !important; }
+}
+
+/* Touch-friendly tables on small screens */
+@media (max-width: 700px) {
+  .ds-table-scroll { overflow-x: auto !important; -webkit-overflow-scrolling: touch; }
 }

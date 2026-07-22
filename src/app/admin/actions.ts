@@ -7,7 +7,7 @@ import { canAccessPatient, clearAdminSession, createAdminSession, requireAdmin }
 import { fmt, fullPricePence, netPricePence, priceForPence } from "@/lib/pricing";
 import { getPricing } from "@/lib/pricing-settings";
 import { COORDINATORS, coordinatorFor, fromHeader, FALLBACK_COORDINATOR, type Coordinator } from "@/lib/coordinators";
-import { brandedEmail, financeLinkEmailHtml, proposalEmailHtml, proposalWhatsAppText, sendEmail, sendWhatsApp } from "@/lib/notify";
+import { brandedEmail, financeLinkEmailHtml, proposalEmailHtml, sendEmail, sendProposalWhatsApp } from "@/lib/notify";
 import { firstNameOf } from "@/lib/status";
 
 function toastUrl(base: string, msg: string, icon = "✓", bg = "#0E9384") {
@@ -338,7 +338,7 @@ async function deliverProposal(patientId: string, sentBy?: Coordinator) {
     results.push(`Email to ${patient.email} failed — check the email configuration`);
   }
   if (patient.phone && patient.phone !== "—") {
-    const r = await sendWhatsApp(patient.phone, proposalWhatsAppText(patient));
+    const r = await sendProposalWhatsApp(patient);
     if (!("error" in r && r.error)) results.push(`WhatsApp sent to ${patient.phone}`);
   }
   await db.patient.update({

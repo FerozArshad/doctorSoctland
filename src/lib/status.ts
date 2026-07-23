@@ -42,7 +42,14 @@ export function initials(first: string, last: string): string {
 
 /** First name from a full name, ignoring a "Dr." prefix ("Dr. Rhona Sinclair" → "Rhona"). */
 export function firstNameOf(name: string): string {
-  return name.replace(/^Dr\.?\s+/i, "").split(" ")[0] || name;
+  const cleaned = name.replace(/^Dr\.?\s+/i, "").trim();
+  const parts = cleaned.split(/\s+/).filter(Boolean);
+  const first = parts[0] || name;
+  // Initials like "M." → keep a fuller label (e.g. "M. Arfan")
+  if (first.length <= 2 || /\.$/.test(first)) {
+    return parts.slice(0, 2).join(" ") || cleaned;
+  }
+  return first;
 }
 
 export function avatarBg(id: string): string {

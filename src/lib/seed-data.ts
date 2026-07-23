@@ -25,12 +25,12 @@ export async function runSeed(db: PrismaClient): Promise<SeedResult> {
 
   await db.admin.upsert({
     where: { email: "concierge@dentalscotland.com" },
-    update: {},
+    update: { name: "M. Arfan" },
     create: {
       email: "concierge@dentalscotland.com",
       passwordHash: await bcrypt.hash("dental123", 10),
-      name: "Dr. Rhona Sinclair",
-      role: "Treatment Coordinator",
+      name: "M. Arfan",
+      role: "Super Admin",
       isSuperAdmin: true, // primary account sees revenue
     },
   });

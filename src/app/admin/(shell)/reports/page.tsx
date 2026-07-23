@@ -43,14 +43,26 @@ export default async function ReportsPage({ searchParams }: { searchParams: { m?
   // ── Computed Invisalign figures for this admin & month ──
   const attribution = { OR: [{ ownerId: target.id }, { sentByEmail: target.email }] };
   const [attributedPatients, paidPayments] = await Promise.all([
-    db.patient.findMany({ where: attribution, select: { id: true, pricePence: true, upfrontPaidPence: true } }),
+    db.patient.findMany({
+      where: attribution,
+      select: { id: true, firstName: true, lastName: true, email: true, pricePence: true, upfrontPaidPence: true },
+    }),
     db.payment.findMany({
       where: { status: "paid", patient: attribution },
-      select: { patientId: true, amountPence: true, paidAt: true },
+      select: {
+        patientId: true,
+        amountPence: true,
+        paidAt: true,
+        type: true,
+        patient: { select: { firstName: true, lastName: true, email: true } },
+      },
     }),
   ]);
   const inMonth = (d: Date | null) => !!d && d >= start && d < end;
-  const incomePence = paidPayments.filter((p) => inMonth(p.paidAt)).reduce((a, p) => a + p.amountPence, 0);
+  const monthPayments = paidPayments
+    .filter((p) => inMonth(p.paidAt))
+    .sort((a, b) => (a.paidAt && b.paidAt ? a.paidAt.getTime() - b.paidAt.getTime() : 0));
+  const incomePence = monthPayments.reduce((a, p) => a + p.amountPence, 0);
   // An "order" = a patient whose first successful payment landed in this month.
   const firstPay = new Map<string, Date>();
   for (const p of paidPayments) {
@@ -63,6 +75,16 @@ export default async function ReportsPage({ searchParams }: { searchParams: { m?
     .filter((p) => orderIds.includes(p.id))
     .reduce((a, p) => a + netPricePence(p.pricePence, p.upfrontPaidPence), 0);
   const avgAligner = orderIds.length ? Math.round(orderValueSum / orderIds.length) : 0;
+  const patientById = new Map(attributedPatients.map((p) => [p.id, p]));
+  const orderPatients = orderIds.map((id) => {
+    const p = patientById.get(id);
+    return {
+      id,
+      name: p ? `${p.firstName} ${p.lastName}`.trim() : "Patient",
+      email: p?.email || "",
+      amountPence: p ? netPricePence(p.pricePence, p.upfrontPaidPence) : 0,
+    };
+  });
 
   // ── Saved report + history log ──
   const report = await db.monthlyReport.findUnique({
@@ -154,6 +176,75 @@ export default async function ReportsPage({ searchParams }: { searchParams: { m?
             {stat("Invisalign income", fmt(incomePence), "payments collected this month")}
             {stat("Avg per aligner patient", avgAligner ? fmt(avgAligner) : "—", "average treatment value of new orders")}
             {stat("Consult conversion", report ? pct(report.consultsProceeded, report.consultsSeen) : "—", "from the figures entered below")}
+          </div>
+
+          {/* Read-only patient names + amounts (auto from payments / orders) */}
+          <div className="ds-split" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 18, marginTop: 18, alignItems: "start" }}>
+            <div className="card" style={{ overflow: "hidden" }}>
+              <div style={{ padding: "14px 18px", borderBottom: "1px solid #EEF2F6" }}>
+                <div style={{ fontSize: 15, fontWeight: 800 }}>Patients — payments this month</div>
+                <div style={{ fontSize: 12.5, color: "#7A8696", marginTop: 2 }}>Read-only · name and amount from live payment records</div>
+              </div>
+              {monthPayments.length === 0 ? (
+                <div style={{ padding: 24, fontSize: 13.5, color: "#9AA6B4" }}>No payments collected in {monthName}.</div>
+              ) : (
+                <>
+                  <div style={{ display: "grid", gridTemplateColumns: "1.5fr 0.8fr 0.7fr", gap: 8, padding: "8px 18px", background: "#FAFBFC", fontSize: 11, fontWeight: 800, letterSpacing: ".05em", textTransform: "uppercase", color: "#8A96A5" }}>
+                    <span>Patient</span>
+                    <span>Type</span>
+                    <span style={{ textAlign: "right" }}>Amount</span>
+                  </div>
+                  {monthPayments.map((p, i) => (
+                    <div
+                      key={`${p.patientId}-${i}`}
+                      style={{ display: "grid", gridTemplateColumns: "1.5fr 0.8fr 0.7fr", gap: 8, padding: "12px 18px", borderTop: "1px solid #F1F4F8", alignItems: "center" }}
+                    >
+                      <div>
+                        <div style={{ fontSize: 13.5, fontWeight: 700, color: "#16202E" }}>
+                          {`${p.patient.firstName} ${p.patient.lastName}`.trim()}
+                        </div>
+                        <div style={{ fontSize: 11.5, color: "#9AA6B4", marginTop: 2 }}>{p.patient.email}</div>
+                      </div>
+                      <div style={{ fontSize: 12.5, color: "#5C6a79", textTransform: "capitalize" }}>{p.type}</div>
+                      <div style={{ fontSize: 14, fontWeight: 800, color: "#0B7A6E", textAlign: "right" }}>{fmt(p.amountPence)}</div>
+                    </div>
+                  ))}
+                  <div style={{ display: "flex", justifyContent: "space-between", padding: "12px 18px", borderTop: "1px solid #E7ECF2", background: "#F4FCFA", fontWeight: 800 }}>
+                    <span style={{ fontSize: 13, color: "#0B7A6E" }}>Total collected</span>
+                    <span style={{ fontSize: 15, color: "#0B7A6E" }}>{fmt(incomePence)}</span>
+                  </div>
+                </>
+              )}
+            </div>
+
+            <div className="card" style={{ overflow: "hidden" }}>
+              <div style={{ padding: "14px 18px", borderBottom: "1px solid #EEF2F6" }}>
+                <div style={{ fontSize: 15, fontWeight: 800 }}>New orders this month</div>
+                <div style={{ fontSize: 12.5, color: "#7A8696", marginTop: 2 }}>Read-only · patient name and treatment amount</div>
+              </div>
+              {orderPatients.length === 0 ? (
+                <div style={{ padding: 24, fontSize: 13.5, color: "#9AA6B4" }}>No new Invisalign orders in {monthName}.</div>
+              ) : (
+                <>
+                  <div style={{ display: "grid", gridTemplateColumns: "1.6fr 0.8fr", gap: 8, padding: "8px 18px", background: "#FAFBFC", fontSize: 11, fontWeight: 800, letterSpacing: ".05em", textTransform: "uppercase", color: "#8A96A5" }}>
+                    <span>Patient</span>
+                    <span style={{ textAlign: "right" }}>Amount</span>
+                  </div>
+                  {orderPatients.map((p) => (
+                    <div
+                      key={p.id}
+                      style={{ display: "grid", gridTemplateColumns: "1.6fr 0.8fr", gap: 8, padding: "12px 18px", borderTop: "1px solid #F1F4F8", alignItems: "center" }}
+                    >
+                      <div>
+                        <div style={{ fontSize: 13.5, fontWeight: 700, color: "#16202E" }}>{p.name}</div>
+                        <div style={{ fontSize: 11.5, color: "#9AA6B4", marginTop: 2 }}>{p.email}</div>
+                      </div>
+                      <div style={{ fontSize: 14, fontWeight: 800, color: "#0B7A6E", textAlign: "right" }}>{fmt(p.amountPence)}</div>
+                    </div>
+                  ))}
+                </>
+              )}
+            </div>
           </div>
 
           <div className="ds-split" style={{ display: "grid", gridTemplateColumns: "1.4fr 1fr", gap: 18, marginTop: 18, alignItems: "start" }}>

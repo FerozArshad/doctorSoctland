@@ -82,6 +82,34 @@ export async function changeAdminPassword(formData: FormData) {
   redirect(toastUrl("/admin/settings", "Password updated — use it next time you sign in", "✓"));
 }
 
+/** Any logged-in Admin or Super Admin can update their own profile. */
+export async function updateAdminProfile(formData: FormData) {
+  const me = await requireAdmin();
+  const name = String(formData.get("name") || "").trim();
+  const email = String(formData.get("email") || "").trim().toLowerCase();
+  const role = String(formData.get("role") || "").trim() || "Treatment Coordinator";
+
+  if (!name || name.length < 2) {
+    redirect(toastUrl("/admin/settings", "Enter your full name", "!", "#E0A429"));
+  }
+  if (!/.+@.+\..+/.test(email)) {
+    redirect(toastUrl("/admin/settings", "Enter a valid email address", "!", "#E0A429"));
+  }
+  if (email !== me.email) {
+    const clash = await db.admin.findUnique({ where: { email } });
+    if (clash) {
+      redirect(toastUrl("/admin/settings", "That email is already used by another admin", "!", "#E0A429"));
+    }
+  }
+
+  await db.admin.update({
+    where: { id: me.id },
+    data: { name, email, role },
+  });
+  log.info("admin.profile.updated", { adminId: me.id });
+  redirect(toastUrl("/admin/settings", "Profile updated", "✓"));
+}
+
 // ── Pricing settings ────────────────────────────────────────────────────
 // Editable by any admin. Changing these affects NEW/edited proposals only —
 // existing patients keep the pricePence/discountPct captured at proposal time,

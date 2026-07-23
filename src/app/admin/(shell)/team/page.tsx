@@ -72,7 +72,7 @@ export default async function TeamPage() {
             </div>
             <div style={{ marginTop: 14 }}>
               <label className="label">Email *</label>
-              <input className="input" name="email" type="email" placeholder="millie@dentalscotland.com" required />
+              <input className="input" name="email" type="email" placeholder="name@example.com" required />
             </div>
             <div style={{ marginTop: 14 }}>
               <label className="label">Password * (min 8 characters)</label>

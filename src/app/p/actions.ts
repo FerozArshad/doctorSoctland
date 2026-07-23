@@ -10,6 +10,7 @@ import { rateLimit } from "@/lib/ratelimit";
 import { fmt, fullPricePence, netPricePence } from "@/lib/pricing";
 import { getPricing } from "@/lib/pricing-settings";
 import { brandedEmail, notifyAdmin, sendEmail, sendLoginCodeWhatsApp } from "@/lib/notify";
+import { log, summarizeError } from "@/lib/log";
 import { stripe, stripeConfigured } from "@/lib/stripe";
 
 const appUrl = () => process.env.APP_URL || "http://localhost:3000";
@@ -69,7 +70,13 @@ export async function sendOtp(formData: FormData) {
 
   try {
     if (channel === "whatsapp" && patient.phone) {
-      await sendLoginCodeWhatsApp(patient.phone, code);
+      const r = await sendLoginCodeWhatsApp(patient.phone, code);
+      if (r.error) {
+        log.error("otp.whatsapp.fail", { patientId: patient.id, ...summarizeError(r.error) });
+        throw new Error("WhatsApp OTP failed");
+      }
+      if (r.simulated) log.warn("otp.whatsapp.simulated", { patientId: patient.id });
+      else log.info("otp.whatsapp.ok", { patientId: patient.id });
     } else {
       await sendEmail(
         patient.email,

@@ -4,6 +4,7 @@ import { createContext, useContext } from "react";
 import type { MessageNotifications } from "@/lib/messages";
 
 const MessageNotificationsContext = createContext<MessageNotifications>({
+  items: [],
   recentSent: [],
   upcoming: [],
   alertCount: 0,

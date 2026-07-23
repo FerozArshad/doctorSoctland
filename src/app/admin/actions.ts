@@ -9,6 +9,7 @@ import { getPricing } from "@/lib/pricing-settings";
 import { COORDINATORS, coordinatorFor, fromHeader, FALLBACK_COORDINATOR, type Coordinator } from "@/lib/coordinators";
 import { brandedEmail, financeLinkEmailHtml, proposalEmailHtml, sendEmail, sendProposalWhatsApp } from "@/lib/notify";
 import { firstNameOf } from "@/lib/status";
+import { log, summarizeError } from "@/lib/log";
 
 function toastUrl(base: string, msg: string, icon = "✓", bg = "#0E9384") {
   const q = new URLSearchParams({ toast: msg, ticon: icon, tbg: bg });
@@ -353,6 +354,7 @@ async function deliverProposal(patientId: string, sentBy?: Coordinator) {
   const patient = await db.patient.findUniqueOrThrow({ where: { id: patientId } });
   const co = sentBy ?? coordinatorFor(patient.sentByName, patient.sentByEmail);
   const results: string[] = [];
+  log.info("proposal.deliver.start", { patientId, email: patient.email, phone: patient.phone || null });
   try {
     await sendEmail(
       patient.email,
@@ -361,21 +363,32 @@ async function deliverProposal(patientId: string, sentBy?: Coordinator) {
       fromHeader(co)
     );
     results.push(`Proposal emailed to ${patient.email} from ${co.name}`);
+    log.info("proposal.email.ok", { patientId });
   } catch (e) {
-    console.error(e);
-    results.push(`Email to ${patient.email} failed — check the email configuration`);
+    const summary = summarizeError(e);
+    log.error("proposal.email.fail", { patientId, ...summary });
+    results.push(`Email to ${patient.email} failed — ${summary.message}`);
   }
   if (patient.phone && patient.phone !== "—") {
     const r = await sendProposalWhatsApp(patient);
-    if (r.error) results.push(`WhatsApp to ${patient.phone} failed`);
-    else if (r.simulated) results.push(`WhatsApp to ${patient.phone} simulated (check keys)`);
-    else results.push(`WhatsApp sent to ${patient.phone}`);
+    if (r.error) {
+      const summary = summarizeError(r.error);
+      results.push(`WhatsApp to ${patient.phone} failed — ${summary.message}`);
+      log.error("proposal.whatsapp.fail", { patientId, phone: patient.phone, ...summary });
+    } else if (r.simulated) {
+      results.push(`WhatsApp to ${patient.phone} simulated (check keys)`);
+      log.warn("proposal.whatsapp.simulated", { patientId, phone: patient.phone });
+    } else {
+      results.push(`WhatsApp sent to ${patient.phone}`);
+      log.info("proposal.whatsapp.ok", { patientId, phone: patient.phone });
+    }
+  } else {
+    log.info("proposal.whatsapp.skip", { patientId, reason: "no_phone" });
   }
   await db.patient.update({
     where: { id: patientId },
     data: {
       status: patient.status === "draft" ? "sent" : patient.status,
-      // Restart the clock + sequence on every (re)send so the price lock is honest.
       proposalSentAt: new Date(),
       sequenceTouch: 0,
       priceLockExpired: false,
@@ -384,6 +397,7 @@ async function deliverProposal(patientId: string, sentBy?: Coordinator) {
       activities: { create: results.map((text) => ({ text })) },
     },
   });
+  log.info("proposal.deliver.done", { patientId, results: results.length });
   return results;
 }
 

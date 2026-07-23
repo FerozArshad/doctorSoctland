@@ -27,7 +27,10 @@ export default async function AdminShell({ children }: { children: React.ReactNo
       activities: { orderBy: { createdAt: "desc" }, take: 30 },
     },
   });
-  const messageNotifications = buildMessageNotifications(patientsForMessages);
+  const messageNotifications = buildMessageNotifications(patientsForMessages, {
+    readKeys: admin.notifReadKeys,
+    dismissedKeys: admin.notifDismissedKeys,
+  });
 
   return (
     <MessageNotificationsProvider data={messageNotifications}>

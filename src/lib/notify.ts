@@ -5,6 +5,7 @@ import { Resend } from "resend";
 import type { Patient } from "@prisma/client";
 import { estMonths, fmt, fullPricePence, instalmentPence, netPricePence, PRICING_DEFAULTS, type PricingConfig } from "./pricing";
 import { gmailConfigured, sendGmail } from "./google";
+import { log, summarizeError } from "./log";
 
 const appUrl = () => process.env.APP_URL || "http://localhost:3000";
 
@@ -90,9 +91,11 @@ async function graphSend(to: string, payload: Record<string, unknown>): Promise<
   });
   if (!res.ok) {
     const detail = await res.text();
-    console.error("WhatsApp send failed:", detail);
+    const summary = summarizeError(detail);
+    log.error("whatsapp.send", { to, ...summary, via: payload.type });
     return { simulated: false, error: detail };
   }
+  log.info("whatsapp.send", { to, via: payload.type, ok: true });
   return { simulated: false };
 }
 

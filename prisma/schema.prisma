@@ -37,6 +37,9 @@ model Admin {
   // Super Admin sees revenue/earnings and ALL patients; a plain Admin sees only
   // the patients they own (or sent), and no revenue.
   isSuperAdmin Boolean         @default(false)
+  // Notification bell: keys like "up:patientId:touch" / "sent:activityId"
+  notifReadKeys      String[] @default([])
+  notifDismissedKeys String[] @default([])
   createdAt    DateTime        @default(now())
   patients     Patient[]
   reports      MonthlyReport[]

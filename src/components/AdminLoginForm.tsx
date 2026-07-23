@@ -7,7 +7,7 @@ export default function AdminLoginForm() {
   return (
     <form action={adminLogin} style={{ marginTop: 20 }}>
       <label className="label">Email</label>
-      <input className="input" name="email" type="email" required placeholder="concierge@dentalscotland.com" autoComplete="username" />
+      <input className="input" name="email" type="email" required placeholder="you@email.com" autoComplete="username" />
       <div style={{ marginTop: 14 }}>
         <label className="label">Password</label>
         <input className="input" name="password" type="password" required placeholder="••••••••" autoComplete="current-password" />

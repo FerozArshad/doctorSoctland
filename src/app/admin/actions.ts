@@ -379,8 +379,21 @@ async function deliverProposal(patientId: string, sentBy?: Coordinator) {
       results.push(`WhatsApp to ${patient.phone} simulated (check keys)`);
       log.warn("proposal.whatsapp.simulated", { patientId, phone: patient.phone });
     } else {
-      results.push(`WhatsApp sent to ${patient.phone}`);
-      log.info("proposal.whatsapp.ok", { patientId, phone: patient.phone });
+      // Meta "accepted" ≠ delivered to the handset — delivery comes via webhook later.
+      const bits = [
+        `WhatsApp accepted for ${patient.phone}`,
+        r.waId ? `wa_id=${r.waId}` : null,
+        r.messageStatus ? `status=${r.messageStatus}` : null,
+        r.messageId ? `id=${r.messageId.slice(0, 24)}…` : null,
+      ].filter(Boolean);
+      results.push(bits.join(" · "));
+      log.info("proposal.whatsapp.ok", {
+        patientId,
+        phone: patient.phone,
+        waId: r.waId || null,
+        messageStatus: r.messageStatus || null,
+        messageId: r.messageId || null,
+      });
     }
   } else {
     log.info("proposal.whatsapp.skip", { patientId, reason: "no_phone" });

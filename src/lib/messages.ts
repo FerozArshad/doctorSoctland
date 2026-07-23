@@ -55,7 +55,9 @@ export function isMessageActivity(text: string): boolean {
   return (
     text.startsWith("Proposal emailed") ||
     text.startsWith("WhatsApp sent") ||
+    text.startsWith("WhatsApp accepted") ||
     text.startsWith("WhatsApp to ") ||
+    text.startsWith("WhatsApp delivery") ||
     /^Follow-up \d+\/7 sent/.test(text) ||
     text.startsWith("Email sent:") ||
     text.includes("link emailed to patient") ||

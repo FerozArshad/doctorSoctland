@@ -1,0 +1,118 @@
+import { NextRequest, NextResponse } from "next/server";
+import { db } from "@/lib/db";
+import { log } from "@/lib/log";
+
+export const dynamic = "force-dynamic";
+
+/**
+ * Meta WhatsApp Cloud API webhook.
+ * Configure in Meta App → WhatsApp → Configuration:
+ *   Callback URL: https://dashboard.dentalscotland.com/api/whatsapp/webhook
+ *   Verify token: same as WHATSAPP_WEBHOOK_VERIFY_TOKEN
+ * Subscribe to: messages (includes delivery status updates)
+ */
+
+export async function GET(req: NextRequest) {
+  const mode = req.nextUrl.searchParams.get("hub.mode");
+  const token = req.nextUrl.searchParams.get("hub.verify_token");
+  const challenge = req.nextUrl.searchParams.get("hub.challenge");
+  const expected = process.env.WHATSAPP_WEBHOOK_VERIFY_TOKEN || "";
+
+  if (mode === "subscribe" && expected && token === expected && challenge) {
+    log.info("whatsapp.webhook.verify", { ok: true });
+    return new NextResponse(challenge, { status: 200 });
+  }
+  log.warn("whatsapp.webhook.verify", { ok: false });
+  return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+}
+
+type Status = {
+  id?: string;
+  status?: string;
+  timestamp?: string;
+  recipient_id?: string;
+  errors?: Array<{ code?: number; title?: string; message?: string; error_data?: { details?: string } }>;
+};
+
+export async function POST(req: NextRequest) {
+  let body: {
+    entry?: Array<{
+      changes?: Array<{
+        value?: {
+          statuses?: Status[];
+          messages?: Array<{ from?: string; type?: string; text?: { body?: string } }>;
+          contacts?: Array<{ wa_id?: string; profile?: { name?: string } }>;
+        };
+      }>;
+    }>;
+  };
+
+  try {
+    body = await req.json();
+  } catch {
+    return NextResponse.json({ ok: true });
+  }
+
+  // Always 200 quickly so Meta doesn't retry storms.
+  const jobs: Promise<unknown>[] = [];
+
+  for (const entry of body.entry || []) {
+    for (const change of entry.changes || []) {
+      const value = change.value;
+      if (!value) continue;
+
+      for (const st of value.statuses || []) {
+        jobs.push(handleStatus(st));
+      }
+    }
+  }
+
+  await Promise.allSettled(jobs);
+  return NextResponse.json({ ok: true });
+}
+
+async function handleStatus(st: Status) {
+  const status = (st.status || "").toLowerCase();
+  const waId = st.recipient_id || "";
+  const messageId = st.id || "";
+  const err = st.errors?.[0];
+  const errMsg = err?.message || err?.title || err?.error_data?.details || "";
+
+  log.info("whatsapp.status", {
+    status,
+    waId: waId || null,
+    messageId: messageId ? messageId.slice(0, 28) + "…" : null,
+    code: err?.code || null,
+    message: errMsg ? errMsg.slice(0, 160) : null,
+  });
+
+  // Only persist failures / problems onto a patient timeline (saves noise & DB).
+  if (!waId || (status !== "failed" && status !== "undeliverable")) return;
+
+  const patient = await findPatientByWaId(waId);
+  if (!patient) {
+    log.warn("whatsapp.status.unmatched", { waId, status });
+    return;
+  }
+
+  const text = `WhatsApp delivery ${status} to +${waId}${errMsg ? ` — ${errMsg}` : ""}${
+    err?.code ? ` (code ${err.code})` : ""
+  }`;
+  await db.activity.create({ data: { patientId: patient.id, text } });
+}
+
+async function findPatientByWaId(waId: string) {
+  // Patients store phones as +923… / 07… etc. Match on digits suffix.
+  const digits = waId.replace(/\D/g, "");
+  if (digits.length < 8) return null;
+  const patients = await db.patient.findMany({
+    where: { phone: { contains: digits.slice(-10) } },
+    select: { id: true, phone: true },
+    take: 5,
+  });
+  return (
+    patients.find((p) => (p.phone || "").replace(/\D/g, "").endsWith(digits) || digits.endsWith((p.phone || "").replace(/\D/g, "").slice(-10))) ||
+    patients[0] ||
+    null
+  );
+}

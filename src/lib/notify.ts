@@ -51,7 +51,14 @@ export async function sendEmail(to: string, subject: string, html: string, fromO
 // WHATSAPP_TEMPLATES_ENABLED=1 after Meta approves display name + templates.
 // Until then we fall back to free-form text (works in test / open 24h window).
 
-export type WhatsAppSendResult = { simulated: boolean; error?: string; via?: "text" | "template" };
+export type WhatsAppSendResult = {
+  simulated: boolean;
+  error?: string;
+  via?: "text" | "template";
+  messageId?: string;
+  waId?: string;
+  messageStatus?: string;
+};
 
 /** True when Cloud API credentials are present. */
 export function whatsappConfigured() {
@@ -89,14 +96,40 @@ async function graphSend(to: string, payload: Record<string, unknown>): Promise<
     },
     body: JSON.stringify({ messaging_product: "whatsapp", to, ...payload }),
   });
-  if (!res.ok) {
-    const detail = await res.text();
-    const summary = summarizeError(detail);
-    log.error("whatsapp.send", { to, ...summary, via: payload.type });
-    return { simulated: false, error: detail };
+  const raw = await res.text();
+  let json: {
+    error?: unknown;
+    messages?: Array<{ id?: string; message_status?: string }>;
+    contacts?: Array<{ input?: string; wa_id?: string }>;
+  } = {};
+  try {
+    json = JSON.parse(raw);
+  } catch {
+    json = {};
   }
-  log.info("whatsapp.send", { to, via: payload.type, ok: true });
-  return { simulated: false };
+  if (!res.ok) {
+    const summary = summarizeError(raw);
+    log.error("whatsapp.send", { to, ...summary, via: payload.type });
+    return { simulated: false, error: raw };
+  }
+  const messageId = json.messages?.[0]?.id;
+  const messageStatus = json.messages?.[0]?.message_status;
+  const waId = json.contacts?.[0]?.wa_id;
+  log.info("whatsapp.send", {
+    to,
+    waId: waId || null,
+    messageId: messageId || null,
+    messageStatus: messageStatus || "accepted",
+    via: payload.type,
+    ok: true,
+  });
+  return {
+    simulated: false,
+    via: payload.type === "template" ? "template" : "text",
+    messageId,
+    waId,
+    messageStatus,
+  };
 }
 
 /** Free-form text (24h service window / test numbers). */
@@ -191,14 +224,27 @@ export async function sendLoginCodeWhatsApp(toPhone: string, code: string): Prom
   );
 }
 
-// UK mobiles: 07700 900123 → +447700900123
+// E.164 normalisation for common practice inputs.
+// UK: 07… → +44… | Pakistan: 03… → +92… | already +country kept as-is.
 export function normalisePhone(phone: string): string | null {
-  const digits = (phone || "").replace(/[^\d+]/g, "");
+  let digits = (phone || "").replace(/[^\d+]/g, "");
   if (!digits) return null;
-  if (digits.startsWith("+")) return digits;
-  if (digits.startsWith("07")) return "+44" + digits.slice(1);
-  if (digits.startsWith("44")) return "+" + digits;
-  return "+" + digits;
+  // Keep a single leading +
+  if (digits.startsWith("00")) digits = "+" + digits.slice(2);
+  if (digits.startsWith("+")) {
+    const rest = digits.slice(1).replace(/\D/g, "");
+    return rest ? `+${rest}` : null;
+  }
+  const only = digits.replace(/\D/g, "");
+  // UK mobiles
+  if (only.startsWith("07") && only.length === 11) return "+44" + only.slice(1);
+  if (only.startsWith("44") && only.length >= 12) return "+" + only;
+  // Pakistan mobiles (03XXXXXXXXX → +923XXXXXXXXX)
+  if (only.startsWith("03") && only.length === 11) return "+92" + only.slice(1);
+  if (only.startsWith("92") && only.length >= 12) return "+" + only;
+  // Fallback: assume already includes country code without +
+  if (only.length >= 10) return "+" + only;
+  return null;
 }
 
 // ── Admin alerts (email + WhatsApp to the practice) ─────────────────────

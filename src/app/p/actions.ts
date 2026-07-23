@@ -11,9 +11,13 @@ import { fmt, fullPricePence, netPricePence } from "@/lib/pricing";
 import { getPricing } from "@/lib/pricing-settings";
 import { brandedEmail, notifyAdmin, sendEmail, sendLoginCodeWhatsApp } from "@/lib/notify";
 import { log, summarizeError } from "@/lib/log";
+import type Stripe from "stripe";
 import { stripe, stripeConfigured } from "@/lib/stripe";
 import { gmailConfigured } from "@/lib/google";
 import { allowDevOtpDisplay } from "@/lib/secure";
+import { checkoutAssetUrl, stripeCheckoutBranding, stripeCheckoutCustomText } from "@/lib/stripe-branding";
+import { BRAND } from "@/lib/brand";
+import { patientTemplateText, patientTemplateTitle } from "@/lib/patient-templates";
 
 const appUrl = () => process.env.APP_URL || "http://localhost:3000";
 
@@ -256,25 +260,59 @@ async function launchCheckout(token: string, type: "full" | "deposit"): Promise<
   const name =
     type === "full"
       ? `Invisalign ${patient.pkg} — pay in full (${patient.discountPct}% discount)`
-      : `Invisalign ${patient.pkg} — ${fmt(cfg.depositPence)} deposit (3 monthly instalments to follow)`;
+      : `Invisalign ${patient.pkg} — ${fmt(cfg.depositPence)} deposit (then 3 monthly instalments)`;
+  const description =
+    type === "full"
+      ? `${BRAND.name} · personalised Invisalign treatment paid in full`
+      : `${BRAND.name} · deposit today; 3 remaining payments collected automatically each month`;
 
-  const session = await s.checkout.sessions.create({
+  const branding = stripeCheckoutBranding();
+  const logoUrl = checkoutAssetUrl("/logo.webp");
+
+  // branding_settings needs a recent Stripe API; request it per-call and fall back if unsupported.
+  const sessionParams: Stripe.Checkout.SessionCreateParams = {
     mode: "payment",
     customer: customerId,
     line_items: [
       {
         quantity: 1,
-        price_data: { currency: "gbp", unit_amount: amount, product_data: { name } },
+        price_data: {
+          currency: "gbp",
+          unit_amount: amount,
+          product_data: {
+            name,
+            description,
+            images: [logoUrl],
+            metadata: { brand: BRAND.name },
+          },
+        },
       },
     ],
     // Deposit flow: save the card so the 3 monthly instalments can be
-    // collected automatically off-session.
-    payment_intent_data:
-      type === "deposit" ? { setup_future_usage: "off_session" } : undefined,
-    metadata: { patientId: patient.id, type },
+    // collected automatically off-session (not an open-ended subscription).
+    payment_intent_data: {
+      description: name,
+      ...(type === "deposit" ? { setup_future_usage: "off_session" as const } : {}),
+    },
+    custom_text: stripeCheckoutCustomText(type),
+    billing_address_collection: "auto",
+    locale: "en-GB",
+    metadata: { patientId: patient.id, type, brand: BRAND.name },
     success_url: `${appUrl()}/p/${token}?paid=${type}`,
     cancel_url: `${appUrl()}/p/${token}?cancelled=1`,
-  });
+  };
+
+  let session: Stripe.Checkout.Session;
+  try {
+    session = await s.checkout.sessions.create({
+      ...sessionParams,
+      // branding_settings is available on newer Stripe APIs than our typed version.
+      ...( { branding_settings: branding } as Stripe.Checkout.SessionCreateParams ),
+    });
+  } catch (e) {
+    log.warn("stripe.checkout.branding_fallback", { ...summarizeError(e) });
+    session = await s.checkout.sessions.create(sessionParams);
+  }
 
   await db.payment.create({
     data: { patientId: patient.id, amountPence: amount, type, status: "pending", stripeSessionId: session.id },
@@ -338,8 +376,12 @@ export async function uploadPatientFile(formData: FormData): Promise<
 /**
  * Consent + e-signature gate for every payment route.
  * Previously only finance opened the modal — full/deposit skipped it.
+ * Returns a success payload for finance/interested (client shows SuccessModal).
+ * full/deposit redirect into Stripe Checkout and never return.
  */
-export async function completePaymentConsent(formData: FormData) {
+export async function completePaymentConsent(
+  formData: FormData
+): Promise<{ ok: true; title: string; body: string } | void> {
   const token = String(formData.get("token"));
   const choiceRaw = String(formData.get("choice") || "");
   const choice = (["full", "deposit", "finance", "interested"].includes(choiceRaw) ? choiceRaw : "") as
@@ -404,7 +446,9 @@ export async function completePaymentConsent(formData: FormData) {
   });
 
   const name = `${firstName || patient.firstName} ${lastName || patient.lastName}`.trim();
-  await notifyAdmin(
+  const greet = firstName || patient.firstName;
+  // Don't block the patient on admin email/WhatsApp.
+  void notifyAdmin(
     choice === "finance"
       ? `📝 ${name} applied for 0% finance (consent signed)`
       : choice === "interested"
@@ -421,10 +465,18 @@ export async function completePaymentConsent(formData: FormData) {
   if (choice === "finance") {
     const financeUrl = process.env.FINANCE_APPLY_URL;
     if (financeUrl && !financeUrl.includes("example.com")) redirect(financeUrl);
-    redirect(toastUrl(`/p/${token}`, "Thank you! We'll email your finance application link shortly.", "✓"));
+    return {
+      ok: true,
+      title: patientTemplateTitle("finance_received"),
+      body: patientTemplateText("finance_received", greet),
+    };
   }
 
-  redirect(toastUrl(`/p/${token}`, "Thank you! Please check your inbox — you'll hear from us shortly.", "✓"));
+  return {
+    ok: true,
+    title: "Thank you",
+    body: `Hi ${greet}, thanks so much for choosing Dental Scotland. We've noted your interest — a Treatment Coordinator will be in touch shortly.`,
+  };
 }
 
 /** @deprecated use completePaymentConsent */
@@ -458,7 +510,7 @@ export async function markInterested(formData: FormData) {
       activities: { create: { text: "Replied “I’M INTERESTED”" } },
     },
   });
-  await notifyAdmin(
+  void notifyAdmin(
     `⭐ ${patient.firstName} ${patient.lastName} is interested!`,
     `${patient.firstName} clicked I'M INTERESTED on their ${fmt(patient.pricePence)} Invisalign proposal. View: ${appUrl()}/admin/patients/${patient.id}`
   );
@@ -475,7 +527,7 @@ export async function bookCall(formData: FormData) {
       activities: { create: { text: "Requested a follow-up call" } },
     },
   });
-  await notifyAdmin(
+  void notifyAdmin(
     `📞 ${patient.firstName} ${patient.lastName} requested a call`,
     `Please call ${patient.firstName} on ${patient.phone || patient.email} about their Invisalign proposal. View: ${appUrl()}/admin/patients/${patient.id}`
   );
@@ -492,7 +544,7 @@ export async function chooseFinance(formData: FormData) {
       activities: { create: { text: "Applied for 0% finance — awaiting approval" } },
     },
   });
-  await notifyAdmin(
+  void notifyAdmin(
     `💷 ${patient.firstName} ${patient.lastName} applied for 0% finance`,
     `${patient.firstName} started a finance application for their ${fmt(patient.pricePence)} plan. View: ${appUrl()}/admin/patients/${patient.id}`
   );

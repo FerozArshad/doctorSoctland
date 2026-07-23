@@ -7,9 +7,10 @@ import { canAccessPatient, clearAdminSession, createAdminSession, requireAdmin }
 import { fmt, fullPricePence, netPricePence, priceForPence } from "@/lib/pricing";
 import { getPricing } from "@/lib/pricing-settings";
 import { COORDINATORS, coordinatorFor, fromHeader, FALLBACK_COORDINATOR, type Coordinator } from "@/lib/coordinators";
-import { brandedEmail, financeLinkEmailHtml, proposalEmailHtml, sendEmail, sendProposalWhatsApp } from "@/lib/notify";
+import { brandedEmail, financeLinkEmailHtml, proposalEmailHtml, sendEmail, sendProposalWhatsApp, sendWhatsApp, escapeHtml } from "@/lib/notify";
 import { firstNameOf } from "@/lib/status";
 import { log, summarizeError } from "@/lib/log";
+import { patientTemplateText, patientTemplateTitle, type PatientTemplateId } from "@/lib/patient-templates";
 
 const ADMIN_LOGIN_DUMMY = "$2a$10$jIXu5fFVbg3ikfyxoWTwL.sLkQyG8lo/95eoTH8DTmJLzZCI7uUs2";
 
@@ -95,7 +96,8 @@ export async function createAdminAccount(formData: FormData) {
   const email = String(formData.get("email") || "").trim().toLowerCase();
   const password = String(formData.get("password") || "");
   const role = String(formData.get("role") || "").trim() || "Treatment Coordinator";
-  const isSuperAdmin = formData.get("isSuperAdmin") === "on";
+  // Super Admin cannot mint more Super Admins — team members are Admin only.
+  const isSuperAdmin = false;
 
   if (!name || !/.+@.+\..+/.test(email)) {
     redirect(toastUrl("/admin/team", "A name and a valid email are required", "!", "#E0A429"));
@@ -110,7 +112,7 @@ export async function createAdminAccount(formData: FormData) {
   await db.admin.create({
     data: { name, email, role, isSuperAdmin, passwordHash: await bcrypt.hash(password, 10) },
   });
-  redirect(toastUrl("/admin/team", `${name} can now log in as ${email}`, "✓"));
+  redirect(toastUrl("/admin/team", `${name} can now log in as ${email} (Admin)`, "✓"));
 }
 
 // ── Monthly reports ─────────────────────────────────────────────────────
@@ -472,5 +474,73 @@ export async function markPaid(formData: FormData) {
     },
   });
   redirect(toastUrl(`/admin/patients/${id}`, "Marked paid in full"));
+}
+
+/** Super Admin only — permanently remove a patient and related records. */
+export async function deletePatient(formData: FormData) {
+  const id = String(formData.get("patientId"));
+  const me = await requireAdmin();
+  if (!me.isSuperAdmin) {
+    redirect(toastUrl(`/admin/patients/${id}`, "Only a Super Admin can remove patients", "!", "#E0A429"));
+  }
+  const patient = await db.patient.findUnique({ where: { id } });
+  if (!patient) redirect("/admin/patients");
+  const label = `${patient.firstName} ${patient.lastName}`.trim() || patient.email;
+  await db.patient.delete({ where: { id } });
+  log.info("patient.delete", { adminId: me.id, patientId: id, email: patient.email });
+  redirect(toastUrl("/admin/patients", `Removed ${label}`, "✓"));
+}
+
+/** Send a canned patient message (email + WhatsApp when possible). */
+export async function sendPatientTemplate(formData: FormData) {
+  const id = String(formData.get("patientId"));
+  const template = String(formData.get("template") || "") as PatientTemplateId;
+  if (template !== "invisalign_ordered" && template !== "finance_received") {
+    redirect(toastUrl(`/admin/patients/${id}`, "Unknown message template", "!", "#E0A429"));
+  }
+  const { patient } = await requireOwnedPatient(id);
+  const text = patientTemplateText(template, patient.firstName);
+  const title = patientTemplateTitle(template);
+
+  const emailHtml = brandedEmail(
+    title,
+    `<p style="font-size:15px;line-height:1.7;color:#3C4a59;white-space:pre-wrap;">${escapeHtml(text)}</p>`
+  );
+
+  let emailOk = false;
+  try {
+    await sendEmail(patient.email, `${title} — Dental Scotland`, emailHtml);
+    emailOk = true;
+  } catch (e) {
+    log.error("template.email.fail", { patientId: id, template, ...summarizeError(e) });
+  }
+
+  let waOk = false;
+  if (patient.phone) {
+    try {
+      const r = await sendWhatsApp(patient.phone, text);
+      waOk = !r.simulated && !r.error;
+    } catch (e) {
+      log.error("template.wa.fail", { patientId: id, template, ...summarizeError(e) });
+    }
+  }
+
+  await db.activity.create({
+    data: {
+      patientId: id,
+      text: `Sent “${title}” template${emailOk ? " · email" : ""}${waOk ? " · WhatsApp" : ""}`,
+    },
+  });
+
+  if (!emailOk && !waOk) {
+    redirect(toastUrl(`/admin/patients/${id}`, "Could not send message — check email/WhatsApp config", "!", "#E0A429"));
+  }
+  redirect(
+    toastUrl(
+      `/admin/patients/${id}`,
+      `Sent “${title}”${emailOk ? " by email" : ""}${waOk ? " + WhatsApp" : ""}`,
+      "✉"
+    )
+  );
 }
 

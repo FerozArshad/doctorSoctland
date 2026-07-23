@@ -6,7 +6,7 @@ import { db } from "@/lib/db";
 import { stripe } from "@/lib/stripe";
 import { fmt, fullPricePence, instalmentPence, netPricePence } from "@/lib/pricing";
 import { getPricing } from "@/lib/pricing-settings";
-import { notifyAdmin, receiptEmailHtml, sendEmail } from "@/lib/notify";
+import { notifyAdmin, receiptEmailHtml, depositScheduleEmailHtml, sendEmail } from "@/lib/notify";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -123,8 +123,8 @@ async function handleCheckoutPaid(
 
   await sendEmail(
     patient.email,
-    "Deposit received — Dental Scotland",
-    receiptEmailHtml(patient, amount, `deposit — 3 monthly instalments of ${fmt(per)} will follow automatically`)
+    "Deposit received — your instalment plan is set — Dental Scotland",
+    depositScheduleEmailHtml(patient, amount, per, dueDates)
   ).catch(console.error);
   await notifyAdmin(
     `💚 ${patient.firstName} ${patient.lastName} paid the ${fmt(amount)} deposit`,

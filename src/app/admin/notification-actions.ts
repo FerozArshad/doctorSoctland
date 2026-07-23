@@ -1,6 +1,5 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
 import { db } from "@/lib/db";
 import { requireAdmin } from "@/lib/auth";
 import { log } from "@/lib/log";
@@ -11,6 +10,7 @@ function appendKey(existing: string[], key: string): string[] {
   return [key, ...existing.filter((k) => k !== key)].slice(0, MAX_KEYS);
 }
 
+/** Persist mark-read without revalidating the whole admin shell (keeps UI instant). */
 export async function markNotificationRead(key: string) {
   if (!key || key.length > 120) return;
   const admin = await requireAdmin();
@@ -19,9 +19,9 @@ export async function markNotificationRead(key: string) {
     data: { notifReadKeys: appendKey(admin.notifReadKeys || [], key) },
   });
   log.info("notif.read", { adminId: admin.id, key });
-  revalidatePath("/admin", "layout");
 }
 
+/** Persist dismiss without revalidating the whole admin shell. */
 export async function dismissNotification(key: string) {
   if (!key || key.length > 120) return;
   const admin = await requireAdmin();
@@ -30,5 +30,4 @@ export async function dismissNotification(key: string) {
     data: { notifDismissedKeys: appendKey(admin.notifDismissedKeys || [], key) },
   });
   log.info("notif.dismiss", { adminId: admin.id, key });
-  revalidatePath("/admin", "layout");
 }

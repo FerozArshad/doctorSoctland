@@ -360,6 +360,52 @@ export function receiptEmailHtml(p: Patient, amountPence: number, what: string) 
   );
 }
 
+/** Sent after deposit — explains the 3 automatic monthly card charges. */
+export function depositScheduleEmailHtml(
+  p: Patient,
+  depositPence: number,
+  perInstalmentPence: number,
+  dueDates: Date[]
+) {
+  const rows = dueDates
+    .map(
+      (d, i) =>
+        `<tr>
+          <td style="padding:10px 14px;border-bottom:1px solid #F1F4F8;font-size:14px;color:#3C4a59;">Instalment ${i + 1} of 3</td>
+          <td style="padding:10px 14px;border-bottom:1px solid #F1F4F8;font-size:14px;font-weight:700;text-align:right;color:#16202E;">${fmt(perInstalmentPence)}</td>
+          <td style="padding:10px 14px;border-bottom:1px solid #F1F4F8;font-size:13px;text-align:right;color:#7A8696;">${d.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}</td>
+        </tr>`
+    )
+    .join("");
+  return brandedEmail(
+    "Deposit received — your instalment plan is set",
+    `<p style="font-size:15px;line-height:1.7;color:#3C4a59;">Hi ${p.firstName},</p>
+     <p style="font-size:15px;line-height:1.7;color:#3C4a59;">Thank you — we've received your <strong style="color:#0B7A6E;">${fmt(depositPence)}</strong> deposit. Your card has been saved securely with Stripe for <strong>exactly 3 monthly payments</strong> (not an open-ended subscription).</p>
+     <table style="width:100%;border:1px solid #E7ECF2;border-radius:14px;border-collapse:separate;border-spacing:0;overflow:hidden;margin:18px 0;">
+       <tr style="background:#F7FAFC;">
+         <td style="padding:10px 14px;font-size:11px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:#8A96A5;">Payment</td>
+         <td style="padding:10px 14px;font-size:11px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:#8A96A5;text-align:right;">Amount</td>
+         <td style="padding:10px 14px;font-size:11px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:#8A96A5;text-align:right;">Due</td>
+       </tr>
+       ${rows}
+     </table>
+     <p style="font-size:14px;line-height:1.7;color:#3C4a59;">We'll email you a reminder a few days before each charge. Receipts are sent after every successful payment.</p>
+     <p style="font-size:14px;line-height:1.7;color:#3C4a59;">Questions? Just reply to this email — the Dental Scotland team is here to help.</p>`
+  );
+}
+
+/** Reminder ~3 days before an automatic instalment charge. */
+export function instalmentReminderEmailHtml(p: Patient, number: number, amountPence: number, dueDate: Date) {
+  const when = dueDate.toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
+  return brandedEmail(
+    `Reminder: instalment ${number}/3 due soon`,
+    `<p style="font-size:15px;line-height:1.7;color:#3C4a59;">Hi ${p.firstName},</p>
+     <p style="font-size:15px;line-height:1.7;color:#3C4a59;">Friendly heads-up from Dental Scotland: instalment <strong>${number} of 3</strong> for your Invisalign treatment (<strong style="color:#0B7A6E;">${fmt(amountPence)}</strong>) is due on <strong>${when}</strong>.</p>
+     <p style="font-size:15px;line-height:1.7;color:#3C4a59;">We'll collect it automatically from the card you used for your deposit — no action needed unless your card details have changed. If they have, reply to this email and we'll help update them.</p>
+     <p style="font-size:14px;line-height:1.7;color:#7A8696;">You'll get a receipt as soon as the payment goes through.</p>`
+  );
+}
+
 // ── Payment reminder (for patients who've had a proposal but not yet paid) ──
 // Written in a warm, personal coordinator's voice — deliberately not generic.
 export function reminderEmailHtml(p: Patient, cfg: PricingConfig = PRICING_DEFAULTS) {

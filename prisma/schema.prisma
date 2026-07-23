@@ -172,6 +172,8 @@ model Instalment {
   status                String    @default("scheduled") // scheduled | paid | failed
   stripePaymentIntentId String?
   paidAt                DateTime?
+  // Pre-charge reminder email (sent ~3 days before dueDate)
+  reminderSentAt        DateTime?
   createdAt             DateTime  @default(now())
 
   @@index([patientId])

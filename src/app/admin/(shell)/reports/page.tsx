@@ -119,12 +119,26 @@ export default async function ReportsPage({ searchParams }: { searchParams: { m?
                 ))}
               </div>
             )}
-            <div style={{ display: "flex", alignItems: "center", gap: 10, marginLeft: "auto" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 10, marginLeft: "auto", flexWrap: "wrap" }}>
               <Link href={qs(prev)} style={{ padding: "6px 12px", borderRadius: 8, border: "1px solid #E1E7EE", textDecoration: "none", color: "#3C4a59", fontWeight: 700 }}>‹</Link>
               <span style={{ fontSize: 15, fontWeight: 800, minWidth: 130, textAlign: "center" }}>{monthName}</span>
               {isCurrentMonth
                 ? <span style={{ padding: "6px 12px", borderRadius: 8, border: "1px solid #F1F4F8", color: "#C6CFDA", fontWeight: 700 }}>›</span>
                 : <Link href={qs(next)} style={{ padding: "6px 12px", borderRadius: 8, border: "1px solid #E1E7EE", textDecoration: "none", color: "#3C4a59", fontWeight: 700 }}>›</Link>}
+              <a
+                href={`/api/admin/reports/export?format=csv&m=${year}-${pad(month)}&a=${target.id}`}
+                className="btn btn-outline"
+                style={{ padding: "7px 12px", fontSize: 12.5, textDecoration: "none" }}
+              >
+                Export CSV
+              </a>
+              <a
+                href={`/api/admin/reports/export?format=xlsx&m=${year}-${pad(month)}&a=${target.id}`}
+                className="btn btn-teal"
+                style={{ padding: "7px 12px", fontSize: 12.5, textDecoration: "none" }}
+              >
+                Export Excel
+              </a>
             </div>
           </div>
 

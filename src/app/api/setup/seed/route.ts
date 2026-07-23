@@ -1,7 +1,6 @@
-// One-time production bootstrap: creates admin + demo patients on the live database.
-// Disabled in production unless ALLOW_PRODUCTION_SEED=1 (and CRON_SECRET).
+// One-time local/bootstrap seed only. Always blocked on Vercel production.
 //
-//   curl -X POST -H "Authorization: Bearer YOUR_CRON_SECRET" https://…/api/setup/seed
+//   curl -X POST -H "Authorization: Bearer YOUR_CRON_SECRET" http://localhost:3000/api/setup/seed
 import { NextRequest, NextResponse } from "next/server";
 import { execSync } from "node:child_process";
 import { PrismaClient } from "@prisma/client";
@@ -13,7 +12,8 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export async function POST(req: NextRequest) {
-  if (process.env.NODE_ENV === "production" && process.env.ALLOW_PRODUCTION_SEED !== "1") {
+  // Never allow seeding on the live Vercel deployment — keep data safe.
+  if (process.env.NODE_ENV === "production" || process.env.VERCEL_ENV === "production") {
     log.warn("seed.blocked", { reason: "production_seed_disabled" });
     return NextResponse.json({ error: "seed disabled in production" }, { status: 403 });
   }

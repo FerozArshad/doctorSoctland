@@ -1,23 +1,15 @@
 "use client";
 
 import Link from "next/link";
-import { useState, useRef, useEffect, useTransition } from "react";
-import type { MessageNotifications } from "@/lib/messages";
+import { useState, useRef, useEffect } from "react";
 import { channelLabel } from "@/lib/messages";
 import { timeAgo } from "@/lib/status";
-import { dismissNotification, markNotificationRead } from "@/app/admin/notification-actions";
+import { useMessageNotifications } from "@/components/MessageNotificationsContext";
 
-export default function NotificationsBell({ data }: { data: MessageNotifications }) {
+export default function NotificationsBell() {
+  const data = useMessageNotifications();
   const [open, setOpen] = useState(false);
-  const [items, setItems] = useState(data.items);
-  const [alertCount, setAlertCount] = useState(data.alertCount);
-  const [pending, startTransition] = useTransition();
   const ref = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    setItems(data.items);
-    setAlertCount(data.alertCount);
-  }, [data]);
 
   useEffect(() => {
     if (!open) return;
@@ -28,24 +20,8 @@ export default function NotificationsBell({ data }: { data: MessageNotifications
     return () => document.removeEventListener("mousedown", close);
   }, [open]);
 
-  const markRead = (key: string) => {
-    setItems((prev) => prev.map((i) => (i.key === key ? { ...i, unread: false } : i)));
-    setAlertCount((c) => Math.max(0, c - 1));
-    startTransition(() => {
-      void markNotificationRead(key);
-    });
-  };
-
-  const remove = (key: string) => {
-    setItems((prev) => prev.filter((i) => i.key !== key));
-    setAlertCount((c) => Math.max(0, c - 1));
-    startTransition(() => {
-      void dismissNotification(key);
-    });
-  };
-
-  const upcoming = items.filter((i) => i.kind === "upcoming");
-  const recent = items.filter((i) => i.kind === "sent");
+  const upcoming = data.items.filter((i) => i.kind === "upcoming");
+  const recent = data.items.filter((i) => i.kind === "sent");
 
   return (
     <div ref={ref} style={{ position: "relative" }}>
@@ -58,21 +34,18 @@ export default function NotificationsBell({ data }: { data: MessageNotifications
         <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
           <path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9M13.7 21a2 2 0 0 1-3.4 0" />
         </svg>
-        {alertCount > 0 && (
+        {data.alertCount > 0 && (
           <span style={{ position: "absolute", top: 8, right: 9, minWidth: 16, height: 16, padding: "0 4px", borderRadius: 99, background: "#E5544B", border: "2px solid #fff", color: "#fff", fontSize: 10, fontWeight: 800, display: "grid", placeItems: "center" }}>
-            {alertCount > 99 ? "99+" : alertCount}
+            {data.alertCount > 99 ? "99+" : data.alertCount}
           </span>
         )}
       </button>
 
       {open && (
         <div style={{ position: "absolute", top: "calc(100% + 8px)", right: 0, width: 380, maxHeight: 520, overflow: "auto", background: "#fff", border: "1px solid #E7ECF2", borderRadius: 14, boxShadow: "0 18px 40px -18px rgba(16,32,54,.35)", zIndex: 50 }}>
-          <div style={{ padding: "14px 16px", borderBottom: "1px solid #F1F4F8", display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
-            <div>
-              <div style={{ fontSize: 14, fontWeight: 800 }}>Notifications</div>
-              <div style={{ fontSize: 12, color: "#7A8696", marginTop: 2 }}>Live from patients — follow-ups &amp; sends</div>
-            </div>
-            {pending && <span style={{ fontSize: 11, color: "#9AA6B4" }}>Saving…</span>}
+          <div style={{ padding: "14px 16px", borderBottom: "1px solid #F1F4F8" }}>
+            <div style={{ fontSize: 14, fontWeight: 800 }}>Notifications</div>
+            <div style={{ fontSize: 12, color: "#7A8696", marginTop: 2 }}>Live from patients — follow-ups &amp; sends</div>
           </div>
 
           <Section title="Next to send" empty="No follow-ups scheduled." hasItems={upcoming.length > 0}>
@@ -87,8 +60,8 @@ export default function NotificationsBell({ data }: { data: MessageNotifications
                 failed={false}
                 accent={u.overdue ? "#C23B34" : u.dueToday ? "#B7791F" : undefined}
                 onOpen={() => setOpen(false)}
-                onRead={() => markRead(u.key)}
-                onRemove={() => remove(u.key)}
+                onRead={() => data.markRead(u.key)}
+                onRemove={() => data.remove(u.key)}
               />
             ))}
           </Section>
@@ -104,8 +77,8 @@ export default function NotificationsBell({ data }: { data: MessageNotifications
                 unread={!!m.unread}
                 failed={!!m.failed}
                 onOpen={() => setOpen(false)}
-                onRead={() => markRead(m.key)}
-                onRemove={() => remove(m.key)}
+                onRead={() => data.markRead(m.key)}
+                onRemove={() => data.remove(m.key)}
               />
             ))}
           </Section>

@@ -5,12 +5,14 @@ import { estMonths, fmt, netPricePence, paymentPreferenceLabel } from "@/lib/pri
 import { getPricing } from "@/lib/pricing-settings";
 import { avatarBg, initials, statusOf, timeAgo } from "@/lib/status";
 import { COMP_ITEMS, COMP_TOTAL } from "@/lib/content";
-import { approveFinance, markPaid, recordDeposit, sendProposal } from "@/app/admin/actions";
+import { approveFinance, markPaid, recordDeposit, sendPatientTemplate, sendProposal } from "@/app/admin/actions";
 import { canAccessPatient, requireAdmin } from "@/lib/auth";
 import TopBar from "@/components/TopBar";
 import MessageLog from "@/components/MessageLog";
 import FormSubmitButton from "@/components/FormSubmitButton";
+import DeletePatientButton from "@/components/DeletePatientButton";
 import { isMessageActivity } from "@/lib/messages";
+import { patientTemplateText } from "@/lib/patient-templates";
 
 export const dynamic = "force-dynamic";
 
@@ -111,7 +113,7 @@ export default async function PatientProfile({ params }: { params: { id: string 
                 </div>
               </div>
             </div>
-            <div style={{ display: "flex", gap: 10 }}>
+            <div style={{ display: "flex", gap: 10, flexWrap: "wrap", justifyContent: "flex-end" }}>
               <Link href={`/admin/patients/${c.id}/edit`} className="btn btn-outline" style={{ padding: "11px 16px", fontSize: 13.5, textDecoration: "none" }}>
                 Edit
               </Link>
@@ -130,6 +132,9 @@ export default async function PatientProfile({ params }: { params: { id: string 
                 </svg>
                 Open pay link
               </Link>
+              {admin.isSuperAdmin && (
+                <DeletePatientButton patientId={c.id} patientName={`${c.firstName} ${c.lastName}`.trim()} />
+              )}
             </div>
           </div>
 
@@ -279,6 +284,27 @@ export default async function PatientProfile({ params }: { params: { id: string 
                     ))}
                 </div>
               )}
+
+              {/* quick message templates */}
+              <div className="card" style={{ padding: 24 }}>
+                <div style={{ fontSize: 15, fontWeight: 800, marginBottom: 4 }}>Message templates</div>
+                <div style={{ fontSize: 12.5, color: "#7A8696", marginBottom: 14, lineHeight: 1.5 }}>
+                  One-click send to {c.firstName} by email (and WhatsApp when available).
+                </div>
+                <div style={{ padding: "12px 14px", borderRadius: 12, background: "#F7FAFC", border: "1px solid #E7ECF2", fontSize: 13, color: "#3C4a59", lineHeight: 1.6, marginBottom: 12 }}>
+                  {patientTemplateText("invisalign_ordered", c.firstName)}
+                </div>
+                <form action={sendPatientTemplate}>
+                  <input type="hidden" name="patientId" value={c.id} />
+                  <input type="hidden" name="template" value="invisalign_ordered" />
+                  <FormSubmitButton
+                    className="btn btn-teal"
+                    style={{ width: "100%", padding: 12, fontSize: 13.5 }}
+                    label="Send “Invisalign ordered”"
+                    pendingLabel="Sending…"
+                  />
+                </form>
+              </div>
 
               <MessageLog patient={c} activities={c.activities} />
 

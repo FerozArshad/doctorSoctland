@@ -30,7 +30,7 @@ export default function Toast() {
 
   if (!toast) return null;
   return (
-    <div style={{ position: "fixed", bottom: 26, left: "50%", transform: "translateX(-50%)", zIndex: 100, animation: "ds-toast .3s cubic-bezier(.2,.8,.3,1) both" }}>
+    <div style={{ position: "fixed", bottom: 26, left: "50%", transform: "translateX(-50%)", zIndex: 1200, animation: "ds-toast .3s cubic-bezier(.2,.8,.3,1) both" }}>
       <div style={{ display: "flex", alignItems: "center", gap: 12, background: "#0E1A2B", color: "#fff", padding: "13px 20px", borderRadius: 12, boxShadow: "0 16px 40px -12px rgba(11,24,40,.55)", fontSize: 14, fontWeight: 600 }}>
         <span style={{ width: 22, height: 22, borderRadius: "50%", background: toast.bg, display: "grid", placeItems: "center", fontSize: 12, flex: "none" }}>{toast.icon}</span>
         {toast.msg}

@@ -61,10 +61,9 @@ export default async function TeamPage() {
 
           {/* create admin */}
           <form action={createAdminAccount} className="card" style={{ padding: 24 }}>
-            <div style={{ fontSize: 16, fontWeight: 800 }}>Add admin user</div>
+            <div style={{ fontSize: 16, fontWeight: 800 }}>Add team member</div>
             <div style={{ fontSize: 13, color: "#7A8696", marginTop: 2, lineHeight: 1.6 }}>
-              Super Admins can create unlimited team logins. Each person signs in at <strong>/admin/login</strong> with the email and password you set here.
-              Patient accounts are created separately via <strong>New patient</strong>.
+              New accounts are always <strong>Admin</strong> (not Super Admin). They sign in at <strong>/admin/login</strong> and only see patients they own or send.
             </div>
             <div style={{ marginTop: 18 }}>
               <label className="label">Full name *</label>
@@ -79,15 +78,12 @@ export default async function TeamPage() {
               <input className="input" name="password" type="password" minLength={8} required />
             </div>
             <div style={{ marginTop: 14 }}>
-              <label className="label">Role title</label>
+              <label className="label">Job title</label>
               <input className="input" name="role" placeholder="Treatment Coordinator" />
             </div>
-            <label style={{ display: "flex", gap: 10, alignItems: "flex-start", marginTop: 16, cursor: "pointer" }}>
-              <input type="checkbox" name="isSuperAdmin" style={{ width: 17, height: 17, accentColor: "#0E9384", marginTop: 1 }} />
-              <span style={{ fontSize: 13, color: "#3C4a59", lineHeight: 1.5 }}>
-                <strong>Super Admin</strong> — sees all patients, revenue and every admin&apos;s reports
-              </span>
-            </label>
+            <div style={{ marginTop: 14, padding: "11px 13px", borderRadius: 11, background: "#F4F6F9", fontSize: 12.5, color: "#5C6a79", lineHeight: 1.5 }}>
+              Access level: <strong>Admin</strong> only. There is no option to create additional Super Admins.
+            </div>
             <button className="btn btn-teal" style={{ marginTop: 20, width: "100%", padding: 13 }}>Create admin user</button>
           </form>
         </div>

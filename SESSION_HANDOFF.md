@@ -1,6 +1,6 @@
 # Session Handoff — Dental Scotland (Invisalign Proposals, Payments & Reporting)
 
-Last updated: **2026-07-21**. Complete working state — anyone (or a new session) can
+Last updated: **2026-07-22**. Complete working state — anyone (or a new session) can
 pick up from this file without re-deriving context. **No secrets live here** — real
 values are only in local `.env` (gitignored) and Vercel → Settings → Environment Variables.
 
@@ -100,7 +100,7 @@ Next.js 14 (App Router) + Prisma + Postgres app for dentalscotland.com:
 | Database (Supabase) | ✅ | schema pushed incl. `ownerId` + `MonthlyReport` |
 | Auth (`AUTH_SECRET`) | ✅ | Vercel + local |
 | Email (Gmail send) | ✅ | OAuth `gmail.send`, falls back Resend → simulated |
-| WhatsApp (Meta Cloud API) | ⏳ | keys in place; templates gated by `WHATSAPP_TEMPLATES_ENABLED=0` until display name + 3 templates approved — see §11 |
+| WhatsApp (Meta Cloud API) | ⏳ blocked | Code + templates + display name ready; number still **PENDING / not registered** and **no Meta App subscribed to the WABA** — see **§11** (full dossier) |
 | Stripe | ✅ verified e2e | LIVE keys in Vercel, TEST keys local — keep it that way |
 | Editable pricing | ✅ | `/admin/settings` |
 | Super Admin / Admin roles | ✅ | now with full patient isolation |
@@ -150,24 +150,181 @@ Next.js 14 (App Router) + Prisma + Postgres app for dentalscotland.com:
 - Report-saved confirmation: `saveMonthlyReport` in `src/app/admin/actions.ts`
 - Finance link on approval: `approveFinance` in `src/app/admin/actions.ts`
 
-## 11. WhatsApp — current plan (discussed 2026-07-20; code ready 2026-07-22)
+## 11. WhatsApp — full integration dossier (updated 2026-07-22)
 
-Business verification is **approved**. Credentials are in Vercel + local `.env`.
-Template send path is **wired** in `src/lib/notify.ts` and gated by
-`WHATSAPP_TEMPLATES_ENABLED` (keep `0` until Meta finishes approval).
+### 11.1 Goal (Phase 1 — outbound only)
+Business-initiated messages to patients via **WhatsApp Cloud API** (no BSP, no n8n):
+- Proposal link when admin clicks **Send / Resend proposal**
+- Payment reminder on sequence **touch 1** only
+- OTP / login code when patient chooses WhatsApp on `/p/[token]`
+- Admin alerts to `ADMIN_NOTIFY_WHATSAPP` (still free-form text; may fail outside 24h window)
 
-Still waiting on Meta:
-1. Display name **Dental Scotland** approved (retry exact brand name if
-   "Dental Scotland Care" was rejected).
-2. Approve templates (`en_GB`): `proposal_ready` + `payment_reminder` (Utility,
-   `{{1}}` = first name, `{{2}}` = proposal URL) and `login_code` (Authentication,
-   `{{1}}` = OTP).
-3. Then set `WHATSAPP_TEMPLATES_ENABLED=1` on Vercel (+ local) and redeploy —
-   no further code change needed. Helpers:
-   `sendProposalWhatsApp` / `sendReminderWhatsApp` / `sendLoginCodeWhatsApp`.
+**Phase 2 (not built):** inbound webhook + conversation history / admin inbox.
+Outbound “Messages sent” history already exists on the patient profile (`MessageLog`).
 
-**Phase 2 — human replies** (later): webhook `/api/whatsapp/webhook` + admin inbox.
-Free-form replies only inside the 24h window; outside it, templates only.
+### 11.2 Meta account facts (verified via Graph API 2026-07-22)
+
+| Item | Value / status |
+|---|---|
+| Business verification | ✅ Verified |
+| WABA name | Dental Scotland |
+| **WABA ID** | `1839924533652808` ← **NOT** the phone number ID |
+| **Phone Number ID** (correct) | `1186752691194998` |
+| Display phone | **+44 7915 357177** |
+| Display name | **Dental Scotland** — ✅ **APPROVED** (do not use “Dental Scotland Care”; that was rejected) |
+| Code verification | `VERIFIED` |
+| Account / phone `status` | **`CONNECTED`** ✅ (registered via API / Postman 2026-07-23) |
+| `platform_type` | `NOT_APPLICABLE` |
+| `is_on_biz_app` | `false` |
+| WABA `subscribed_apps` | **`[]` empty** ← why number does **not** show under App → WhatsApp → API Setup |
+| Meta App ID (in `.env`) | `2093913674807269` |
+| Token type used | Permanent **System User** token with scopes `whatsapp_business_messaging`, `whatsapp_business_management` |
+| Token identity seen via API | “Conversions API System User” — token works against the WABA, but the **developer app is not subscribed** to the WABA |
+
+⚠️ **Critical mix-up that burned time:** local/Vercel previously had
+`WHATSAPP_PHONE_NUMBER_ID=1839924533652808` (the **WABA** id). Graph returns WABA
+fields (`message_template_namespace`, currency…) for that id. Messaging
+`/{id}/messages` then fails with “Object does not exist / missing permissions”.
+**Always use Phone Number ID `1186752691194998` for sends.**
+
+### 11.3 Why the number does not appear in Meta “API Setup”
+The number **exists on the WABA** (API lists it). It does **not** appear in
+**developers.facebook.com → App → WhatsApp → API Setup** because:
+
+1. **`subscribed_apps` is empty** — the Meta App is not linked to WABA `1839924533652808`.
+2. Phone was **PENDING**; registration completed → now **CONNECTED**.
+3. **Do not send test messages to +44 7915 357177 itself** (that is the business
+   sender). Use a personal mobile on the patient record.
+
+**Do not keep “adding” the same number again** — that creates duplicates/confusion.
+**Link the existing WABA to the app**, then **Register** the existing number.
+
+**Fix steps (practice / Meta admin):**
+1. [Meta Business Settings](https://business.facebook.com/settings) → **Accounts →
+   WhatsApp accounts → Dental Scotland** → **Apps / Connected apps** → **Add** app
+   `2093913674807269` with WhatsApp messaging permissions.
+2. Or: [developers.facebook.com](https://developers.facebook.com) → correct app →
+   **WhatsApp → API Setup** → connect / select WABA **Dental Scotland** (existing).
+3. After it appears: open **+44 7915 357177** → complete **Register / Activate**
+   (set a **6-digit two-step PIN**). Status must become **CONNECTED** (not PENDING).
+4. Optional API register (once app is subscribed):  
+   `POST /v21.0/1186752691194998/register`  
+   body `{ "messaging_product": "whatsapp", "pin": "<6-digit-PIN>" }`  
+   — only with a PIN the practice chooses and stores safely.
+
+Until status is CONNECTED, sends fail with:
+`(#133010) Account not registered`.
+
+### 11.4 Templates (approved — create body rules)
+Language: **`en_GB`** (must match `WHATSAPP_TEMPLATE_LANG`).
+
+Meta **rejects variables at the very start or end** of the body. Use static text
+before `{{1}}` and after `{{2}}`.
+
+| Meta name (as created) | Category | Actual body text | App uses for |
+|---|---|---|---|
+| `payment_reminder` | Utility | Hello {{1}}, … plan is **ready**. Open … {{2}} Thanks… | **Proposal send** (`WHATSAPP_TPL_PROPOSAL`) |
+| `porposal_ready` *(typo)* | Utility | Hello {{1}}, a **reminder** … {{2}} Thanks… | **Reminder** (`WHATSAPP_TPL_REMINDER`) |
+| `login_code` | Authentication | `*{{1}}* is your verification code…` + Copy code button | OTP (`button` URL param = code) |
+
+⚠️ There is **no** template named `proposal_ready`. Code defaults were updated
+2026-07-23 to match Meta. Prefer recreating correctly named templates later.
+
+Sample values when submitting: `{{1}}=Sarah`,
+`{{2}}=https://dashboard.dentalscotland.com/p/example`.
+
+Optional overrides in env if Meta names differ:
+`WHATSAPP_TPL_PROPOSAL`, `WHATSAPP_TPL_REMINDER`, `WHATSAPP_TPL_LOGIN`.
+
+### 11.5 Code (already on `main`)
+File: `src/lib/notify.ts`
+
+| Helper | Used by | Behaviour |
+|---|---|---|
+| `sendProposalWhatsApp(patient)` | `deliverProposal` in `src/app/admin/actions.ts` | Template `proposal_ready` if `WHATSAPP_TEMPLATES_ENABLED=1`, else free-form text |
+| `sendReminderWhatsApp(patient)` | `src/app/api/cron/reminders/route.ts` (touch 1 only) | Template `payment_reminder` |
+| `sendLoginCodeWhatsApp(phone, code)` | `sendOtp` in `src/app/p/actions.ts` | Template `login_code` |
+| `sendWhatsApp(phone, text)` | Admin notify + fallbacks | Free-form text |
+| `whatsappConfigured()` / `whatsappTemplatesEnabled()` | gating | Token + phone id; templates flag |
+
+Go-live switch: **`WHATSAPP_TEMPLATES_ENABLED=1`** (local already `1`).
+Production needs the same on **Vercel** + Redeploy or templates stay off / text fallback.
+
+Send-proposal UX (2026-07-22):
+- Loader spinner on **Send / Resend proposal** (and create & send, deposit, mark paid,
+  finance approve) via `FormSubmitButton` / `NewPatientActions`.
+- Toast reports email + WhatsApp outcome (incl. WhatsApp failed).
+
+Patient access gotcha (fixed 2026-07-22): creating a patient whose email already
+exists redirected to their profile → **404** if current admin couldn’t access them.
+Now: access-aware redirect; if owned + “Create & send”, proposal is sent on the
+existing record. **Grace Stewart** (demo) is owned by `coordinator@` —
+profile id `cmrj4e00t000turyapyziq2ir`.
+
+### 11.6 Environment variables (WhatsApp)
+
+| Name | Purpose | Correct / notes |
+|---|---|---|
+| `WHATSAPP_TOKEN` | Permanent System User token | Not the 24h API-Setup test token |
+| `WHATSAPP_PHONE_NUMBER_ID` | **Phone Number ID** | **`1186752691194998`** — never the WABA id |
+| `WHATSAPP_TEMPLATES_ENABLED` | `1` / `true` to send templates | Local `1`; set on Vercel + redeploy |
+| `WHATSAPP_TEMPLATE_LANG` | Template language code | `en_GB` |
+| `ADMIN_NOTIFY_WHATSAPP` | Practice alert number | e.g. `+447915357177` (E.164) |
+| `WHATSAPP_TPL_*` | Optional template name overrides | Defaults: `proposal_ready`, `payment_reminder`, `login_code` |
+| `NEXT_PUBLIC_META_APP_ID` | Embedded signup / Meta app | `2093913674807269` |
+| `NEXT_PUBLIC_META_CONFIG_ID` | Embedded signup config | present in `.env` |
+| `META_APP_SECRET` | Embedded signup | present in `.env` |
+
+`/admin/whatsapp-connect` (Embedded Signup / coexistence) is a **dormant dead end**
+for the practice’s consumer WhatsApp Business app number — ruled out without a
+BSP/Tech Provider. Cloud API number above is the path.
+
+### 11.7 How to test (once CONNECTED + app subscribed + Vercel env correct)
+
+1. Confirm Vercel: `WHATSAPP_PHONE_NUMBER_ID=1186752691194998`,
+   `WHATSAPP_TEMPLATES_ENABLED=1`, token set → **Redeploy**.
+2. Log in (Super Admin sees all patients; coordinator only own).
+3. Open a patient with **your** mobile in E.164 (`+44…`) — not a fake demo number.
+4. Patient profile → **Resend proposal** → expect WhatsApp template + email; toast
+   should say email + WhatsApp (not “WhatsApp failed”).
+5. Open proposal link → **WhatsApp a code** → receive OTP template.
+6. Check activity / **Messages sent** on the profile.
+
+Graph quick checks (no secrets in handoff):
+- `GET /{waba-id}/phone_numbers` → status should be CONNECTED
+- `GET /{waba-id}/subscribed_apps` → should list the Meta App (not `[]`)
+- `POST /{phone-number-id}/messages` with `proposal_ready` → `messages[0].id`
+
+### 11.8 Known errors & meanings
+
+| Error / symptom | Meaning | Fix |
+|---|---|---|
+| `#133010 Account not registered` | Phone still PENDING / not registered for Cloud API | Register number (PIN); wait for CONNECTED |
+| `Object with ID '18399…' does not exist` on `/messages` | Using **WABA id** as phone id | Use `1186752691194998` |
+| Number missing in App → API Setup | App not subscribed to WABA | Link app in Business Settings (§11.3) |
+| Variable at start/end rejected | Meta template rule | Static text before first & after last variable |
+| Zero-tap needs package name / signature | Android autofill OTP | Use **Copy code** auth template |
+| Send proposal “stuck”, no loader | Button had no pending UI | Fixed — spinner on send buttons |
+| 404 on `/admin/patients/{id}` after “email already exists” | Admin couldn’t access that patient | Fixed access-aware redirect; use Super Admin or owner login |
+| Free-form text to patients | Templates disabled or outside 24h window | Keep `WHATSAPP_TEMPLATES_ENABLED=1` for business-initiated |
+
+### 11.9 Remaining WhatsApp checklist
+- [x] Register +44 7915 357177 → status **CONNECTED**
+- [ ] Link Meta App to WABA (`subscribed_apps` was still empty when last checked)
+- [ ] Vercel: `WHATSAPP_PHONE_NUMBER_ID=1186752691194998`,
+      `WHATSAPP_TEMPLATES_ENABLED=1`, optional `WHATSAPP_TPL_PROPOSAL=payment_reminder`,
+      `WHATSAPP_TPL_REMINDER=porposal_ready` + Redeploy
+- [ ] Smoke-test proposal WhatsApp + OTP to a **personal** handset (not the business number)
+- [ ] Phase 2: webhook + conversation history / inbox
+- [ ] Optional: recreate templates with correct names (`proposal_ready` / `payment_reminder`)
+
+### 11.10 Display-name request copy (for Meta, if ever re-submitted)
+Reason used / recommended:
+> Official trading name of our dental practice. Matches our website
+> dentalscotland.com, patient emails, and clinic branding. Patients recognise us
+> as Dental Scotland.
+
+Business website: `https://dentalscotland.com`
 
 ## 12. Cron jobs (`vercel.json` — exactly 2, fits Hobby)
 
@@ -196,7 +353,9 @@ Crons are registered in Vercel (confirmed firing 2026-07-21, ~10:17 first observ
 Core: `DATABASE_URL`*, `AUTH_SECRET`, `APP_URL`, `CRON_SECRET`
 Gmail: `EMAIL_FROM`, `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GMAIL_REFRESH_TOKEN`, (`RESEND_API_KEY` optional)
 Notify: `ADMIN_NOTIFY_EMAIL` (=concierge@), `ADMIN_NOTIFY_WHATSAPP`
-WhatsApp: `WHATSAPP_TOKEN`, `WHATSAPP_PHONE_NUMBER_ID`
+WhatsApp: `WHATSAPP_TOKEN`, `WHATSAPP_PHONE_NUMBER_ID` (**=`1186752691194998`**, not WABA id),
+  `WHATSAPP_TEMPLATES_ENABLED`, `WHATSAPP_TEMPLATE_LANG` (`en_GB`), optional `WHATSAPP_TPL_*`
+  (+ Embedded Signup: `NEXT_PUBLIC_META_APP_ID`, `NEXT_PUBLIC_META_CONFIG_ID`, `META_APP_SECRET`)
 Stripe: `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`
 Finance: `FINANCE_APPLY_URL`, `PAY_DISCOUNT_PCT`
 
@@ -225,9 +384,9 @@ token → `GMAIL_REFRESH_TOKEN`. Redirect URI must match `<APP_URL>/api/auth/goo
 - [ ] **T&C document**: get the terms text or URL and link it from the payment tick.
 - [ ] **Create Millie & Rochelle admin logins** at `/admin/team`; optionally assign
       their existing patients via Edit → "Belongs to admin".
-- [ ] **WhatsApp go-live** (§11): display name + 3 templates approved → set
-      `WHATSAPP_TEMPLATES_ENABLED=1` and redeploy (code already wired); later
-      the webhook + admin inbox.
+- [ ] **WhatsApp go-live** (§11 full dossier): link Meta App to WABA → register
+      number to CONNECTED → Vercel phone id `1186752691194998` +
+      `WHATSAPP_TEMPLATES_ENABLED=1` + redeploy → smoke-test; later webhook + inbox.
 - [ ] **Verify Gmail send-as** for millie@/rochelle@ (`[SEND-AS TEST]` emails in
       concierge@) — the touch-1 emails to Millie/Rochelle test patients came from the
       concierge fallback, so this is STILL unanswered.
@@ -236,7 +395,6 @@ token → `GMAIL_REFRESH_TOKEN`. Redirect URI must match `<APP_URL>/api/auth/goo
 - [ ] Change default admin passwords; delete Downloads `client_secret_*.json`.
 - [ ] Delete test patient asadqureshi1908@ when testing is done.
 - [ ] Rate limiter is in-memory → inconsistent on serverless (Redis would fix).
-- [ ] Dead `monthly` label lingers on the profile (trivial).
 
 ## 17. Gotchas
 
@@ -246,11 +404,20 @@ token → `GMAIL_REFRESH_TOKEN`. Redirect URI must match `<APP_URL>/api/auth/goo
 - **Shared DB**: local edits hit prod data (this is by design — stay careful).
 - **Never commit secrets** — `.env` stays gitignored.
 - Inline styles beat class selectors → mobile overrides in `globals.css` need `!important`.
+- **WhatsApp IDs**: WABA id ≠ Phone Number ID — see §11.2. Wrong id looks “set up”
+  but every send fails.
+- **WhatsApp UI vs API**: number can exist on WABA via API while App → API Setup is
+  empty if `subscribed_apps` is empty (§11.3).
 
 ## 18. Commit history (newest first)
 
 | Commit | What |
 |---|---|
+| `04f786a` | Send-proposal loaders + WhatsApp outcome in toast |
+| `18e707d` | Fix 404 when email already exists / access denied |
+| `20df07f` | WhatsApp template messaging + brand/proposal UI |
+| `60e678b` | Consent + e-sign all payment routes; patient uploads |
+| `d56dea7` | Message history + notifications (replace free-form composer) |
 | `c1f9cca` | Per-admin isolation, team management, monthly performance reports |
 | `47778ec` | T&C tick before payment, tier-based treatment months, sent-by filter |
 | `ec3077d` | New pricing tiers (8–15 / 16+); forms read live config |

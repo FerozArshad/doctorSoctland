@@ -41,7 +41,7 @@ export default function WhatsAppSettingsForm({
             <div style={{ fontSize: 16, fontWeight: 800 }}>WhatsApp Cloud API</div>
             <div style={{ fontSize: 13, color: "#7A8696", marginTop: 4, lineHeight: 1.55 }}>
               Paste credentials from Meta → WhatsApp → API Setup. Saved in the shared database so{" "}
-              <strong>local and production</strong> both use the same connection (no Facebook SDK / Embedded Signup).
+              <strong>local and production</strong> both use the same connection.
             </div>
           </div>
           <span
@@ -59,6 +59,14 @@ export default function WhatsAppSettingsForm({
           Active source: <strong>{cfg.source}</strong>
           {cfg.phoneNumberId ? ` · Phone Number ID ${cfg.phoneNumberId}` : ""}
           {cfg.token ? ` · Token ${maskSecret(cfg.token)}` : ""}
+        </div>
+        <div style={{ marginTop: 14, padding: "12px 14px", borderRadius: 11, background: "#FBE9E8", border: "1px solid #F0C4C0", fontSize: 13, color: "#8A2E2A", lineHeight: 1.55 }}>
+          <strong>If messages show “accepted” but patients never receive them:</strong> Meta is blocking delivery with billing error{" "}
+          <code>131042</code>. Fix in{" "}
+          <a href="https://business.facebook.com/settings/whatsapp-business-accounts" target="_blank" rel="noreferrer" style={{ color: "#8A2E2A", fontWeight: 700 }}>
+            Meta Business Suite → WhatsApp Accounts → Billing
+          </a>
+          : assign an active payment method (and tax info) to the <em>WhatsApp</em> account — not only the Business Manager wallet.
         </div>
       </div>
 

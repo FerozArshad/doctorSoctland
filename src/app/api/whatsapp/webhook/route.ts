@@ -106,7 +106,7 @@ async function handleStatus(st: Status) {
     message: errMsg ? errMsg.slice(0, 160) : null,
   });
 
-  if (!waId || (status !== "failed" && status !== "undeliverable")) return;
+  if (!waId || (status !== "failed" && status !== "undeliverable" && status !== "delivered")) return;
 
   const patient = await findPatientByWaId(waId);
   if (!patient) {
@@ -114,9 +114,21 @@ async function handleStatus(st: Status) {
     return;
   }
 
-  const text = `WhatsApp delivery ${status} to +${waId}${errMsg ? ` — ${errMsg}` : ""}${
-    err?.code ? ` (code ${err.code})` : ""
-  }`;
+  let text: string;
+  if (status === "delivered") {
+    text = `WhatsApp delivered to +${waId}`;
+  } else if (err?.code === 131042) {
+    text =
+      `WhatsApp delivery failed to +${waId} — Meta billing/payment not set on WhatsApp Business Account (code 131042). ` +
+      `Add a payment method under Meta Business Suite → WhatsApp Accounts → Billing.`;
+  } else if (err?.code === 131047) {
+    text =
+      `WhatsApp delivery failed to +${waId} — outside 24h window; use an approved template (code 131047).`;
+  } else {
+    text = `WhatsApp delivery ${status} to +${waId}${errMsg ? ` — ${errMsg}` : ""}${
+      err?.code ? ` (code ${err.code})` : ""
+    }`;
+  }
   await db.activity.create({ data: { patientId: patient.id, text } });
 }
 

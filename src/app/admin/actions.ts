@@ -469,9 +469,9 @@ async function deliverProposal(patientId: string, sentBy?: Coordinator) {
       results.push(`WhatsApp to ${patient.phone} simulated (check keys)`);
       log.warn("proposal.whatsapp.simulated", { patientId, phone: patient.phone });
     } else {
-      // Meta "accepted" ≠ delivered to the handset — delivery comes via webhook later.
+      // Meta "accepted" ≠ delivered — webhook reports delivered/failed (e.g. 131042 billing).
       const bits = [
-        `WhatsApp accepted for ${patient.phone}`,
+        `WhatsApp accepted for ${patient.phone} (queued by Meta — delivery status follows)`,
         r.waId ? `wa_id=${r.waId}` : null,
         r.messageStatus ? `status=${r.messageStatus}` : null,
         r.messageId ? `id=${r.messageId.slice(0, 24)}…` : null,

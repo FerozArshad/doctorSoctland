@@ -1,9 +1,8 @@
 "use client";
-// Patient proposal: pick a payment route → optional note + uploads → consent
+// Patient proposal: pick a payment route → optional note → consent
 // popup with e-signature (required for full / deposit / finance).
-import { useRef, useState, useTransition } from "react";
+import { useState } from "react";
 import ConsentModal, { Applicant, ConsentChoice } from "./ConsentModal";
-import { uploadPatientFile } from "@/app/p/actions";
 
 export type PayOption = {
   key: "full" | "deposit" | "finance";
@@ -17,46 +16,21 @@ export type PayOption = {
   cta: string;
 };
 
-type Uploaded = { id: string; fileName: string; sizeBytes: number };
-
 export default function PaymentOptionsForm({
   token,
   options,
   applicant,
-  initialUploads = [],
   compact = false,
 }: {
   token: string;
   options: PayOption[];
   applicant: Applicant;
-  initialUploads?: Uploaded[];
   compact?: boolean;
 }) {
   const [choice, setChoice] = useState<PayOption["key"]>(options[0]?.key ?? "full");
   const [note, setNote] = useState("");
   const [showConsent, setShowConsent] = useState(false);
-  const [uploads, setUploads] = useState<Uploaded[]>(initialUploads);
-  const [uploadError, setUploadError] = useState("");
-  const [pending, startTransition] = useTransition();
-  const fileRef = useRef<HTMLInputElement | null>(null);
   const selected = options.find((o) => o.key === choice)!;
-
-  const onPickFile = (file: File | null) => {
-    if (!file) return;
-    setUploadError("");
-    const fd = new FormData();
-    fd.set("token", token);
-    fd.set("file", file);
-    startTransition(async () => {
-      const res = await uploadPatientFile(fd);
-      if (res.error) {
-        setUploadError(res.error);
-        return;
-      }
-      if (res.upload) setUploads((u) => [...u, res.upload!]);
-      if (fileRef.current) fileRef.current.value = "";
-    });
-  };
 
   return (
     <>
@@ -128,54 +102,6 @@ export default function PaymentOptionsForm({
           className="input"
           style={{ marginTop: 0, resize: "vertical", fontSize: 13 }}
         />
-      </div>
-
-      <div style={{ marginTop: 12, padding: "12px 12px", borderRadius: 12, border: "1px dashed #C5D0DB", background: "#fff" }}>
-        <div style={{ fontSize: 13, fontWeight: 800, color: "#16202E" }}>Upload documents</div>
-        <div style={{ fontSize: 11.5, color: "#7A8696", marginTop: 3, lineHeight: 1.45 }}>
-          Optional — photos, ID or PDF (max 2&nbsp;MB each).
-        </div>
-        <label
-          style={{
-            marginTop: 10,
-            display: "inline-flex",
-            alignItems: "center",
-            gap: 8,
-            padding: "8px 12px",
-            borderRadius: 9,
-            border: "1px solid #D5DCE5",
-            background: "#F4F6F9",
-            fontSize: 12.5,
-            fontWeight: 700,
-            color: "#3C4a59",
-            cursor: pending || uploads.length >= 5 ? "not-allowed" : "pointer",
-            opacity: pending || uploads.length >= 5 ? 0.55 : 1,
-          }}
-        >
-          Choose file
-          <input
-            ref={fileRef}
-            type="file"
-            accept="image/jpeg,image/png,image/webp,application/pdf"
-            disabled={pending || uploads.length >= 5}
-            onChange={(e) => onPickFile(e.target.files?.[0] ?? null)}
-            style={{ display: "none" }}
-          />
-        </label>
-        {uploadError && (
-          <div style={{ marginTop: 8, fontSize: 12, color: "#C23B34", fontWeight: 600 }}>{uploadError}</div>
-        )}
-        {pending && <div style={{ marginTop: 8, fontSize: 12, color: "#0E9384", fontWeight: 600 }}>Uploading…</div>}
-        {uploads.length > 0 && (
-          <ul style={{ margin: "10px 0 0", padding: 0, listStyle: "none", display: "flex", flexDirection: "column", gap: 5 }}>
-            {uploads.map((u) => (
-              <li key={u.id} style={{ fontSize: 12.5, color: "#2C3847", display: "flex", justifyContent: "space-between", gap: 8 }}>
-                <span style={{ fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>📎 {u.fileName}</span>
-                <span style={{ color: "#9AA6B4", flex: "none" }}>{Math.round(u.sizeBytes / 1024)} KB</span>
-              </li>
-            ))}
-          </ul>
-        )}
       </div>
 
       <button

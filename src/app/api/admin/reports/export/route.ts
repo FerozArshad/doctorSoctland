@@ -3,12 +3,28 @@ import { db } from "@/lib/db";
 import { getAdmin } from "@/lib/auth";
 import { netPricePence } from "@/lib/pricing";
 import { BRAND } from "@/lib/brand";
-import { reportExportRows, rowsToCsv, rowsToExcelXml, type ReportExportInput } from "@/lib/report-export";
+import { COORDINATORS } from "@/lib/coordinators";
+import {
+  reportExportRows,
+  reportToPdfHtml,
+  rowsToCsv,
+  rowsToExcelXml,
+  type ReportExportInput,
+} from "@/lib/report-export";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 const pad = (n: number) => String(n).padStart(2, "0");
+
+function staffOf(email: string) {
+  return COORDINATORS.find((c) => c.email === email)?.key ?? "other";
+}
+function staffLabel(key: string) {
+  if (key === "all") return "All staff";
+  if (key === "other") return "Other";
+  return COORDINATORS.find((c) => c.key === key)?.name || key;
+}
 
 export async function GET(req: NextRequest) {
   const me = await getAdmin();
@@ -16,17 +32,8 @@ export async function GET(req: NextRequest) {
     return NextResponse.redirect(new URL("/admin/login", req.url));
   }
   const format = (req.nextUrl.searchParams.get("format") || "csv").toLowerCase();
-  if (format !== "csv" && format !== "xlsx" && format !== "xls") {
-    return NextResponse.json({ error: "format must be csv or xlsx" }, { status: 400 });
-  }
-
-  let target = me;
-  const a = req.nextUrl.searchParams.get("a");
-  if (a && a !== me.id) {
-    if (!me.isSuperAdmin) {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-    }
-    target = (await db.admin.findUnique({ where: { id: a } })) ?? me;
+  if (!["csv", "xlsx", "xls", "pdf"].includes(format)) {
+    return NextResponse.json({ error: "format must be csv, xlsx, or pdf" }, { status: 400 });
   }
 
   const now = new Date();
@@ -38,67 +45,102 @@ export async function GET(req: NextRequest) {
   const monthName = start.toLocaleString("en-GB", { month: "long", year: "numeric" });
   const inMonth = (d: Date | null) => !!d && d >= start && d < end;
 
-  const attribution = { OR: [{ ownerId: target.id }, { sentByEmail: target.email }] };
-  const [attributedPatients, paidPayments, report] = await Promise.all([
+  const staffKey = req.nextUrl.searchParams.get("s") || "all";
+  const baseWhere = me.isSuperAdmin
+    ? {}
+    : { OR: [{ ownerId: me.id }, { sentByEmail: me.email }] };
+
+  const [patients, paidPayments] = await Promise.all([
     db.patient.findMany({
-      where: attribution,
-      select: { id: true, firstName: true, lastName: true, email: true, pricePence: true, upfrontPaidPence: true },
+      where: baseWhere,
+      select: {
+        id: true,
+        firstName: true,
+        lastName: true,
+        email: true,
+        pricePence: true,
+        upfrontPaidPence: true,
+        proposalSentAt: true,
+        sentByEmail: true,
+      },
     }),
     db.payment.findMany({
-      where: { status: "paid", patient: attribution },
+      where: { status: "paid", patient: baseWhere },
       select: {
         patientId: true,
         amountPence: true,
         paidAt: true,
         type: true,
-        patient: { select: { firstName: true, lastName: true, email: true } },
+        patient: { select: { firstName: true, lastName: true, email: true, sentByEmail: true } },
       },
-    }),
-    db.monthlyReport.findUnique({
-      where: { adminId_year_month: { adminId: target.id, year, month } },
     }),
   ]);
 
-  const incomePence = paidPayments.filter((p) => inMonth(p.paidAt)).reduce((a, p) => a + p.amountPence, 0);
+  const matchStaff = (email: string) => {
+    if (!me.isSuperAdmin) return true;
+    if (staffKey === "all") return true;
+    return staffOf(email) === staffKey;
+  };
+
+  const scoped = patients.filter((p) => matchStaff(p.sentByEmail || ""));
+  const proposals = scoped
+    .filter((p) => inMonth(p.proposalSentAt))
+    .map((p) => ({
+      patientName: `${p.firstName} ${p.lastName}`.trim(),
+      email: p.email,
+      amountPence: netPricePence(p.pricePence, p.upfrontPaidPence),
+      staff: staffLabel(staffOf(p.sentByEmail || "")),
+    }));
+
   const firstPay = new Map<string, Date>();
   for (const p of paidPayments) {
-    if (!p.paidAt) continue;
+    if (!p.paidAt || !matchStaff(p.patient.sentByEmail || "")) continue;
     const cur = firstPay.get(p.patientId);
     if (!cur || p.paidAt < cur) firstPay.set(p.patientId, p.paidAt);
   }
   const orderIds = Array.from(firstPay.entries())
     .filter(([, d]) => inMonth(d))
     .map(([id]) => id);
-  const orderValueSum = attributedPatients
-    .filter((p) => orderIds.includes(p.id))
-    .reduce((a, p) => a + netPricePence(p.pricePence, p.upfrontPaidPence), 0);
-  const avgAligner = orderIds.length ? Math.round(orderValueSum / orderIds.length) : 0;
+  const byId = new Map(patients.map((p) => [p.id, p]));
+  const orders = orderIds.map((id) => {
+    const p = byId.get(id)!;
+    return {
+      patientName: `${p.firstName} ${p.lastName}`.trim(),
+      email: p.email,
+      amountPence: netPricePence(p.pricePence, p.upfrontPaidPence),
+      staff: staffLabel(staffOf(p.sentByEmail || "")),
+    };
+  });
+
+  const monthPayments = paidPayments.filter(
+    (p) => inMonth(p.paidAt) && matchStaff(p.patient.sentByEmail || "")
+  );
+  const incomePence = monthPayments.reduce((a, p) => a + p.amountPence, 0);
+  const orderValueSum = orders.reduce((a, o) => a + o.amountPence, 0);
+  const conversionPct =
+    proposals.length > 0 ? Math.round((100 * orders.length) / proposals.length) : null;
 
   const stamp = (d: Date) =>
     d.toLocaleString("en-GB", { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" });
 
+  const scopeLabel = me.isSuperAdmin
+    ? staffLabel(staffKey)
+    : `${me.name} (${me.email})`;
+
   const data: ReportExportInput = {
     practiceName: BRAND.name,
-    adminName: target.name,
-    adminEmail: target.email,
+    scopeLabel,
     monthName,
     year,
     month,
-    invisalignOrders: orderIds.length,
+    proposalsSent: proposals.length,
+    invisalignOrders: orders.length,
+    conversionPct,
+    avgOrderPence: orders.length ? Math.round(orderValueSum / orders.length) : 0,
     invisalignIncomePence: incomePence,
-    avgOrderPence: avgAligner,
-    consultsSeen: report?.consultsSeen ?? 0,
-    consultsProceeded: report?.consultsProceeded ?? 0,
-    bondingConsults: report?.bondingConsults ?? 0,
-    bondingProceeded: report?.bondingProceeded ?? 0,
-    bondingIncomePence: report?.bondingIncomePence ?? 0,
-    veneerConsults: report?.veneerConsults ?? 0,
-    veneerProceeded: report?.veneerProceeded ?? 0,
-    veneerIncomePence: report?.veneerIncomePence ?? 0,
-    notes: report?.notes ?? "",
-    filedAt: report ? stamp(report.updatedAt) : null,
-    payments: paidPayments
-      .filter((p) => inMonth(p.paidAt))
+    proposals,
+    orders,
+    payments: monthPayments
       .sort((a, b) => (a.paidAt && b.paidAt ? a.paidAt.getTime() - b.paidAt.getTime() : 0))
       .map((p) => ({
         patientName: `${p.patient.firstName} ${p.patient.lastName}`.trim(),
@@ -109,9 +151,18 @@ export async function GET(req: NextRequest) {
       })),
   };
 
-  const rows = reportExportRows(data);
-  const base = `Dental-Scotland-report-${target.name.replace(/\s+/g, "-")}-${year}-${pad(month)}`;
+  const base = `Dental-Scotland-report-${scopeLabel.replace(/\s+/g, "-")}-${year}-${pad(month)}`;
 
+  if (format === "pdf") {
+    return new NextResponse(reportToPdfHtml(data), {
+      headers: {
+        "Content-Type": "text/html; charset=utf-8",
+        "Cache-Control": "no-store",
+      },
+    });
+  }
+
+  const rows = reportExportRows(data);
   if (format === "csv") {
     return new NextResponse(rowsToCsv(rows), {
       headers: {
@@ -122,7 +173,6 @@ export async function GET(req: NextRequest) {
     });
   }
 
-  // SpreadsheetML — Excel opens as a formatted workbook (extension .xls).
   const xml = rowsToExcelXml(rows, monthName);
   return new NextResponse(xml, {
     headers: {

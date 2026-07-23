@@ -6,7 +6,7 @@ import { getAdmin, getPatientSession } from "@/lib/auth";
 import { estMonths, finance36Pence, fmt, fullPricePence, instalmentPence, netPricePence } from "@/lib/pricing";
 import { getPricing } from "@/lib/pricing-settings";
 import { COMP_ITEMS, COMP_TOTAL, WHY_US } from "@/lib/content";
-import { bookCall } from "@/app/p/actions";
+import { FOLLOW_UP_BOOKING_URL } from "@/lib/coordinators";
 import BrandLogo from "@/components/BrandLogo";
 import CreateAccountCard from "@/components/CreateAccountCard";
 import PaymentOptionsForm, { PayOption } from "@/components/PaymentOptionsForm";
@@ -25,7 +25,6 @@ export default async function ProposalPage({
 }) {
   const c = await db.patient.findUnique({
     where: { proposalToken: params.token },
-    include: { uploads: { orderBy: { createdAt: "asc" }, select: { id: true, fileName: true, sizeBytes: true } } },
   });
   if (!c) notFound();
 
@@ -239,7 +238,6 @@ export default async function ProposalPage({
                     token={c.proposalToken}
                     options={payOptions}
                     applicant={applicant}
-                    initialUploads={c.uploads}
                     compact
                   />
                 )}
@@ -279,12 +277,15 @@ export default async function ProposalPage({
                   <div style={{ color: "#fff", fontSize: 15, fontWeight: 800 }}>Questions before you choose?</div>
                   <div style={{ color: "#9FB2C8", fontSize: 12.5, marginTop: 3, lineHeight: 1.45 }}>Happy to talk it through — no obligation.</div>
                 </div>
-                <form action={bookCall}>
-                  <input type="hidden" name="token" value={c.proposalToken} />
-                  <button className="btn btn-teal" style={{ padding: "11px 18px", fontSize: 13.5, fontWeight: 800, whiteSpace: "nowrap" }}>
-                    Book a follow-up call
-                  </button>
-                </form>
+                <a
+                  href={FOLLOW_UP_BOOKING_URL}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="btn btn-teal"
+                  style={{ padding: "11px 18px", fontSize: 13.5, fontWeight: 800, whiteSpace: "nowrap", textDecoration: "none" }}
+                >
+                  Book a follow-up call
+                </a>
               </div>
             )}
 

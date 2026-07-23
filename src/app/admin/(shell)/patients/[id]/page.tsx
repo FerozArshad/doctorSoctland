@@ -5,14 +5,17 @@ import { estMonths, fmt, netPricePence, paymentPreferenceLabel } from "@/lib/pri
 import { getPricing } from "@/lib/pricing-settings";
 import { avatarBg, initials, statusOf, timeAgo } from "@/lib/status";
 import { COMP_ITEMS, COMP_TOTAL } from "@/lib/content";
-import { approveFinance, markPaid, recordDeposit, sendPatientTemplate, sendProposal } from "@/app/admin/actions";
+import { approveFinance, markPaid, recordDeposit, sendPatientTemplate, sendProposal, setFinanceStatus } from "@/app/admin/actions";
 import { canAccessPatient, requireAdmin } from "@/lib/auth";
 import TopBar from "@/components/TopBar";
 import MessageLog from "@/components/MessageLog";
 import FormSubmitButton from "@/components/FormSubmitButton";
 import DeletePatientButton from "@/components/DeletePatientButton";
+import AdminFileUpload from "@/components/AdminFileUpload";
 import { isMessageActivity } from "@/lib/messages";
 import { patientTemplateText } from "@/lib/patient-templates";
+import { CONSENT_PARAGRAPHS, CONSENT_TITLE } from "@/lib/consent";
+import { FOLLOW_UP_BOOKING_URL } from "@/lib/coordinators";
 
 export const dynamic = "force-dynamic";
 
@@ -100,6 +103,32 @@ export default async function PatientProfile({ params }: { params: { id: string 
                       Price lock expired — requote
                     </span>
                   )}
+                  {c.financeStatus && c.financeStatus !== "none" && (
+                    <span
+                      className="badge"
+                      style={{
+                        padding: "4px 11px",
+                        color:
+                          c.financeStatus === "accepted"
+                            ? "#1C7C3A"
+                            : c.financeStatus === "declined"
+                              ? "#C23B34"
+                              : "#7A3EC0",
+                        background:
+                          c.financeStatus === "accepted"
+                            ? "#E6F6EA"
+                            : c.financeStatus === "declined"
+                              ? "#FBE9E8"
+                              : "#F3EBFC",
+                      }}
+                    >
+                      {c.financeStatus === "accepted"
+                        ? "Finance accepted"
+                        : c.financeStatus === "declined"
+                          ? "Finance not accepted"
+                          : "Finance pending"}
+                    </span>
+                  )}
                   {!c.priceLockExpired && c.sequenceTouch > 0 && (
                     <span className="badge" title={`Follow-up sequence: ${c.sequenceTouch} of 7 sent`} style={{ color: "#5C6a79", background: "#F1F4F8", padding: "4px 11px" }}>
                       Follow-up {c.sequenceTouch}/7
@@ -114,6 +143,15 @@ export default async function PatientProfile({ params }: { params: { id: string 
               </div>
             </div>
             <div style={{ display: "flex", gap: 10, flexWrap: "wrap", justifyContent: "flex-end" }}>
+              <a
+                href={FOLLOW_UP_BOOKING_URL}
+                target="_blank"
+                rel="noreferrer"
+                className="btn btn-outline"
+                style={{ padding: "11px 16px", fontSize: 13.5, textDecoration: "none" }}
+              >
+                Book a follow-up call
+              </a>
               <Link href={`/admin/patients/${c.id}/edit`} className="btn btn-outline" style={{ padding: "11px 16px", fontSize: 13.5, textDecoration: "none" }}>
                 Edit
               </Link>
@@ -140,6 +178,89 @@ export default async function PatientProfile({ params }: { params: { id: string 
 
           <div className="ds-split" style={{ display: "grid", gridTemplateColumns: "1.55fr 1fr", gap: 18, marginTop: 18, alignItems: "start" }}>
             <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
+              {/* Signed consent + statement copy — top of patient record */}
+              <div className="card" style={{ padding: 24 }}>
+                <div style={{ fontSize: 15, fontWeight: 800, marginBottom: 4 }}>
+                  {c.consentSignedAt
+                    ? c.paymentPreference === "finance" || c.financeStatus !== "none"
+                      ? "Signed consent & finance"
+                      : "Signed consent"
+                    : "Consent & documents"}
+                </div>
+                {c.consentSignedAt ? (
+                  <>
+                    <div style={{ fontSize: 12.5, color: "#7A8696", marginBottom: 14 }}>
+                      Consent signed {c.consentSignedAt.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}
+                      {c.dateOfBirth ? ` · DOB ${c.dateOfBirth}` : ""}
+                    </div>
+                    <div style={{ fontSize: 13, fontWeight: 800, color: "#3C4a59", marginBottom: 8 }}>{CONSENT_TITLE}</div>
+                    <div style={{ padding: "14px 16px", borderRadius: 12, background: "#F7FAFC", border: "1px solid #E7ECF2", maxHeight: 220, overflow: "auto", marginBottom: 14 }}>
+                      {CONSENT_PARAGRAPHS.map((p, i) => (
+                        <p key={i} style={{ fontSize: 12.5, color: "#3C4a59", lineHeight: 1.55, margin: i === 0 ? 0 : "10px 0 0" }}>{p}</p>
+                      ))}
+                    </div>
+                    {c.consentSignature && (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={c.consentSignature} alt="Patient signature" style={{ maxWidth: "100%", height: 90, objectFit: "contain", border: "1px solid #E7ECF2", borderRadius: 10, background: "#fff", padding: 6, display: "block" }} />
+                    )}
+                  </>
+                ) : (
+                  <div style={{ fontSize: 13.5, color: "#9AA6B4", lineHeight: 1.55 }}>
+                    No consent signature yet — it appears here when the patient signs on their proposal.
+                  </div>
+                )}
+
+                {/* Finance status — persists independently of payment stage */}
+                <div style={{ marginTop: 18, paddingTop: 16, borderTop: "1px solid #EEF2F6" }}>
+                  <div style={{ fontSize: 14, fontWeight: 800, marginBottom: 6 }}>Finance (external)</div>
+                  <div style={{ fontSize: 12.5, color: "#7A8696", marginBottom: 12, lineHeight: 1.5 }}>
+                    Mark whether finance was accepted. This badge stays visible even if they later pay another way.
+                  </div>
+                  <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 12 }}>
+                    {(["applied", "accepted", "declined"] as const).map((s) => (
+                      <form key={s} action={setFinanceStatus}>
+                        <input type="hidden" name="patientId" value={c.id} />
+                        <input type="hidden" name="financeStatus" value={s} />
+                        <button
+                          type="submit"
+                          className="btn btn-outline"
+                          style={{
+                            padding: "8px 12px",
+                            fontSize: 12.5,
+                            borderColor: c.financeStatus === s ? "#0E9384" : "#E1E7EE",
+                            background: c.financeStatus === s ? "#E3F6F0" : "#fff",
+                            color: c.financeStatus === s ? "#0B7A6E" : "#5C6a79",
+                            fontWeight: 700,
+                          }}
+                        >
+                          {s === "applied" ? "Pending" : s === "accepted" ? "Accepted" : "Not accepted"}
+                        </button>
+                      </form>
+                    ))}
+                  </div>
+                  {c.financeStatus === "accepted" && c.financeLink ? (
+                    <div style={{ padding: "12px 14px", borderRadius: 12, background: "#E6F6EA", color: "#1C7C3A", fontSize: 13, fontWeight: 600 }}>
+                      ✓ Accepted{c.financeApprovedAt ? ` ${c.financeApprovedAt.toLocaleDateString("en-GB", { day: "numeric", month: "short" })}` : ""} — link emailed.
+                      <div style={{ fontWeight: 500, marginTop: 4, wordBreak: "break-all" }}>
+                        <a href={c.financeLink} style={{ color: "#0B7A6E" }}>{c.financeLink}</a>
+                      </div>
+                    </div>
+                  ) : (c.financeStatus === "applied" || c.paymentPreference === "finance") && !c.financeApprovedAt ? (
+                    <form action={approveFinance}>
+                      <input type="hidden" name="patientId" value={c.id} />
+                      <label className="label">Finance / info link to send</label>
+                      <input className="input" name="financeLink" placeholder="https://…" defaultValue={c.financeLink} />
+                      <FormSubmitButton
+                        className="btn btn-teal"
+                        style={{ marginTop: 10, width: "100%", padding: 11, fontSize: 13.5 }}
+                        label="Approve & email finance link"
+                        pendingLabel="Sending…"
+                      />
+                    </form>
+                  ) : null}
+                </div>
+              </div>
+
               {/* plan */}
               <div className="card" style={{ padding: 24 }}>
                 <div style={{ fontSize: 15, fontWeight: 800, marginBottom: 18 }}>Treatment plan</div>
@@ -247,44 +368,6 @@ export default async function PatientProfile({ params }: { params: { id: string 
                 </div>
               </div>
 
-              {/* signed consent / finance application */}
-              {c.consentSignedAt && (
-                <div className="card" style={{ padding: 24 }}>
-                  <div style={{ fontSize: 15, fontWeight: 800, marginBottom: 4 }}>
-                    {c.paymentPreference === "finance" ? "0% finance application" : "Signed consent"}
-                  </div>
-                  <div style={{ fontSize: 12.5, color: "#7A8696", marginBottom: 14 }}>
-                    Consent signed {c.consentSignedAt.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}
-                    {c.dateOfBirth ? ` · DOB ${c.dateOfBirth}` : ""}
-                  </div>
-                  {c.consentSignature && (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img src={c.consentSignature} alt="Patient signature" style={{ maxWidth: "100%", height: 90, objectFit: "contain", border: "1px solid #E7ECF2", borderRadius: 10, background: "#fff", padding: 6, display: "block" }} />
-                  )}
-                  {c.paymentPreference === "finance" &&
-                    (c.financeApprovedAt ? (
-                      <div style={{ marginTop: 14, padding: "12px 14px", borderRadius: 12, background: "#E6F6EA", color: "#1C7C3A", fontSize: 13, fontWeight: 600 }}>
-                        ✓ Approved {c.financeApprovedAt.toLocaleDateString("en-GB", { day: "numeric", month: "short" })} — link emailed.
-                        <div style={{ fontWeight: 500, marginTop: 4, wordBreak: "break-all" }}>
-                          <a href={c.financeLink} style={{ color: "#0B7A6E" }}>{c.financeLink}</a>
-                        </div>
-                      </div>
-                    ) : (
-                      <form action={approveFinance} style={{ marginTop: 14 }}>
-                        <input type="hidden" name="patientId" value={c.id} />
-                        <label className="label">Finance / info link to send</label>
-                        <input className="input" name="financeLink" placeholder="https://lender.example.com/apply/…" defaultValue={c.financeLink} />
-                        <FormSubmitButton
-                          className="btn btn-teal"
-                          style={{ marginTop: 10, width: "100%", padding: 11, fontSize: 13.5 }}
-                          label="Approve & email finance link"
-                          pendingLabel="Sending…"
-                        />
-                      </form>
-                    ))}
-                </div>
-              )}
-
               {/* quick message templates */}
               <div className="card" style={{ padding: 24 }}>
                 <div style={{ fontSize: 15, fontWeight: 800, marginBottom: 4 }}>Message templates</div>
@@ -308,13 +391,16 @@ export default async function PatientProfile({ params }: { params: { id: string 
 
               <MessageLog patient={c} activities={c.activities} />
 
-              {c.uploads.length > 0 && (
-                <div className="card" style={{ padding: 24 }}>
-                  <div style={{ fontSize: 15, fontWeight: 800, marginBottom: 4 }}>Patient uploads</div>
-                  <div style={{ fontSize: 12.5, color: "#7A8696", marginBottom: 14 }}>
-                    Files attached on the proposal page
-                  </div>
-                  <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+              <div className="card" style={{ padding: 24 }}>
+                <div style={{ fontSize: 15, fontWeight: 800, marginBottom: 4 }}>Files &amp; documents</div>
+                <div style={{ fontSize: 12.5, color: "#7A8696", marginBottom: 14 }}>
+                  Upload files for this patient (ID, photos, PDFs). Patients can also attach files on their proposal.
+                </div>
+                <AdminFileUpload patientId={c.id} />
+                {c.uploads.length === 0 ? (
+                  <div style={{ marginTop: 14, fontSize: 13.5, color: "#9AA6B4" }}>No files yet.</div>
+                ) : (
+                  <div style={{ display: "flex", flexDirection: "column", gap: 10, marginTop: 14 }}>
                     {c.uploads.map((u) => (
                       <a
                         key={u.id}
@@ -325,15 +411,15 @@ export default async function PatientProfile({ params }: { params: { id: string 
                         <div style={{ minWidth: 0 }}>
                           <div style={{ fontSize: 13.5, fontWeight: 700, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>📎 {u.fileName}</div>
                           <div style={{ fontSize: 12, color: "#9AA6B4", marginTop: 2 }}>
-                            {Math.round(u.sizeBytes / 1024)} KB · {u.createdAt.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}
+                            {Math.round(u.sizeBytes / 1024)} KB · {u.uploadedBy === "admin" ? "Admin" : "Patient"} · {u.createdAt.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}
                           </div>
                         </div>
                         <span style={{ fontSize: 12.5, fontWeight: 700, color: "#0E9384", flex: "none" }}>Download</span>
                       </a>
                     ))}
                   </div>
-                </div>
-              )}
+                )}
+              </div>
             </div>
 
             <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>

@@ -72,7 +72,7 @@ export default function NewPatientForm({ cfg }: { cfg: PricingConfig }) {
   const [phone, setPhone] = useState("");
   const [alignerCount, setAlignerCount] = useState(14);
   const [pkg, setPkg] = useState<"Express" | "Go">("Go");
-  const [video, setVideo] = useState("https://clincheck.invisalign.com/plan");
+  const [video, setVideo] = useState("");
   const [notes, setNotes] = useState("");
   const [errs, setErrs] = useState({ first: false, email: false });
 
@@ -102,19 +102,19 @@ export default function NewPatientForm({ cfg }: { cfg: PricingConfig }) {
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14, marginTop: 22 }}>
           <div>
             <label className="label">First name *</label>
-            <input className={"input" + (errs.first ? " err" : "")} name="firstName" value={firstName} onChange={(e) => { setFirstName(e.target.value); setErrs((s) => ({ ...s, first: false })); }} placeholder="Emma" />
+            <input className={"input" + (errs.first ? " err" : "")} name="firstName" value={firstName} onChange={(e) => { setFirstName(e.target.value); setErrs((s) => ({ ...s, first: false })); }} placeholder="First name" />
           </div>
           <div>
             <label className="label">Last name</label>
-            <input className="input" name="lastName" value={lastName} onChange={(e) => setLastName(e.target.value)} placeholder="MacLeod" />
+            <input className="input" name="lastName" value={lastName} onChange={(e) => setLastName(e.target.value)} placeholder="Last name" />
           </div>
           <div>
             <label className="label">Email *</label>
-            <input className={"input" + (errs.email ? " err" : "")} name="email" value={email} onChange={(e) => { setEmail(e.target.value); setErrs((s) => ({ ...s, email: false })); }} placeholder="emma@example.com" />
+            <input className={"input" + (errs.email ? " err" : "")} name="email" value={email} onChange={(e) => { setEmail(e.target.value); setErrs((s) => ({ ...s, email: false })); }} placeholder="name@email.com" />
           </div>
           <div>
             <label className="label">Phone (WhatsApp)</label>
-            <input className="input" name="phone" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="07700 900123" />
+            <input className="input" name="phone" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="Mobile number" />
           </div>
         </div>
 
@@ -147,11 +147,11 @@ export default function NewPatientForm({ cfg }: { cfg: PricingConfig }) {
 
         <div style={{ marginTop: 20 }}>
           <label className="label">ClinCheck video link</label>
-          <input className="input" name="videoUrl" value={video} onChange={(e) => setVideo(e.target.value)} placeholder="https://clincheck.invisalign.com/…" />
+          <input className="input" name="videoUrl" value={video} onChange={(e) => setVideo(e.target.value)} placeholder="Paste ClinCheck video URL" />
         </div>
         <div style={{ marginTop: 16 }}>
           <label className="label">Notes</label>
-          <textarea className="input" name="notes" value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Anything the coordinator should know…" rows={3} style={{ resize: "vertical" }} />
+          <textarea className="input" name="notes" value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Optional notes for the team…" rows={3} style={{ resize: "vertical" }} />
         </div>
 
         <div style={{ height: 1, background: "#EEF2F6", margin: "24px 0" }} />
@@ -167,7 +167,7 @@ export default function NewPatientForm({ cfg }: { cfg: PricingConfig }) {
       <div className="card" style={{ padding: 24, position: "sticky", top: 0 }}>
         <div style={{ fontSize: 12, fontWeight: 700, letterSpacing: ".08em", textTransform: "uppercase", color: "#0E9384" }}>Live proposal preview</div>
         <div style={{ fontSize: 22, fontWeight: 800, marginTop: 12, letterSpacing: "-.01em" }}>{(firstName || "New") + " " + (lastName || "patient")}</div>
-        <div style={{ fontSize: 13, color: "#8A96A5" }}>{email || "email@example.com"}</div>
+        <div style={{ fontSize: 13, color: "#8A96A5" }}>{email || "Email will appear here"}</div>
 
         <div style={{ marginTop: 20, border: "1px solid #EEF2F6", borderRadius: 14, overflow: "hidden" }}>
           <div style={{ display: "flex", justifyContent: "space-between", padding: "14px 16px", borderBottom: "1px solid #F1F4F8" }}>

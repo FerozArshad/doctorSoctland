@@ -358,6 +358,7 @@ export async function uploadPatientFile(formData: FormData): Promise<
       mimeType: file.type,
       sizeBytes: file.size,
       dataBase64: buf.toString("base64"),
+      uploadedBy: admin && session?.id !== patient.id ? "admin" : "patient",
     },
   });
   await db.activity.create({
@@ -433,6 +434,7 @@ export async function completePaymentConsent(
       consentSignature: signature,
       status: nextStatus,
       paymentPreference: choice === "interested" ? patient.paymentPreference : choice,
+      ...(choice === "finance" ? { financeStatus: "applied" } : {}),
       activities: {
         create: [
           { text: "Agreed and consented (e-signed)" },
@@ -539,6 +541,8 @@ export async function chooseFinance(formData: FormData) {
     where: { id: patient.id },
     data: {
       status: "awaiting",
+      paymentPreference: "finance",
+      financeStatus: "applied",
       activities: { create: { text: "Applied for 0% finance — awaiting approval" } },
     },
   });

@@ -33,7 +33,7 @@ export default function PricingSettingsForm({ cfg }: { cfg: PricingConfig }) {
     <form action={updatePricing} onSubmit={() => setSaving(true)} className="ds-view"
       style={{ display: "grid", gridTemplateColumns: "1.3fr 1fr", gap: 18, alignItems: "start" }}>
       <div className="card" style={{ padding: 26 }}>
-        <div style={{ fontSize: 16, fontWeight: 800 }}>Pricing</div>
+        <div style={{ fontSize: 16, fontWeight: 800 }}>Pricing tiers</div>
         <div style={{ fontSize: 13, color: "#7A8696", marginTop: 2, lineHeight: 1.6 }}>
           Applies to <strong>new and edited proposals</strong>. Patients already sent a proposal keep the
           price they were quoted — nothing changes retroactively.

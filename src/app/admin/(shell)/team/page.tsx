@@ -6,6 +6,7 @@ import { requireAdmin } from "@/lib/auth";
 import { initials, timeAgo } from "@/lib/status";
 import { createAdminAccount } from "@/app/admin/actions";
 import TopBar from "@/components/TopBar";
+import DeleteAdminButton from "@/components/DeleteAdminButton";
 
 export const dynamic = "force-dynamic";
 
@@ -31,11 +32,12 @@ export default async function TeamPage() {
             <div style={{ padding: "18px 20px", borderBottom: "1px solid #EEF2F6" }}>
               <div style={{ fontSize: 16, fontWeight: 800 }}>Admins</div>
               <div style={{ fontSize: 13, color: "#7A8696", marginTop: 2 }}>
-                Plain admins see only their own patients and stats. Super Admins see everything.
+                Plain admins see only their own patients and stats. Super Admins see everything and can remove any other team member.
               </div>
             </div>
             {admins.map((a, i) => {
               const [first, ...rest] = a.name.replace(/^Dr\.?\s+/i, "").split(" ");
+              const isSelf = a.id === me.id;
               return (
               <div key={a.id} style={{ display: "flex", alignItems: "center", gap: 14, padding: "14px 20px", borderBottom: "1px solid #F1F4F8" }}>
                 <div style={{ width: 40, height: 40, borderRadius: "50%", background: a.isSuperAdmin ? "#0E9384" : "#33465F", color: "#fff", display: "grid", placeItems: "center", fontWeight: 800, fontSize: 13, flex: "none" }}>
@@ -44,7 +46,7 @@ export default async function TeamPage() {
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ fontSize: 14.5, fontWeight: 700 }}>
                     {a.name}
-                    {a.id === me.id && <span style={{ fontSize: 11, color: "#9AA6B4", fontWeight: 600 }}> (you)</span>}
+                    {isSelf && <span style={{ fontSize: 11, color: "#9AA6B4", fontWeight: 600 }}> (you)</span>}
                   </div>
                   <div style={{ fontSize: 12.5, color: "#8A96A5", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{a.email} · {a.role}</div>
                 </div>
@@ -54,6 +56,11 @@ export default async function TeamPage() {
                   </span>
                   <div style={{ fontSize: 12, color: "#9AA6B4", marginTop: 4 }}>{counts[i]} patients · added {timeAgo(a.createdAt)}</div>
                 </div>
+                {!isSelf && (
+                  <div style={{ flex: "none" }}>
+                    <DeleteAdminButton adminId={a.id} adminName={a.name} />
+                  </div>
+                )}
               </div>
               );
             })}

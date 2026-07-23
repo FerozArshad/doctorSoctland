@@ -7,8 +7,13 @@ export type Coordinator = { key: string; name: string; email: string; title: str
 
 export const COORDINATORS: Coordinator[] = [
   { key: "millie", name: "Millie Buchanan", email: "millie@dentalscotland.com", title: "Treatment Coordinator" },
+  { key: "michelle", name: "Michelle", email: "michelle@dentalscotland.com", title: "Treatment Coordinator" },
   { key: "rochelle", name: "Rochelle Copland", email: "rochelle@dentalscotland.com", title: "Treatment Coordinator" },
 ];
+
+/** LeadConnector booking widget — virtual Invisalign follow-up with Millie. */
+export const FOLLOW_UP_BOOKING_URL =
+  "https://api.leadconnectorhq.com/widget/bookings/virtual-invisalign-follow-up-consult-millie";
 
 export const FALLBACK_COORDINATOR: Coordinator = {
   key: "practice",

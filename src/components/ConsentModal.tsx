@@ -201,7 +201,7 @@ export default function ConsentModal({
                 </div>
                 <div>
                   <label className="label">Phone</label>
-                  <input className="input" id="consent-phone" name="phone" defaultValue={applicant.phone} placeholder="07700 900123" />
+                  <input className="input" id="consent-phone" name="phone" defaultValue={applicant.phone} placeholder="Mobile number" />
                 </div>
                 <div>
                   <label className="label">Date of birth</label>

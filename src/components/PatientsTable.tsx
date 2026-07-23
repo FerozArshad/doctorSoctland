@@ -13,18 +13,26 @@ export type PatientRow = {
   pkg: string;
   priceFmt: string;
   status: string;
+  financeStatus: string; // none | applied | accepted | declined
   lastAgo: string;
-  coord: string; // "millie" | "rochelle" | "other" — who the proposal was sent by
+  coord: string; // millie | michelle | rochelle | other
 };
 
 const CHIP_DEFS: Array<[string, string]> = [
   ["all", "All"], ["draft", "Draft"], ["sent", "Sent"], ["interested", "Interested"],
   ["awaiting", "Awaiting"], ["deposit", "Deposit"], ["paid", "Paid"], ["overdue", "Overdue"],
+  ["finance", "Finance"],
 ];
 
 const COORD_CHIPS: Array<[string, string]> = [
-  ["all", "Anyone"], ["millie", "Millie"], ["rochelle", "Rochelle"], ["other", "Other"],
+  ["all", "Anyone"], ["millie", "Millie"], ["michelle", "Michelle"], ["rochelle", "Rochelle"], ["other", "Other"],
 ];
+
+const FINANCE_BADGE: Record<string, { label: string; fg: string; bg: string }> = {
+  applied: { label: "Finance pending", fg: "#7A3EC0", bg: "#F3EBFC" },
+  accepted: { label: "Finance accepted", fg: "#1C7C3A", bg: "#E6F6EA" },
+  declined: { label: "Finance not accepted", fg: "#C23B34", bg: "#FBE9E8" },
+};
 
 export default function PatientsTable({ rows }: { rows: PatientRow[] }) {
   const router = useRouter();
@@ -33,8 +41,11 @@ export default function PatientsTable({ rows }: { rows: PatientRow[] }) {
   const [coordFilter, setCoordFilter] = useState("all");
 
   const counts = useMemo(() => {
-    const c: Record<string, number> = { all: rows.length };
-    for (const r of rows) c[r.status] = (c[r.status] || 0) + 1;
+    const c: Record<string, number> = { all: rows.length, finance: 0 };
+    for (const r of rows) {
+      c[r.status] = (c[r.status] || 0) + 1;
+      if (r.financeStatus && r.financeStatus !== "none") c.finance += 1;
+    }
     return c;
   }, [rows]);
 
@@ -46,7 +57,12 @@ export default function PatientsTable({ rows }: { rows: PatientRow[] }) {
 
   const filtered = useMemo(() => {
     const q = search.toLowerCase();
-    let f = rows.filter((r) => filter === "all" || r.status === filter);
+    let f = rows;
+    if (filter === "finance") {
+      f = f.filter((r) => r.financeStatus && r.financeStatus !== "none");
+    } else if (filter !== "all") {
+      f = f.filter((r) => r.status === filter);
+    }
     f = f.filter((r) => coordFilter === "all" || r.coord === coordFilter);
     if (q) f = f.filter((r) => r.name.toLowerCase().includes(q) || r.email.toLowerCase().includes(q));
     return f;
@@ -137,6 +153,20 @@ export default function PatientsTable({ rows }: { rows: PatientRow[] }) {
                 <span style={{ width: 6, height: 6, borderRadius: "50%", background: st.dot }} />
                 {st.label}
               </span>
+              {r.financeStatus && FINANCE_BADGE[r.financeStatus] && (
+                <div style={{ marginTop: 6 }}>
+                  <span
+                    className="badge"
+                    style={{
+                      color: FINANCE_BADGE[r.financeStatus].fg,
+                      background: FINANCE_BADGE[r.financeStatus].bg,
+                      fontSize: 11,
+                    }}
+                  >
+                    {FINANCE_BADGE[r.financeStatus].label}
+                  </span>
+                </div>
+              )}
             </div>
             <div style={{ fontSize: 13, color: "#7A8696" }}>{r.lastAgo}</div>
             <div style={{ textAlign: "right", color: "#B4BECB" }}>

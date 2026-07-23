@@ -26,6 +26,7 @@ export default async function PatientsPage() {
     pkg: c.pkg,
     priceFmt: fmt(c.pricePence),
     status: c.status,
+    financeStatus: c.financeStatus || "none",
     lastAgo: c.activities[0] ? timeAgo(c.activities[0].createdAt) : "—",
     coord: COORDINATORS.find((x) => x.email === c.sentByEmail)?.key ?? "other",
   }));

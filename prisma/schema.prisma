@@ -124,6 +124,10 @@ model Patient {
   consentSignature      String? // data-URL PNG of the drawn signature
   financeLink           String       @default("") // finance/info link the admin attaches
   financeApprovedAt     DateTime?
+  // External finance track — persists independently of payment status so the
+  // Finance filter/badge never disappears when they later pay by card.
+  // none | applied | accepted | declined
+  financeStatus         String       @default("none")
   proposalToken         String       @unique @default(cuid())
   passwordHash          String? // set on first visit to the secure link
   otpHash               String? // hashed one-time login code
@@ -141,7 +145,7 @@ model Patient {
   uploads               PatientUpload[]
 }
 
-/// Files a patient attaches on their proposal (photos, ID, PDF). Stored as
+/// Files attached to a patient proposal (by patient or admin). Stored as
 /// base64 so we don't need Blob storage for the first release — capped at 2MB.
 model PatientUpload {
   id         String   @id @default(cuid())
@@ -151,6 +155,8 @@ model PatientUpload {
   mimeType   String
   sizeBytes  Int
   dataBase64 String
+  // patient | admin
+  uploadedBy String   @default("patient")
   createdAt  DateTime @default(now())
 
   @@index([patientId, createdAt])

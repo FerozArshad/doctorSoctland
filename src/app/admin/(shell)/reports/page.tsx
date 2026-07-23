@@ -1,33 +1,37 @@
-// Monthly per-admin performance reports.
-// Invisalign orders & income are computed live from that admin's patients
-// (owned or sent by them); consult and bonding/veneer figures are entered
-// manually in the report template below. Each saved report is a held record
-// with filed/adjusted timestamps, and the next due date is always shown.
+// Automated monthly Invisalign report — fully computed from live data, no
+// manual edits. Segment by staff (sent-by coordinator) and flick months.
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { db } from "@/lib/db";
 import { requireAdmin } from "@/lib/auth";
 import { fmt, netPricePence } from "@/lib/pricing";
+import { COORDINATORS, FALLBACK_COORDINATOR } from "@/lib/coordinators";
 import { firstNameOf } from "@/lib/status";
-import { saveMonthlyReport } from "@/app/admin/actions";
 import TopBar from "@/components/TopBar";
 
 export const dynamic = "force-dynamic";
 
 const pad = (n: number) => String(n).padStart(2, "0");
 
-export default async function ReportsPage({ searchParams }: { searchParams: { m?: string; a?: string } }) {
+type StaffKey = "all" | string;
+
+function staffOf(email: string): string {
+  return COORDINATORS.find((c) => c.email === email)?.key ?? "other";
+}
+
+function staffLabel(key: StaffKey) {
+  if (key === "all") return "All staff";
+  if (key === "other") return "Other";
+  return COORDINATORS.find((c) => c.key === key)?.name || key;
+}
+
+export default async function ReportsPage({
+  searchParams,
+}: {
+  searchParams: { m?: string; s?: string };
+}) {
   const me = await requireAdmin();
 
-  // Which admin's report — Super Admins can view anyone's.
-  let target = me;
-  if (searchParams.a && searchParams.a !== me.id) {
-    if (!me.isSuperAdmin) redirect("/admin/reports");
-    target = (await db.admin.findUnique({ where: { id: searchParams.a } })) ?? me;
-  }
-  const admins = me.isSuperAdmin ? await db.admin.findMany({ orderBy: { createdAt: "asc" } }) : [me];
-
-  // Which month — default: the current one.
   const now = new Date();
   const mMatch = /^(\d{4})-(\d{2})$/.exec(searchParams.m || "");
   const year = mMatch ? parseInt(mMatch[1], 10) : now.getFullYear();
@@ -38,68 +42,99 @@ export default async function ReportsPage({ searchParams }: { searchParams: { m?
   const prev = new Date(year, month - 2, 1);
   const next = new Date(year, month, 1);
   const isCurrentMonth = year === now.getFullYear() && month === now.getMonth() + 1;
-  const qs = (d: Date) => `?m=${d.getFullYear()}-${pad(d.getMonth() + 1)}&a=${target.id}`;
 
-  // ── Computed Invisalign figures for this admin & month ──
-  const attribution = { OR: [{ ownerId: target.id }, { sentByEmail: target.email }] };
-  const [attributedPatients, paidPayments] = await Promise.all([
-    db.patient.findMany({
-      where: attribution,
-      select: { id: true, firstName: true, lastName: true, email: true, pricePence: true, upfrontPaidPence: true },
-    }),
-    db.payment.findMany({
-      where: { status: "paid", patient: attribution },
-      select: {
-        patientId: true,
-        amountPence: true,
-        paidAt: true,
-        type: true,
-        patient: { select: { firstName: true, lastName: true, email: true } },
-      },
-    }),
-  ]);
-  const inMonth = (d: Date | null) => !!d && d >= start && d < end;
-  const monthPayments = paidPayments
-    .filter((p) => inMonth(p.paidAt))
-    .sort((a, b) => (a.paidAt && b.paidAt ? a.paidAt.getTime() - b.paidAt.getTime() : 0));
-  const incomePence = monthPayments.reduce((a, p) => a + p.amountPence, 0);
-  // An "order" = a patient whose first successful payment landed in this month.
+  const staffKey = (searchParams.s || "all") as StaffKey;
+  const knownKeys = new Set(COORDINATORS.map((c) => c.key));
+  if (staffKey !== "all" && staffKey !== "other" && !knownKeys.has(staffKey)) {
+    redirect(`/admin/reports?m=${year}-${pad(month)}`);
+  }
+
+  // Plain admins only see their own attributed patients; Super Admin can segment anyone.
+  const baseWhere = me.isSuperAdmin
+    ? {}
+    : { OR: [{ ownerId: me.id }, { sentByEmail: me.email }] };
+
+  const patients = await db.patient.findMany({
+    where: baseWhere,
+    select: {
+      id: true,
+      firstName: true,
+      lastName: true,
+      email: true,
+      pricePence: true,
+      upfrontPaidPence: true,
+      proposalSentAt: true,
+      sentByEmail: true,
+      sentByName: true,
+      ownerId: true,
+    },
+  });
+
+  const payments = await db.payment.findMany({
+    where: { status: "paid", patient: baseWhere },
+    select: {
+      patientId: true,
+      amountPence: true,
+      paidAt: true,
+      type: true,
+      patient: { select: { firstName: true, lastName: true, email: true, sentByEmail: true } },
+    },
+  });
+
+  const inMonth = (d: Date | null | undefined) => !!d && d >= start && d < end;
+
+  const matchStaff = (email: string) => {
+    if (staffKey === "all") return true;
+    return staffOf(email) === staffKey;
+  };
+
+  const scopedPatients = patients.filter((p) => matchStaff(p.sentByEmail || ""));
+  const proposals = scopedPatients
+    .filter((p) => inMonth(p.proposalSentAt))
+    .sort((a, b) => (a.proposalSentAt!.getTime() - b.proposalSentAt!.getTime()));
+
   const firstPay = new Map<string, Date>();
-  for (const p of paidPayments) {
+  for (const p of payments) {
     if (!p.paidAt) continue;
+    if (!matchStaff(p.patient.sentByEmail || "")) continue;
     const cur = firstPay.get(p.patientId);
     if (!cur || p.paidAt < cur) firstPay.set(p.patientId, p.paidAt);
   }
-  const orderIds = Array.from(firstPay.entries()).filter(([, d]) => inMonth(d)).map(([id]) => id);
-  const orderValueSum = attributedPatients
-    .filter((p) => orderIds.includes(p.id))
-    .reduce((a, p) => a + netPricePence(p.pricePence, p.upfrontPaidPence), 0);
-  const avgAligner = orderIds.length ? Math.round(orderValueSum / orderIds.length) : 0;
-  const patientById = new Map(attributedPatients.map((p) => [p.id, p]));
-  const orderPatients = orderIds.map((id) => {
-    const p = patientById.get(id);
+  const orderIds = Array.from(firstPay.entries())
+    .filter(([, d]) => inMonth(d))
+    .map(([id]) => id);
+  const patientById = new Map(patients.map((p) => [p.id, p]));
+  const orders = orderIds.map((id) => {
+    const p = patientById.get(id)!;
     return {
       id,
-      name: p ? `${p.firstName} ${p.lastName}`.trim() : "Patient",
-      email: p?.email || "",
-      amountPence: p ? netPricePence(p.pricePence, p.upfrontPaidPence) : 0,
+      name: `${p.firstName} ${p.lastName}`.trim(),
+      email: p.email,
+      amountPence: netPricePence(p.pricePence, p.upfrontPaidPence),
+      staff: staffLabel(staffOf(p.sentByEmail || "")),
     };
   });
 
-  // ── Saved report + history log ──
-  const report = await db.monthlyReport.findUnique({
-    where: { adminId_year_month: { adminId: target.id, year, month } },
-  });
-  const history = await db.monthlyReport.findMany({
-    where: { adminId: target.id },
-    orderBy: [{ year: "desc" }, { month: "desc" }],
-    take: 12,
-  });
-  const nextDue = new Date(now.getFullYear(), now.getMonth() + 1, 1);
-  const stamp = (d: Date) => d.toLocaleString("en-GB", { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" });
+  const monthPayments = payments
+    .filter((p) => inMonth(p.paidAt) && matchStaff(p.patient.sentByEmail || ""))
+    .sort((a, b) => (a.paidAt && b.paidAt ? a.paidAt.getTime() - b.paidAt.getTime() : 0));
 
-  const avgOf = (incomePence: number, n: number) => (n > 0 ? fmt(Math.round(incomePence / n)) : "—");
-  const pct = (part: number, whole: number) => (whole > 0 ? Math.round((100 * part) / whole) + "%" : "—");
+  const proposalCount = proposals.length;
+  const orderCount = orders.length;
+  const conversion = proposalCount > 0 ? Math.round((100 * orderCount) / proposalCount) : null;
+  const orderValueSum = orders.reduce((a, o) => a + o.amountPence, 0);
+  const avgRevenue = orderCount > 0 ? Math.round(orderValueSum / orderCount) : 0;
+  const incomePence = monthPayments.reduce((a, p) => a + p.amountPence, 0);
+
+  // Staff picker counts for this month (Super Admin only).
+  const staffTabs: Array<{ key: StaffKey; label: string }> = [
+    { key: "all", label: "All staff" },
+    ...COORDINATORS.map((c) => ({ key: c.key, label: firstNameOf(c.name) })),
+    { key: "other", label: "Other" },
+  ];
+
+  const qs = (d: Date, s: StaffKey = staffKey) =>
+    `?m=${d.getFullYear()}-${pad(d.getMonth() + 1)}&s=${s}`;
 
   const stat = (label: string, value: string, sub: string) => (
     <div key={label} className="card" style={{ padding: 18 }}>
@@ -109,226 +144,126 @@ export default async function ReportsPage({ searchParams }: { searchParams: { m?
     </div>
   );
 
-  const numField = (label: string, name: string, value: number, step = "1") => (
-    <div>
-      <label className="label">{label}</label>
-      <input className="input" name={name} type="number" min={0} step={step} defaultValue={step === "1" ? value : value / 100} />
-    </div>
-  );
+  const exportHref = (format: string) =>
+    `/api/admin/reports/export?format=${format}&m=${year}-${pad(month)}&s=${staffKey}`;
 
   return (
     <>
-      <TopBar title="Monthly reports" sub="Per-admin performance, filed monthly" />
+      <TopBar title="Monthly reports" sub="Automated Invisalign volume, conversion & value — locked, not editable" />
       <div className="ds-scroll" style={{ flex: 1, overflow: "auto", padding: 28 }}>
         <div className="ds-view">
-          {/* controls: admin picker (super) + month nav + due banner */}
           <div className="card" style={{ padding: "16px 20px", display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap" }}>
             {me.isSuperAdmin && (
               <div style={{ display: "flex", gap: 7, flexWrap: "wrap" }}>
-                {admins.map((a) => (
+                {staffTabs.map((t) => (
                   <Link
-                    key={a.id}
-                    href={`?m=${year}-${pad(month)}&a=${a.id}`}
+                    key={t.key}
+                    href={qs(start, t.key)}
                     style={{
-                      padding: "7px 13px", borderRadius: 9, fontSize: 13, fontWeight: 700, textDecoration: "none",
-                      border: "1px solid " + (a.id === target.id ? "#0E9384" : "#E1E7EE"),
-                      background: a.id === target.id ? "#0E9384" : "#fff",
-                      color: a.id === target.id ? "#fff" : "#5C6a79",
+                      padding: "7px 13px",
+                      borderRadius: 9,
+                      fontSize: 13,
+                      fontWeight: 700,
+                      textDecoration: "none",
+                      border: "1px solid " + (t.key === staffKey ? "#0E9384" : "#E1E7EE"),
+                      background: t.key === staffKey ? "#0E9384" : "#fff",
+                      color: t.key === staffKey ? "#fff" : "#5C6a79",
                     }}
                   >
-                    {firstNameOf(a.name)}
+                    {t.label}
                   </Link>
                 ))}
               </div>
             )}
+            {!me.isSuperAdmin && (
+              <div style={{ fontSize: 13.5, fontWeight: 700, color: "#3C4a59" }}>
+                Your performance · {me.name}
+              </div>
+            )}
             <div style={{ display: "flex", alignItems: "center", gap: 10, marginLeft: "auto", flexWrap: "wrap" }}>
               <Link href={qs(prev)} style={{ padding: "6px 12px", borderRadius: 8, border: "1px solid #E1E7EE", textDecoration: "none", color: "#3C4a59", fontWeight: 700 }}>‹</Link>
-              <span style={{ fontSize: 15, fontWeight: 800, minWidth: 130, textAlign: "center" }}>{monthName}</span>
-              {isCurrentMonth
-                ? <span style={{ padding: "6px 12px", borderRadius: 8, border: "1px solid #F1F4F8", color: "#C6CFDA", fontWeight: 700 }}>›</span>
-                : <Link href={qs(next)} style={{ padding: "6px 12px", borderRadius: 8, border: "1px solid #E1E7EE", textDecoration: "none", color: "#3C4a59", fontWeight: 700 }}>›</Link>}
-              <a
-                href={`/api/admin/reports/export?format=csv&m=${year}-${pad(month)}&a=${target.id}`}
-                className="btn btn-outline"
-                style={{ padding: "7px 12px", fontSize: 12.5, textDecoration: "none" }}
-              >
-                Export CSV
-              </a>
-              <a
-                href={`/api/admin/reports/export?format=xlsx&m=${year}-${pad(month)}&a=${target.id}`}
-                className="btn btn-teal"
-                style={{ padding: "7px 12px", fontSize: 12.5, textDecoration: "none" }}
-              >
-                Export Excel
-              </a>
+              <span style={{ fontSize: 15, fontWeight: 800, minWidth: 140, textAlign: "center" }}>{monthName}</span>
+              {isCurrentMonth ? (
+                <span style={{ padding: "6px 12px", borderRadius: 8, border: "1px solid #F1F4F8", color: "#C6CFDA", fontWeight: 700 }}>›</span>
+              ) : (
+                <Link href={qs(next)} style={{ padding: "6px 12px", borderRadius: 8, border: "1px solid #E1E7EE", textDecoration: "none", color: "#3C4a59", fontWeight: 700 }}>›</Link>
+              )}
+              <a href={exportHref("csv")} className="btn btn-outline" style={{ padding: "7px 12px", fontSize: 12.5, textDecoration: "none" }}>Export CSV</a>
+              <a href={exportHref("xlsx")} className="btn btn-outline" style={{ padding: "7px 12px", fontSize: 12.5, textDecoration: "none" }}>Excel</a>
+              <a href={exportHref("pdf")} className="btn btn-teal" style={{ padding: "7px 12px", fontSize: 12.5, textDecoration: "none" }}>PDF for management</a>
             </div>
           </div>
 
           <div style={{ marginTop: 14, padding: "12px 18px", borderRadius: 12, background: "#F4FCFA", border: "1px solid #CFEDE5", fontSize: 13.5, color: "#0B7A6E", fontWeight: 600 }}>
-            {report
-              ? <>✓ {monthName} report filed {stamp(report.createdAt)}{report.updatedAt.getTime() - report.createdAt.getTime() > 60000 ? ` · last adjusted ${stamp(report.updatedAt)}` : ""} — next report due {nextDue.toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" })}</>
-              : <>Next report due <strong>{nextDue.toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" })}</strong> — a reminder email goes out that morning. {monthName} hasn&apos;t been filed yet.</>}
+            Live from patient &amp; payment records · {staffLabel(staffKey)} · not editable
           </div>
 
-          {/* computed Invisalign stats */}
           <div className="ds-stats" style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 14, marginTop: 14 }}>
-            {stat("Invisalign orders", String(orderIds.length), `patients who went ahead in ${monthName}`)}
-            {stat("Invisalign income", fmt(incomePence), "payments collected this month")}
-            {stat("Avg per aligner patient", avgAligner ? fmt(avgAligner) : "—", "average treatment value of new orders")}
-            {stat("Consult conversion", report ? pct(report.consultsProceeded, report.consultsSeen) : "—", "from the figures entered below")}
+            {stat("Proposals sent", String(proposalCount), `secure links sent in ${monthName}`)}
+            {stat("Invisalign orders", String(orderCount), "patients who went ahead (first payment)")}
+            {stat("Conversion rate", conversion === null ? "—" : `${conversion}%`, "orders ÷ proposals sent")}
+            {stat("Avg revenue / patient", avgRevenue ? fmt(avgRevenue) : "—", "average treatment value of new orders")}
           </div>
 
-          {/* Read-only patient names + amounts (auto from payments / orders) */}
           <div className="ds-split" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 18, marginTop: 18, alignItems: "start" }}>
             <div className="card" style={{ overflow: "hidden" }}>
               <div style={{ padding: "14px 18px", borderBottom: "1px solid #EEF2F6" }}>
-                <div style={{ fontSize: 15, fontWeight: 800 }}>Patients — payments this month</div>
-                <div style={{ fontSize: 12.5, color: "#7A8696", marginTop: 2 }}>Read-only · name and amount from live payment records</div>
+                <div style={{ fontSize: 15, fontWeight: 800 }}>Proposals sent</div>
+                <div style={{ fontSize: 12.5, color: "#7A8696", marginTop: 2 }}>Read-only · patient name</div>
               </div>
-              {monthPayments.length === 0 ? (
-                <div style={{ padding: 24, fontSize: 13.5, color: "#9AA6B4" }}>No payments collected in {monthName}.</div>
+              {proposals.length === 0 ? (
+                <div style={{ padding: 24, fontSize: 13.5, color: "#9AA6B4" }}>No proposals sent in {monthName}.</div>
+              ) : (
+                proposals.map((p) => (
+                  <div key={p.id} style={{ display: "flex", justifyContent: "space-between", gap: 12, padding: "12px 18px", borderTop: "1px solid #F1F4F8" }}>
+                    <div>
+                      <div style={{ fontSize: 13.5, fontWeight: 700 }}>{`${p.firstName} ${p.lastName}`.trim()}</div>
+                      <div style={{ fontSize: 11.5, color: "#9AA6B4", marginTop: 2 }}>{p.email}</div>
+                    </div>
+                    <div style={{ fontSize: 12.5, color: "#5C6a79", textAlign: "right" }}>
+                      {fmt(netPricePence(p.pricePence, p.upfrontPaidPence))}
+                      <div style={{ fontSize: 11, color: "#9AA6B4", marginTop: 2 }}>{staffLabel(staffOf(p.sentByEmail || ""))}</div>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+
+            <div className="card" style={{ overflow: "hidden" }}>
+              <div style={{ padding: "14px 18px", borderBottom: "1px solid #EEF2F6" }}>
+                <div style={{ fontSize: 15, fontWeight: 800 }}>Orders this month</div>
+                <div style={{ fontSize: 12.5, color: "#7A8696", marginTop: 2 }}>Read-only · patient name &amp; amount</div>
+              </div>
+              {orders.length === 0 ? (
+                <div style={{ padding: 24, fontSize: 13.5, color: "#9AA6B4" }}>No new orders in {monthName}.</div>
               ) : (
                 <>
-                  <div style={{ display: "grid", gridTemplateColumns: "1.5fr 0.8fr 0.7fr", gap: 8, padding: "8px 18px", background: "#FAFBFC", fontSize: 11, fontWeight: 800, letterSpacing: ".05em", textTransform: "uppercase", color: "#8A96A5" }}>
-                    <span>Patient</span>
-                    <span>Type</span>
-                    <span style={{ textAlign: "right" }}>Amount</span>
-                  </div>
-                  {monthPayments.map((p, i) => (
-                    <div
-                      key={`${p.patientId}-${i}`}
-                      style={{ display: "grid", gridTemplateColumns: "1.5fr 0.8fr 0.7fr", gap: 8, padding: "12px 18px", borderTop: "1px solid #F1F4F8", alignItems: "center" }}
-                    >
+                  {orders.map((o) => (
+                    <div key={o.id} style={{ display: "flex", justifyContent: "space-between", gap: 12, padding: "12px 18px", borderTop: "1px solid #F1F4F8" }}>
                       <div>
-                        <div style={{ fontSize: 13.5, fontWeight: 700, color: "#16202E" }}>
-                          {`${p.patient.firstName} ${p.patient.lastName}`.trim()}
-                        </div>
-                        <div style={{ fontSize: 11.5, color: "#9AA6B4", marginTop: 2 }}>{p.patient.email}</div>
+                        <div style={{ fontSize: 13.5, fontWeight: 700 }}>{o.name}</div>
+                        <div style={{ fontSize: 11.5, color: "#9AA6B4", marginTop: 2 }}>{o.email}</div>
                       </div>
-                      <div style={{ fontSize: 12.5, color: "#5C6a79", textTransform: "capitalize" }}>{p.type}</div>
-                      <div style={{ fontSize: 14, fontWeight: 800, color: "#0B7A6E", textAlign: "right" }}>{fmt(p.amountPence)}</div>
+                      <div style={{ fontSize: 14, fontWeight: 800, color: "#0B7A6E", textAlign: "right" }}>
+                        {fmt(o.amountPence)}
+                        <div style={{ fontSize: 11, color: "#9AA6B4", fontWeight: 600, marginTop: 2 }}>{o.staff}</div>
+                      </div>
                     </div>
                   ))}
                   <div style={{ display: "flex", justifyContent: "space-between", padding: "12px 18px", borderTop: "1px solid #E7ECF2", background: "#F4FCFA", fontWeight: 800 }}>
-                    <span style={{ fontSize: 13, color: "#0B7A6E" }}>Total collected</span>
+                    <span style={{ fontSize: 13, color: "#0B7A6E" }}>Collected in month</span>
                     <span style={{ fontSize: 15, color: "#0B7A6E" }}>{fmt(incomePence)}</span>
                   </div>
                 </>
               )}
             </div>
-
-            <div className="card" style={{ overflow: "hidden" }}>
-              <div style={{ padding: "14px 18px", borderBottom: "1px solid #EEF2F6" }}>
-                <div style={{ fontSize: 15, fontWeight: 800 }}>New orders this month</div>
-                <div style={{ fontSize: 12.5, color: "#7A8696", marginTop: 2 }}>Read-only · patient name and treatment amount</div>
-              </div>
-              {orderPatients.length === 0 ? (
-                <div style={{ padding: 24, fontSize: 13.5, color: "#9AA6B4" }}>No new Invisalign orders in {monthName}.</div>
-              ) : (
-                <>
-                  <div style={{ display: "grid", gridTemplateColumns: "1.6fr 0.8fr", gap: 8, padding: "8px 18px", background: "#FAFBFC", fontSize: 11, fontWeight: 800, letterSpacing: ".05em", textTransform: "uppercase", color: "#8A96A5" }}>
-                    <span>Patient</span>
-                    <span style={{ textAlign: "right" }}>Amount</span>
-                  </div>
-                  {orderPatients.map((p) => (
-                    <div
-                      key={p.id}
-                      style={{ display: "grid", gridTemplateColumns: "1.6fr 0.8fr", gap: 8, padding: "12px 18px", borderTop: "1px solid #F1F4F8", alignItems: "center" }}
-                    >
-                      <div>
-                        <div style={{ fontSize: 13.5, fontWeight: 700, color: "#16202E" }}>{p.name}</div>
-                        <div style={{ fontSize: 11.5, color: "#9AA6B4", marginTop: 2 }}>{p.email}</div>
-                      </div>
-                      <div style={{ fontSize: 14, fontWeight: 800, color: "#0B7A6E", textAlign: "right" }}>{fmt(p.amountPence)}</div>
-                    </div>
-                  ))}
-                </>
-              )}
-            </div>
           </div>
 
-          <div className="ds-split" style={{ display: "grid", gridTemplateColumns: "1.4fr 1fr", gap: 18, marginTop: 18, alignItems: "start" }}>
-            {/* report template */}
-            <form action={saveMonthlyReport} className="card" style={{ padding: 24 }}>
-              <input type="hidden" name="adminId" value={target.id} />
-              <input type="hidden" name="year" value={year} />
-              <input type="hidden" name="month" value={month} />
-              <div style={{ fontSize: 16, fontWeight: 800 }}>{firstNameOf(target.name)}&apos;s report — {monthName}</div>
-              <div style={{ fontSize: 13, color: "#7A8696", marginTop: 2, lineHeight: 1.6 }}>
-                Enter the consult numbers for the month. Invisalign orders and income above are calculated automatically. Saving again adjusts the held record.
-              </div>
-
-              <div style={{ fontSize: 13, fontWeight: 800, margin: "20px 0 8px", color: "#0B7A6E", textTransform: "uppercase", letterSpacing: ".05em" }}>Invisalign</div>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-                {numField("Consults seen", "consultsSeen", report?.consultsSeen ?? 0)}
-                {numField("…went ahead", "consultsProceeded", report?.consultsProceeded ?? 0)}
-              </div>
-
-              <div style={{ fontSize: 13, fontWeight: 800, margin: "20px 0 8px", color: "#0B7A6E", textTransform: "uppercase", letterSpacing: ".05em" }}>Composite bonding</div>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12 }}>
-                {numField("Consults seen", "bondingConsults", report?.bondingConsults ?? 0)}
-                {numField("…went ahead", "bondingProceeded", report?.bondingProceeded ?? 0)}
-                {numField("Income (£)", "bondingIncome", report?.bondingIncomePence ?? 0, "0.01")}
-              </div>
-              <div style={{ fontSize: 12.5, color: "#8A96A5", marginTop: 6 }}>
-                Avg per bonding patient: <strong>{avgOf(report?.bondingIncomePence ?? 0, report?.bondingProceeded ?? 0)}</strong>
-              </div>
-
-              <div style={{ fontSize: 13, fontWeight: 800, margin: "20px 0 8px", color: "#0B7A6E", textTransform: "uppercase", letterSpacing: ".05em" }}>Veneers</div>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12 }}>
-                {numField("Consults seen", "veneerConsults", report?.veneerConsults ?? 0)}
-                {numField("…went ahead", "veneerProceeded", report?.veneerProceeded ?? 0)}
-                {numField("Income (£)", "veneerIncome", report?.veneerIncomePence ?? 0, "0.01")}
-              </div>
-              <div style={{ fontSize: 12.5, color: "#8A96A5", marginTop: 6 }}>
-                Avg per veneer patient: <strong>{avgOf(report?.veneerIncomePence ?? 0, report?.veneerProceeded ?? 0)}</strong>
-              </div>
-
-              <div style={{ marginTop: 18 }}>
-                <label className="label">Notes</label>
-                <textarea className="input" name="notes" rows={2} defaultValue={report?.notes ?? ""} placeholder="Anything worth recording for this month…" style={{ resize: "vertical" }} />
-              </div>
-
-              <button className="btn btn-teal" style={{ marginTop: 18, width: "100%", padding: 13 }}>
-                {report ? "Update report (adjust held record)" : "Save report — file & log"}
-              </button>
-              <div style={{ fontSize: 12, color: "#9AA6B4", marginTop: 10, textAlign: "center" }}>
-                A confirmation email goes to {target.email} with the figures and the next due date.
-              </div>
-            </form>
-
-            {/* held records log */}
-            <div className="card" style={{ overflow: "hidden" }}>
-              <div style={{ padding: "16px 20px", borderBottom: "1px solid #EEF2F6" }}>
-                <div style={{ fontSize: 15, fontWeight: 800 }}>Report log</div>
-                <div style={{ fontSize: 12.5, color: "#7A8696", marginTop: 2 }}>Held records for {firstNameOf(target.name)} — filed &amp; adjusted times</div>
-              </div>
-              {history.length === 0 && (
-                <div style={{ padding: 30, textAlign: "center", color: "#9AA6B4", fontSize: 13.5 }}>No reports filed yet.</div>
-              )}
-              {history.map((r) => (
-                <Link
-                  key={r.id}
-                  href={`?m=${r.year}-${pad(r.month)}&a=${target.id}`}
-                  style={{ display: "block", padding: "13px 20px", borderBottom: "1px solid #F1F4F8", textDecoration: "none" }}
-                >
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
-                    <span style={{ fontSize: 14, fontWeight: 800, color: "#16202E" }}>
-                      {new Date(r.year, r.month - 1, 1).toLocaleString("en-GB", { month: "long", year: "numeric" })}
-                    </span>
-                    <span style={{ fontSize: 12.5, fontWeight: 700, color: "#0B7A6E" }}>
-                      {fmt(r.bondingIncomePence + r.veneerIncomePence)} bonding+veneers
-                    </span>
-                  </div>
-                  <div style={{ fontSize: 12.5, color: "#5C6a79", marginTop: 3 }}>
-                    Invisalign {r.consultsProceeded}/{r.consultsSeen} · bonding {r.bondingProceeded}/{r.bondingConsults} · veneers {r.veneerProceeded}/{r.veneerConsults}
-                  </div>
-                  <div style={{ fontSize: 11.5, color: "#9AA6B4", marginTop: 3 }}>
-                    Filed {stamp(r.createdAt)}{r.updatedAt.getTime() - r.createdAt.getTime() > 60000 ? ` · adjusted ${stamp(r.updatedAt)}` : ""}
-                  </div>
-                </Link>
-              ))}
-            </div>
+          <div style={{ marginTop: 18, fontSize: 12.5, color: "#9AA6B4", lineHeight: 1.55 }}>
+            Conversion = orders ÷ proposals sent for {monthName}
+            {staffKey !== "all" ? ` (${staffLabel(staffKey)})` : ""}. Average revenue uses treatment value of new orders.
+            {me.isSuperAdmin ? "" : ` Showing only patients attributed to ${me.name} (${me.email}).`}
+            {" "}Fallback sender: {FALLBACK_COORDINATOR.email}.
           </div>
         </div>
       </div>

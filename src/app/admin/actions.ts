@@ -142,11 +142,11 @@ export async function updatePricing(formData: FormData) {
 
   // A deposit above the cheapest treatment would make instalments negative.
   if (data.depositPence >= data.tier1Pence) {
-    redirect(toastUrl("/admin/settings", "Deposit must be less than the lowest treatment price", "!", "#E0A429"));
+    redirect(toastUrl("/admin/pricing", "Deposit must be less than the lowest treatment price", "!", "#E0A429"));
   }
 
   await db.pricing.upsert({ where: { id: "default" }, update: data, create: { id: "default", ...data } });
-  redirect(toastUrl("/admin/settings", "Pricing updated — applies to new & edited proposals", "✓"));
+  redirect(toastUrl("/admin/pricing", "Pricing updated — applies to new & edited proposals", "✓"));
 }
 
 // ── WhatsApp Cloud API (Super Admin) ────────────────────────────────────
@@ -256,6 +256,36 @@ export async function createAdminAccount(formData: FormData) {
     data: { name, email, role, isSuperAdmin, passwordHash: await bcrypt.hash(password, 10) },
   });
   redirect(toastUrl("/admin/team", `${name} can now log in as ${email} (Admin)`, "✓"));
+}
+
+/** Super Admin only — remove another Admin/Super Admin. Cannot remove yourself or the last Super Admin. */
+export async function deleteAdminAccount(formData: FormData) {
+  const me = await requireAdmin();
+  if (!me.isSuperAdmin) redirect("/admin");
+
+  const adminId = String(formData.get("adminId") || "").trim();
+  if (!adminId) {
+    redirect(toastUrl("/admin/team", "Missing admin account", "!", "#E0A429"));
+  }
+  if (adminId === me.id) {
+    redirect(toastUrl("/admin/team", "You cannot remove your own account", "!", "#E0A429"));
+  }
+
+  const target = await db.admin.findUnique({ where: { id: adminId } });
+  if (!target) {
+    redirect(toastUrl("/admin/team", "That admin was already removed", "!", "#E0A429"));
+  }
+
+  if (target.isSuperAdmin) {
+    const superCount = await db.admin.count({ where: { isSuperAdmin: true } });
+    if (superCount <= 1) {
+      redirect(toastUrl("/admin/team", "Cannot remove the last Super Admin", "!", "#E0A429"));
+    }
+  }
+
+  await db.admin.delete({ where: { id: adminId } });
+  log.info("admin.account.deleted", { by: me.id, removedId: adminId, removedEmail: target.email });
+  redirect(toastUrl("/admin/team", `${target.name} removed from the team`, "✓"));
 }
 
 // ── Monthly reports ─────────────────────────────────────────────────────
@@ -482,6 +512,7 @@ export async function approveFinance(formData: FormData) {
     data: {
       financeLink,
       financeApprovedAt: new Date(),
+      financeStatus: "accepted",
       activities: { create: { text: "Finance application approved — link emailed to patient" } },
     },
   });
@@ -496,6 +527,65 @@ export async function approveFinance(formData: FormData) {
   // redirect() throws NEXT_REDIRECT — must be called outside the try/catch.
   if (emailOk) redirect(toastUrl(`/admin/patients/${id}`, `Approved — finance link emailed to ${patient.firstName}`, "✉"));
   redirect(toastUrl(`/admin/patients/${id}`, "Saved, but the email failed to send — check email config", "!", "#E0A429"));
+}
+
+/** Super Admin / Admin — mark external finance accepted or declined (status persists). */
+export async function setFinanceStatus(formData: FormData) {
+  const id = String(formData.get("patientId"));
+  const status = String(formData.get("financeStatus") || "").trim();
+  if (status !== "accepted" && status !== "declined" && status !== "applied") {
+    redirect(toastUrl(`/admin/patients/${id}`, "Invalid finance status", "!", "#E0A429"));
+  }
+  const { patient } = await requireOwnedPatient(id);
+  const label = status === "accepted" ? "accepted" : status === "declined" ? "not accepted" : "applied (pending)";
+  await db.patient.update({
+    where: { id },
+    data: {
+      financeStatus: status,
+      ...(status === "accepted" && !patient.financeApprovedAt ? { financeApprovedAt: new Date() } : {}),
+      activities: { create: { text: `Finance marked as ${label}` } },
+    },
+  });
+  redirect(toastUrl(`/admin/patients/${id}`, `Finance marked as ${label}`, "✓"));
+}
+
+const ADMIN_UPLOAD_TYPES = new Set(["image/jpeg", "image/png", "image/webp", "application/pdf"]);
+const ADMIN_UPLOAD_MAX_BYTES = 2 * 1024 * 1024;
+const ADMIN_UPLOAD_MAX_FILES = 12;
+
+/** Admin uploads a file onto a patient record (visible on their proposal). */
+export async function adminUploadPatientFile(formData: FormData) {
+  const id = String(formData.get("patientId"));
+  await requireOwnedPatient(id);
+  const file = formData.get("file");
+  if (!(file instanceof File) || file.size <= 0) {
+    redirect(toastUrl(`/admin/patients/${id}`, "Choose a file to upload", "!", "#E0A429"));
+  }
+  const count = await db.patientUpload.count({ where: { patientId: id } });
+  if (count >= ADMIN_UPLOAD_MAX_FILES) {
+    redirect(toastUrl(`/admin/patients/${id}`, `Maximum ${ADMIN_UPLOAD_MAX_FILES} files`, "!", "#E0A429"));
+  }
+  if (!ADMIN_UPLOAD_TYPES.has(file.type)) {
+    redirect(toastUrl(`/admin/patients/${id}`, "Only JPG, PNG, WebP or PDF allowed", "!", "#E0A429"));
+  }
+  if (file.size > ADMIN_UPLOAD_MAX_BYTES) {
+    redirect(toastUrl(`/admin/patients/${id}`, "Each file must be under 2 MB", "!", "#E0A429"));
+  }
+  const buf = Buffer.from(await file.arrayBuffer());
+  const created = await db.patientUpload.create({
+    data: {
+      patientId: id,
+      fileName: file.name.slice(0, 180),
+      mimeType: file.type,
+      sizeBytes: file.size,
+      dataBase64: buf.toString("base64"),
+      uploadedBy: "admin",
+    },
+  });
+  await db.activity.create({
+    data: { patientId: id, text: `Admin uploaded file: ${created.fileName}` },
+  });
+  redirect(toastUrl(`/admin/patients/${id}`, `Uploaded ${created.fileName}`, "✓"));
 }
 
 // Sends the proposal by email + WhatsApp and logs activity.

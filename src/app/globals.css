@@ -21,6 +21,7 @@
 
 * { box-sizing: border-box; }
 html, body { margin: 0; padding: 0; }
+html { scroll-behavior: smooth; }
 body {
   font-family: "DM Sans", system-ui, sans-serif;
   background: var(--ds-surface);
@@ -32,9 +33,10 @@ input, button, select, textarea { font-family: inherit; }
 input:focus, textarea:focus, select:focus {
   outline: 2px solid rgba(60, 199, 247, 0.45);
   outline-offset: 1px;
+  transition: outline-color .15s var(--ease), border-color .15s var(--ease), background .15s var(--ease);
 }
 ::placeholder { color: #9AA6B4; }
-a { color: inherit; }
+a { color: inherit; transition: color .15s var(--ease), opacity .15s var(--ease); }
 
 .ds-scroll::-webkit-scrollbar { width: 10px; height: 10px; }
 .ds-scroll::-webkit-scrollbar-thumb {
@@ -72,13 +74,14 @@ a { color: inherit; }
   border-color: rgba(14, 147, 132, 0.25);
   border-top-color: #0E9384;
 }
-.ds-view { animation: ds-fade .32s var(--ease) both; }
+.ds-view { animation: ds-fade .28s var(--ease) both; }
 
 /* Shared components — brand-aligned */
 .card {
   background: #fff;
   border: 1px solid var(--ds-border);
   border-radius: 16px;
+  transition: box-shadow .2s var(--ease), border-color .2s var(--ease);
 }
 .btn {
   border: none;
@@ -88,7 +91,7 @@ a { color: inherit; }
   font-size: 14.5px;
   padding: 13px 18px;
   font-family: inherit;
-  transition: background .15s var(--ease), transform .12s var(--ease), box-shadow .15s var(--ease);
+  transition: background .15s var(--ease), transform .12s var(--ease), box-shadow .15s var(--ease), border-color .15s var(--ease), opacity .15s var(--ease);
   min-height: 44px;
 }
 .btn:hover:not(:disabled) { transform: translateY(-1px); }
@@ -111,6 +114,7 @@ a { color: inherit; }
   width: 100%; margin-top: 6px; padding: 11px 13px;
   border: 1px solid #E1E7EE; border-radius: 10px; font-size: 14px; background: #FBFCFD;
   min-height: 44px;
+  transition: border-color .15s var(--ease), background .15s var(--ease), box-shadow .15s var(--ease);
 }
 .input.err { border: 1.5px solid #E5544B; background: #FEF6F5; }
 .label { font-size: 12.5px; font-weight: 700; color: #3C4a59; }
@@ -119,6 +123,7 @@ a { color: inherit; }
   display: inline-flex; align-items: center; gap: 6px;
   font-size: 12.5px; font-weight: 700; padding: 4px 10px; border-radius: 20px;
 }
+.row-hover { transition: background .15s var(--ease); }
 .row-hover:hover { background: #F8FAFC; }
 
 /* Brand accent helpers */

@@ -71,18 +71,35 @@ export function whatsappTemplatesEnabled() {
   return v === "1" || v === "true" || v === "yes";
 }
 
-const waLang = () => process.env.WHATSAPP_TEMPLATE_LANG || "en_GB";
+const waLang = () => {
+  const raw = (process.env.WHATSAPP_TEMPLATE_LANG || "en_GB").trim();
+  // Meta templates are en_GB — bare "en" causes (#132001) Template name does not exist in the translation
+  if (raw === "en") return "en_GB";
+  return raw || "en_GB";
+};
 
-/** Template names — must match WhatsApp Manager exactly.
- *  Note (2026-07-23): Meta templates were created with a typo + swapped bodies:
+/**
+ * Template names — must match WhatsApp Manager exactly.
+ * Note (2026-07-23): Meta templates were created with a typo + swapped bodies:
  *  - `payment_reminder` body = "plan is ready…" (use for proposal send)
  *  - `porposal_ready` body = "reminder…" (use for reminder send)
- *  Override with WHATSAPP_TPL_* if you recreate correctly named templates later.
+ * Aliases map common mistakes (proposal_ready / en) so Vercel misconfig still works.
  */
+function resolveTemplateName(raw: string, fallback: string): string {
+  const name = (raw || fallback).trim();
+  const aliases: Record<string, string> = {
+    proposal_ready: "payment_reminder", // never created in Meta; body lives on payment_reminder
+    proposal: "payment_reminder",
+    reminder: "porposal_ready",
+    payment_reminder_correct: "porposal_ready",
+  };
+  return aliases[name] || name;
+}
+
 export const WA_TEMPLATES = {
-  proposal: process.env.WHATSAPP_TPL_PROPOSAL || "payment_reminder",
-  reminder: process.env.WHATSAPP_TPL_REMINDER || "porposal_ready",
-  loginCode: process.env.WHATSAPP_TPL_LOGIN || "login_code",
+  proposal: resolveTemplateName(process.env.WHATSAPP_TPL_PROPOSAL || "", "payment_reminder"),
+  reminder: resolveTemplateName(process.env.WHATSAPP_TPL_REMINDER || "", "porposal_ready"),
+  loginCode: resolveTemplateName(process.env.WHATSAPP_TPL_LOGIN || "", "login_code"),
 } as const;
 
 async function graphSend(to: string, payload: Record<string, unknown>): Promise<WhatsAppSendResult> {
@@ -180,6 +197,14 @@ export async function sendWhatsAppTemplate(
       ...(components.length ? { components } : {}),
     },
   });
+  if (r.error) {
+    log.error("whatsapp.template", {
+      to,
+      template: templateName,
+      lang: waLang(),
+      ...summarizeError(r.error),
+    });
+  }
   return { ...r, via: "template" };
 }
 

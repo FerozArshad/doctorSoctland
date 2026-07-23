@@ -28,6 +28,25 @@ model Pricing {
   updatedByEmail   String   @default("")
 }
 
+/// WhatsApp Cloud API credentials — Super Admin edits in /admin/whatsapp.
+/// Shared DB means local + production both use the same live connection.
+/// Empty fields fall back to process.env (Vercel) for migration.
+model WhatsAppSettings {
+  id                   String   @id @default("default")
+  token                String   @default("")
+  phoneNumberId        String   @default("")
+  templatesEnabled     Boolean  @default(false)
+  templateLang         String   @default("en_GB")
+  tplProposal          String   @default("payment_reminder")
+  tplReminder          String   @default("porposal_ready")
+  tplLogin             String   @default("login_code")
+  webhookVerifyToken   String   @default("")
+  metaAppSecret        String   @default("")
+  adminNotifyWhatsApp  String   @default("")
+  updatedAt            DateTime @updatedAt
+  updatedByEmail       String   @default("")
+}
+
 model Admin {
   id           String          @id @default(cuid())
   email        String          @unique

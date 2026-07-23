@@ -3,6 +3,7 @@ import crypto from "crypto";
 import { db } from "@/lib/db";
 import { log } from "@/lib/log";
 import { timingSafeEqualStr } from "@/lib/secure";
+import { getWhatsAppConfig } from "@/lib/whatsapp-settings";
 
 export const dynamic = "force-dynamic";
 
@@ -10,7 +11,7 @@ export const dynamic = "force-dynamic";
  * Meta WhatsApp Cloud API webhook.
  * Configure in Meta App → WhatsApp → Configuration:
  *   Callback URL: https://dashboard.dentalscotland.com/api/whatsapp/webhook
- *   Verify token: same as WHATSAPP_WEBHOOK_VERIFY_TOKEN
+ *   Verify token: same as saved in Admin → WhatsApp (or WHATSAPP_WEBHOOK_VERIFY_TOKEN)
  * Subscribe to: messages (includes delivery status updates)
  */
 
@@ -18,7 +19,8 @@ export async function GET(req: NextRequest) {
   const mode = req.nextUrl.searchParams.get("hub.mode");
   const token = req.nextUrl.searchParams.get("hub.verify_token") || "";
   const challenge = req.nextUrl.searchParams.get("hub.challenge");
-  const expected = process.env.WHATSAPP_WEBHOOK_VERIFY_TOKEN || "";
+  const cfg = await getWhatsAppConfig();
+  const expected = cfg.webhookVerifyToken || "";
 
   if (mode === "subscribe" && expected.length >= 16 && challenge && timingSafeEqualStr(token, expected)) {
     log.info("whatsapp.webhook.verify", { ok: true });
@@ -36,10 +38,10 @@ type Status = {
   errors?: Array<{ code?: number; title?: string; message?: string; error_data?: { details?: string } }>;
 };
 
-function verifyMetaSignature(rawBody: string, signatureHeader: string | null): boolean {
-  const secret = process.env.META_APP_SECRET || "";
+async function verifyMetaSignature(rawBody: string, signatureHeader: string | null): Promise<boolean> {
+  const cfg = await getWhatsAppConfig();
+  const secret = cfg.metaAppSecret || "";
   if (!secret || secret.length < 16) {
-    // Fail closed in production; allow unsigned only in local dev.
     return process.env.NODE_ENV !== "production";
   }
   if (!signatureHeader?.startsWith("sha256=")) return false;
@@ -50,7 +52,7 @@ function verifyMetaSignature(rawBody: string, signatureHeader: string | null): b
 
 export async function POST(req: NextRequest) {
   const rawBody = await req.text();
-  if (!verifyMetaSignature(rawBody, req.headers.get("x-hub-signature-256"))) {
+  if (!(await verifyMetaSignature(rawBody, req.headers.get("x-hub-signature-256")))) {
     log.warn("whatsapp.webhook.bad_signature");
     return NextResponse.json({ error: "invalid signature" }, { status: 401 });
   }
@@ -73,14 +75,12 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: true });
   }
 
-  // Always 200 quickly so Meta doesn't retry storms.
   const jobs: Promise<unknown>[] = [];
 
   for (const entry of body.entry || []) {
     for (const change of entry.changes || []) {
       const value = change.value;
       if (!value) continue;
-
       for (const st of value.statuses || []) {
         jobs.push(handleStatus(st));
       }
@@ -106,7 +106,6 @@ async function handleStatus(st: Status) {
     message: errMsg ? errMsg.slice(0, 160) : null,
   });
 
-  // Only persist failures / problems onto a patient timeline (saves noise & DB).
   if (!waId || (status !== "failed" && status !== "undeliverable")) return;
 
   const patient = await findPatientByWaId(waId);
@@ -122,7 +121,6 @@ async function handleStatus(st: Status) {
 }
 
 async function findPatientByWaId(waId: string) {
-  // Patients store phones as +923… / 07… etc. Match on digits suffix.
   const digits = waId.replace(/\D/g, "");
   if (digits.length < 8) return null;
   const patients = await db.patient.findMany({

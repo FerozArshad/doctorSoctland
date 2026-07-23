@@ -9,7 +9,7 @@ import { createPatientSession, getAdmin, getPatientSession } from "@/lib/auth";
 import { rateLimit } from "@/lib/ratelimit";
 import { fmt, fullPricePence, netPricePence } from "@/lib/pricing";
 import { getPricing } from "@/lib/pricing-settings";
-import { brandedEmail, notifyAdmin, sendEmail, sendLoginCodeWhatsApp } from "@/lib/notify";
+import { brandedEmail, notifyAdmin, sendEmail, sendLoginCodeWhatsApp, whatsappConfigured } from "@/lib/notify";
 import { log, summarizeError } from "@/lib/log";
 import type Stripe from "stripe";
 import { stripe, stripeConfigured } from "@/lib/stripe";
@@ -60,10 +60,8 @@ async function requireVerified(token: string) {
 const OTP_TTL_MS = 10 * 60 * 1000; // codes valid for 10 minutes
 const OTP_MAX_ATTEMPTS = 5;
 
-function channelReady(channel: "email" | "whatsapp") {
-  if (channel === "whatsapp") {
-    return !!(process.env.WHATSAPP_TOKEN && process.env.WHATSAPP_PHONE_NUMBER_ID);
-  }
+async function channelReady(channel: "email" | "whatsapp") {
+  if (channel === "whatsapp") return whatsappConfigured();
   // Real mail = Gmail OAuth (primary) or Resend fallback
   return gmailConfigured() || !!process.env.RESEND_API_KEY;
 }
@@ -82,7 +80,7 @@ export async function sendOtp(formData: FormData) {
     redirect(toastUrl(`/p/${token}`, "No phone number on this proposal — try email instead", "!", "#E0A429"));
   }
 
-  if (!channelReady(channel) && !allowDevOtpDisplay()) {
+  if (!(await channelReady(channel)) && !allowDevOtpDisplay()) {
     log.error("otp.channel.unconfigured", { channel, patientId: patient.id });
     redirect(
       toastUrl(
@@ -147,7 +145,7 @@ export async function sendOtp(formData: FormData) {
 
   const q = new URLSearchParams({ otp: "sent", channel });
   // Dev-only: never expose OTP in production URLs or HTML.
-  if (allowDevOtpDisplay() && !channelReady(channel)) q.set("devcode", code);
+  if (allowDevOtpDisplay() && !(await channelReady(channel))) q.set("devcode", code);
   redirect(`/p/${token}?${q.toString()}`);
 }
 

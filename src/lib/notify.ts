@@ -6,6 +6,7 @@ import type { Patient } from "@prisma/client";
 import { estMonths, fmt, fullPricePence, instalmentPence, netPricePence, PRICING_DEFAULTS, type PricingConfig } from "./pricing";
 import { gmailConfigured, sendGmail } from "./google";
 import { log, summarizeError } from "./log";
+import { getWhatsAppConfig } from "./whatsapp-settings";
 
 const appUrl = () => process.env.APP_URL || "http://localhost:3000";
 
@@ -46,10 +47,7 @@ export async function sendEmail(to: string, subject: string, html: string, fromO
 }
 
 // ── WhatsApp (Meta Business Cloud API) ──────────────────────────────────
-// Keys: WHATSAPP_TOKEN + WHATSAPP_PHONE_NUMBER_ID (already in env).
-// Business-initiated messages need approved templates. Flip
-// WHATSAPP_TEMPLATES_ENABLED=1 after Meta approves display name + templates.
-// Until then we fall back to free-form text (works in test / open 24h window).
+// Credentials: Super Admin portal (/admin/whatsapp) in DB, with env fallback.
 
 export type WhatsAppSendResult = {
   simulated: boolean;
@@ -60,35 +58,16 @@ export type WhatsAppSendResult = {
   messageStatus?: string;
 };
 
-/** True when Cloud API credentials are present. */
-export function whatsappConfigured() {
-  return !!(process.env.WHATSAPP_TOKEN && process.env.WHATSAPP_PHONE_NUMBER_ID);
+/** True when Cloud API credentials are present (portal DB or env). */
+export async function whatsappConfigured() {
+  const c = await getWhatsAppConfig();
+  return !!(c.token && c.phoneNumberId);
 }
 
-/** True when we're allowed to send approved templates (go-live switch). */
-export function whatsappTemplatesEnabled() {
-  const v = (process.env.WHATSAPP_TEMPLATES_ENABLED || "").toLowerCase();
-  return v === "1" || v === "true" || v === "yes";
-}
-
-const waLang = () => {
-  const raw = (process.env.WHATSAPP_TEMPLATE_LANG || "en_GB").trim();
-  // Meta templates are en_GB — bare "en" causes (#132001) Template name does not exist in the translation
-  if (raw === "en") return "en_GB";
-  return raw || "en_GB";
-};
-
-/**
- * Template names — must match WhatsApp Manager exactly.
- * Note (2026-07-23): Meta templates were created with a typo + swapped bodies:
- *  - `payment_reminder` body = "plan is ready…" (use for proposal send)
- *  - `porposal_ready` body = "reminder…" (use for reminder send)
- * Aliases map common mistakes (proposal_ready / en) so Vercel misconfig still works.
- */
 function resolveTemplateName(raw: string, fallback: string): string {
   const name = (raw || fallback).trim();
   const aliases: Record<string, string> = {
-    proposal_ready: "payment_reminder", // never created in Meta; body lives on payment_reminder
+    proposal_ready: "payment_reminder",
     proposal: "payment_reminder",
     reminder: "porposal_ready",
     payment_reminder_correct: "porposal_ready",
@@ -96,15 +75,17 @@ function resolveTemplateName(raw: string, fallback: string): string {
   return aliases[name] || name;
 }
 
-export const WA_TEMPLATES = {
-  proposal: resolveTemplateName(process.env.WHATSAPP_TPL_PROPOSAL || "", "payment_reminder"),
-  reminder: resolveTemplateName(process.env.WHATSAPP_TPL_REMINDER || "", "porposal_ready"),
-  loginCode: resolveTemplateName(process.env.WHATSAPP_TPL_LOGIN || "", "login_code"),
-} as const;
+function langCode(raw: string) {
+  const t = (raw || "en_GB").trim();
+  if (t === "en") return "en_GB";
+  return t || "en_GB";
+}
 
 async function graphSend(to: string, payload: Record<string, unknown>): Promise<WhatsAppSendResult> {
-  const token = process.env.WHATSAPP_TOKEN!.trim();
-  const phoneId = process.env.WHATSAPP_PHONE_NUMBER_ID!.trim();
+  const c = await getWhatsAppConfig();
+  const token = c.token.trim();
+  const phoneId = c.phoneNumberId.trim();
+  if (!token || !phoneId) return { simulated: true };
   const res = await fetch(`https://graph.facebook.com/v21.0/${phoneId}/messages`, {
     method: "POST",
     headers: {
@@ -135,7 +116,7 @@ async function graphSend(to: string, payload: Record<string, unknown>): Promise<
   log.info("whatsapp.send", {
     to,
     waId: waId || null,
-    messageId: messageId || null,
+    messageId: messageId ? messageId.slice(0, 28) + "…" : null,
     messageStatus: messageStatus || "accepted",
     via: payload.type,
     ok: true,
@@ -149,10 +130,9 @@ async function graphSend(to: string, payload: Record<string, unknown>): Promise<
   };
 }
 
-/** Free-form text (24h service window / test numbers). */
 export async function sendWhatsApp(toPhone: string, body: string): Promise<WhatsAppSendResult> {
   const to = normalisePhone(toPhone);
-  if (!whatsappConfigured() || !to) {
+  if (!(await whatsappConfigured()) || !to) {
     console.log(`[whatsapp:simulated] to=${toPhone} body="${body.slice(0, 80)}…"`);
     return { simulated: true };
   }
@@ -160,9 +140,6 @@ export async function sendWhatsApp(toPhone: string, body: string): Promise<Whats
   return { ...r, via: "text" };
 }
 
-/** Named utility / auth template with body {{1}}, {{2}}, … parameters.
- *  Auth copy-code templates also need the OTP repeated on the URL button.
- */
 export async function sendWhatsAppTemplate(
   toPhone: string,
   templateName: string,
@@ -170,10 +147,12 @@ export async function sendWhatsAppTemplate(
   opts?: { buttonCode?: string }
 ): Promise<WhatsAppSendResult> {
   const to = normalisePhone(toPhone);
-  if (!whatsappConfigured() || !to) {
+  const c = await getWhatsAppConfig();
+  if (!(await whatsappConfigured()) || !to) {
     console.log(`[whatsapp:simulated:template] to=${toPhone} name=${templateName} params=${JSON.stringify(bodyParams)}`);
     return { simulated: true };
   }
+  const lang = langCode(c.templateLang);
   const components: Array<Record<string, unknown>> = [];
   if (bodyParams.length > 0) {
     components.push({
@@ -193,55 +172,41 @@ export async function sendWhatsAppTemplate(
     type: "template",
     template: {
       name: templateName,
-      language: { code: waLang() },
+      language: { code: lang },
       ...(components.length ? { components } : {}),
     },
   });
   if (r.error) {
-    log.error("whatsapp.template", {
-      to,
-      template: templateName,
-      lang: waLang(),
-      ...summarizeError(r.error),
-    });
+    log.error("whatsapp.template", { to, template: templateName, lang, ...summarizeError(r.error) });
   }
   return { ...r, via: "template" };
 }
 
-/**
- * Proposal outbound: template when enabled, else text fallback.
- * Uses Meta template whose body is the "plan is ready" copy (see WA_TEMPLATES).
- */
 export async function sendProposalWhatsApp(p: Patient): Promise<WhatsAppSendResult> {
   const body = proposalWhatsAppText(p);
-  if (whatsappTemplatesEnabled()) {
-    return sendWhatsAppTemplate(p.phone, WA_TEMPLATES.proposal, [p.firstName, proposalLink(p)]);
+  const c = await getWhatsAppConfig();
+  if (c.templatesEnabled) {
+    return sendWhatsAppTemplate(p.phone, resolveTemplateName(c.tplProposal, "payment_reminder"), [p.firstName, proposalLink(p)]);
   }
-  if (whatsappConfigured()) {
-    console.warn("[whatsapp] WHATSAPP_TEMPLATES_ENABLED is off — sending free-form text (set to 1 after Meta approves templates)");
+  if (await whatsappConfigured()) {
+    console.warn("[whatsapp] templates disabled — sending free-form text (enable in Admin → WhatsApp)");
   }
   return sendWhatsApp(p.phone, body);
 }
 
-/**
- * Day-1 sequence reminder.
- * Uses Meta template whose body is the reminder copy (see WA_TEMPLATES).
- */
 export async function sendReminderWhatsApp(p: Patient, cfg: PricingConfig = PRICING_DEFAULTS): Promise<WhatsAppSendResult> {
   const body = reminderWhatsAppText(p, cfg);
-  if (whatsappTemplatesEnabled()) {
-    return sendWhatsAppTemplate(p.phone, WA_TEMPLATES.reminder, [p.firstName, proposalLink(p)]);
+  const c = await getWhatsAppConfig();
+  if (c.templatesEnabled) {
+    return sendWhatsAppTemplate(p.phone, resolveTemplateName(c.tplReminder, "porposal_ready"), [p.firstName, proposalLink(p)]);
   }
   return sendWhatsApp(p.phone, body);
 }
 
-/**
- * OTP / login code.
- * Authentication template `login_code` needs body {{1}} + Copy-code button param.
- */
 export async function sendLoginCodeWhatsApp(toPhone: string, code: string): Promise<WhatsAppSendResult> {
-  if (whatsappTemplatesEnabled()) {
-    return sendWhatsAppTemplate(toPhone, WA_TEMPLATES.loginCode, [code], { buttonCode: code });
+  const c = await getWhatsAppConfig();
+  if (c.templatesEnabled) {
+    return sendWhatsAppTemplate(toPhone, resolveTemplateName(c.tplLogin, "login_code"), [code], { buttonCode: code });
   }
   return sendWhatsApp(
     toPhone,
@@ -281,7 +246,8 @@ export async function notifyAdmin(subject: string, text: string) {
       sendEmail(email, subject, brandedEmail(escapeHtml(subject), `<p style="font-size:15px;line-height:1.7;color:#3C4a59;">${escapeHtml(text)}</p>`)).catch((e) => console.error(e))
     );
   }
-  const wa = process.env.ADMIN_NOTIFY_WHATSAPP;
+  const waCfg = await getWhatsAppConfig();
+  const wa = waCfg.adminNotifyWhatsApp;
   if (wa) {
     jobs.push(sendWhatsApp(wa, `${subject}\n${text}`).catch((e) => console.error(e)));
   }

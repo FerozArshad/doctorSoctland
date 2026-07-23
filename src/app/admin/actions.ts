@@ -11,6 +11,7 @@ import { brandedEmail, financeLinkEmailHtml, proposalEmailHtml, sendEmail, sendP
 import { firstNameOf } from "@/lib/status";
 import { log, summarizeError } from "@/lib/log";
 import { patientTemplateText, patientTemplateTitle, type PatientTemplateId } from "@/lib/patient-templates";
+import { getWhatsAppConfig } from "@/lib/whatsapp-settings";
 
 const ADMIN_LOGIN_DUMMY = "$2a$10$jIXu5fFVbg3ikfyxoWTwL.sLkQyG8lo/95eoTH8DTmJLzZCI7uUs2";
 
@@ -84,6 +85,86 @@ export async function updatePricing(formData: FormData) {
 
   await db.pricing.upsert({ where: { id: "default" }, update: data, create: { id: "default", ...data } });
   redirect(toastUrl("/admin/settings", "Pricing updated — applies to new & edited proposals", "✓"));
+}
+
+// ── WhatsApp Cloud API (Super Admin) ────────────────────────────────────
+export async function saveWhatsAppSettings(formData: FormData) {
+  const me = await requireAdmin();
+  if (!me.isSuperAdmin) redirect("/admin");
+
+  const current = await getWhatsAppConfig();
+  const keepOrSet = (key: string, existing: string) => {
+    const v = String(formData.get(key) || "").trim();
+    return v || existing;
+  };
+
+  const phoneNumberId = String(formData.get("phoneNumberId") || "").trim();
+  if (!phoneNumberId) {
+    redirect(toastUrl("/admin/whatsapp", "Phone Number ID is required", "!", "#E0A429"));
+  }
+
+  const data = {
+    phoneNumberId,
+    token: keepOrSet("token", current.token),
+    templatesEnabled: formData.get("templatesEnabled") === "on",
+    templateLang: String(formData.get("templateLang") || "en_GB").trim() || "en_GB",
+    tplProposal: String(formData.get("tplProposal") || "payment_reminder").trim() || "payment_reminder",
+    tplReminder: String(formData.get("tplReminder") || "porposal_ready").trim() || "porposal_ready",
+    tplLogin: String(formData.get("tplLogin") || "login_code").trim() || "login_code",
+    webhookVerifyToken: String(formData.get("webhookVerifyToken") || "").trim(),
+    metaAppSecret: keepOrSet("metaAppSecret", current.metaAppSecret),
+    adminNotifyWhatsApp: String(formData.get("adminNotifyWhatsApp") || "").trim(),
+    updatedByEmail: me.email,
+  };
+
+  if (!data.token) {
+    redirect(toastUrl("/admin/whatsapp", "Access token is required (paste your System User token)", "!", "#E0A429"));
+  }
+
+  await db.whatsAppSettings.upsert({
+    where: { id: "default" },
+    update: data,
+    create: { id: "default", ...data },
+  });
+  log.info("whatsapp.settings.save", { adminId: me.id, phoneNumberId: data.phoneNumberId });
+  redirect(toastUrl("/admin/whatsapp", "WhatsApp Cloud API settings saved — live for local and production", "✓"));
+}
+
+export async function testWhatsAppConnection() {
+  const me = await requireAdmin();
+  if (!me.isSuperAdmin) redirect("/admin");
+  const cfg = await getWhatsAppConfig();
+  if (!cfg.token || !cfg.phoneNumberId) {
+    redirect(toastUrl("/admin/whatsapp", "Save Phone Number ID + token first", "!", "#E0A429"));
+  }
+  try {
+    const res = await fetch(
+      `https://graph.facebook.com/v21.0/${encodeURIComponent(cfg.phoneNumberId)}?fields=display_phone_number,verified_name,quality_rating`,
+      { headers: { Authorization: `Bearer ${cfg.token}` } }
+    );
+    const json = (await res.json()) as {
+      error?: { message?: string };
+      display_phone_number?: string;
+      verified_name?: string;
+      quality_rating?: string;
+    };
+    if (!res.ok) {
+      redirect(
+        toastUrl("/admin/whatsapp", `Meta error: ${json.error?.message || "connection failed"}`, "!", "#E0A429")
+      );
+    }
+    redirect(
+      toastUrl(
+        "/admin/whatsapp",
+        `Connected: ${json.verified_name || "WhatsApp"} · ${json.display_phone_number || cfg.phoneNumberId}${
+          json.quality_rating ? ` · quality ${json.quality_rating}` : ""
+        }`,
+        "✓"
+      )
+    );
+  } catch (e) {
+    redirect(toastUrl("/admin/whatsapp", e instanceof Error ? e.message : "Test failed", "!", "#E0A429"));
+  }
 }
 
 // ── Team (Super Admin only) ─────────────────────────────────────────────

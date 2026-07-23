@@ -48,6 +48,40 @@ export async function adminLogout() {
   redirect("/admin/login");
 }
 
+/** Any logged-in Admin or Super Admin can reset their own password. */
+export async function changeAdminPassword(formData: FormData) {
+  const me = await requireAdmin();
+  const { rateLimit } = await import("@/lib/ratelimit");
+  if (!rateLimit(`apw:${me.id}`, 5, 15 * 60 * 1000)) {
+    redirect(toastUrl("/admin/settings", "Too many password attempts — wait a few minutes", "!", "#E0A429"));
+  }
+
+  const current = String(formData.get("currentPassword") || "");
+  const next = String(formData.get("newPassword") || "");
+  const confirm = String(formData.get("confirmPassword") || "");
+
+  const ok = await adminPasswordMatches(current, me.passwordHash);
+  if (!ok) {
+    redirect(toastUrl("/admin/settings", "Current password is incorrect", "!", "#E0A429"));
+  }
+  if (next.length < 8) {
+    redirect(toastUrl("/admin/settings", "New password must be at least 8 characters", "!", "#E0A429"));
+  }
+  if (next !== confirm) {
+    redirect(toastUrl("/admin/settings", "New password and confirmation do not match", "!", "#E0A429"));
+  }
+  if (current === next) {
+    redirect(toastUrl("/admin/settings", "Choose a different password from your current one", "!", "#E0A429"));
+  }
+
+  await db.admin.update({
+    where: { id: me.id },
+    data: { passwordHash: await bcrypt.hash(next, 12) },
+  });
+  log.info("admin.password.changed", { adminId: me.id });
+  redirect(toastUrl("/admin/settings", "Password updated — use it next time you sign in", "✓"));
+}
+
 // ── Pricing settings ────────────────────────────────────────────────────
 // Editable by any admin. Changing these affects NEW/edited proposals only —
 // existing patients keep the pricePence/discountPct captured at proposal time,

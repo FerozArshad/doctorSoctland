@@ -69,12 +69,11 @@ export default function OtpGate({
             ) : (
               <>
                 <div style={{ marginTop: 20, padding: "12px 16px", borderRadius: 11, background: "#F0FBF8", border: "1px solid #CFEDE5", fontSize: 13.5, color: "#0B7A6E", fontWeight: 600 }}>
-                  ✓ Code sent by {channel === "whatsapp" ? `WhatsApp to ${maskPhone(phone)}` : `email to ${maskEmail(email)}`} — it expires in 10 minutes.
+                  ✓ Code sent by {channel === "whatsapp" ? `WhatsApp to ${maskPhone(phone)}` : `email to ${maskEmail(email)}`} — it expires in 10 minutes and can only be used once.
                 </div>
-                {devCode && (
+                {devCode && process.env.NODE_ENV !== "production" && (
                   <div style={{ marginTop: 10, padding: "12px 16px", borderRadius: 11, background: "#FBF3E2", border: "1px solid #F0DFB6", fontSize: 13, color: "#B7791F", lineHeight: 1.6 }}>
-                    <strong>Test mode:</strong> sending isn&apos;t configured yet, so your code is <strong style={{ fontSize: 16, letterSpacing: ".15em" }}>{devCode}</strong>
-                    <br />(This disappears once email/WhatsApp keys are added.)
+                    <strong>Local dev only:</strong> code <strong style={{ fontSize: 16, letterSpacing: ".15em" }}>{devCode}</strong>
                   </div>
                 )}
                 <form action={verifyOtp} style={{ marginTop: 18 }}>
@@ -86,6 +85,9 @@ export default function OtpGate({
                     inputMode="numeric"
                     autoComplete="one-time-code"
                     maxLength={6}
+                    minLength={6}
+                    pattern="[0-9]{6}"
+                    required
                     placeholder="••••••"
                     style={{ fontSize: 22, letterSpacing: ".45em", textAlign: "center", fontWeight: 800, padding: "13px" }}
                   />

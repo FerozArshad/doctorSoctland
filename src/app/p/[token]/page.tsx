@@ -34,6 +34,11 @@ export default async function ProposalPage({
   const loggedIn = session?.id === c.id;
 
   if (!admin && !loggedIn) {
+    // Never surface OTP via query string in production.
+    const devCode =
+      process.env.NODE_ENV !== "production" && process.env.ALLOW_DEV_OTP === "1"
+        ? searchParams.devcode
+        : undefined;
     return (
       <OtpGate
         token={c.proposalToken}
@@ -42,7 +47,7 @@ export default async function ProposalPage({
         phone={c.phone}
         sent={searchParams.otp === "sent"}
         channel={searchParams.channel || "email"}
-        devCode={searchParams.devcode}
+        devCode={devCode}
       />
     );
   }

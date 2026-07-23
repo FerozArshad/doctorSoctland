@@ -11,6 +11,16 @@ import { brandedEmail, financeLinkEmailHtml, proposalEmailHtml, sendEmail, sendP
 import { firstNameOf } from "@/lib/status";
 import { log, summarizeError } from "@/lib/log";
 
+const ADMIN_LOGIN_DUMMY = "$2a$10$jIXu5fFVbg3ikfyxoWTwL.sLkQyG8lo/95eoTH8DTmJLzZCI7uUs2";
+
+async function adminPasswordMatches(password: string, hash: string | null | undefined) {
+  try {
+    return await bcrypt.compare(password || " ", hash || ADMIN_LOGIN_DUMMY);
+  } catch {
+    return false;
+  }
+}
+
 function toastUrl(base: string, msg: string, icon = "✓", bg = "#0E9384") {
   const q = new URLSearchParams({ toast: msg, ticon: icon, tbg: bg });
   return `${base}?${q.toString()}`;
@@ -20,14 +30,11 @@ function toastUrl(base: string, msg: string, icon = "✓", bg = "#0E9384") {
 export async function adminLogin(formData: FormData) {
   const email = String(formData.get("email") || "").trim().toLowerCase();
   const password = String(formData.get("password") || "");
-  // Max 10 attempts per email per 15 minutes — enough to stop brute force, but
-  // forgiving of a few mistyped attempts. Distinct error so a lockout isn't
-  // indistinguishable from a wrong password (correct creds would fail silently).
-  // NOTE: in-memory, so it resets on redeploy and is per-instance on serverless.
   const { rateLimit } = await import("@/lib/ratelimit");
   if (!rateLimit(`alogin:${email}`, 10, 15 * 60 * 1000)) redirect("/admin/login?error=locked");
   const admin = await db.admin.findUnique({ where: { email } });
-  if (!admin || !(await bcrypt.compare(password, admin.passwordHash))) {
+  const ok = await adminPasswordMatches(password, admin?.passwordHash);
+  if (!admin || !ok) {
     redirect("/admin/login?error=1");
   }
   await createAdminSession(admin.id);

@@ -9,6 +9,7 @@ import { firstNameOf } from "@/lib/status";
 import { getPricing } from "@/lib/pricing-settings";
 import { dueTouch, seqValues, LOCK_DAYS, TOUCHES } from "@/lib/sequence";
 import { fromHeader } from "@/lib/coordinators";
+import { bearerMatches } from "@/lib/secure";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -17,9 +18,7 @@ export const dynamic = "force-dynamic";
 const UNPAID_STATUSES = ["sent", "interested", "awaiting", "overdue"];
 
 export async function GET(req: NextRequest) {
-  const auth = req.headers.get("authorization") || "";
-  const secret = process.env.CRON_SECRET;
-  if (!secret || secret.startsWith("change-me") || auth !== `Bearer ${secret}`) {
+  if (!bearerMatches(req.headers.get("authorization"), process.env.CRON_SECRET)) {
     return NextResponse.json({ error: "unauthorised" }, { status: 401 });
   }
 

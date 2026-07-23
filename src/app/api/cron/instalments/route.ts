@@ -6,15 +6,13 @@ import { db } from "@/lib/db";
 import { stripe, stripeConfigured } from "@/lib/stripe";
 import { fmt, fullPricePence, netPricePence } from "@/lib/pricing";
 import { notifyAdmin, receiptEmailHtml, sendEmail } from "@/lib/notify";
+import { bearerMatches } from "@/lib/secure";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export async function GET(req: NextRequest) {
-  const auth = req.headers.get("authorization") || "";
-  // Missing/placeholder CRON_SECRET must fail closed, not compare equal.
-  const secret = process.env.CRON_SECRET;
-  if (!secret || secret.startsWith("change-me") || auth !== `Bearer ${secret}`) {
+  if (!bearerMatches(req.headers.get("authorization"), process.env.CRON_SECRET)) {
     return NextResponse.json({ error: "unauthorised" }, { status: 401 });
   }
   if (!stripeConfigured()) {

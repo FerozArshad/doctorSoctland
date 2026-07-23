@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
+import crypto from "crypto";
 import { db } from "@/lib/db";
 import { log } from "@/lib/log";
+import { timingSafeEqualStr } from "@/lib/secure";
 
 export const dynamic = "force-dynamic";
 
@@ -14,11 +16,11 @@ export const dynamic = "force-dynamic";
 
 export async function GET(req: NextRequest) {
   const mode = req.nextUrl.searchParams.get("hub.mode");
-  const token = req.nextUrl.searchParams.get("hub.verify_token");
+  const token = req.nextUrl.searchParams.get("hub.verify_token") || "";
   const challenge = req.nextUrl.searchParams.get("hub.challenge");
   const expected = process.env.WHATSAPP_WEBHOOK_VERIFY_TOKEN || "";
 
-  if (mode === "subscribe" && expected && token === expected && challenge) {
+  if (mode === "subscribe" && expected.length >= 16 && challenge && timingSafeEqualStr(token, expected)) {
     log.info("whatsapp.webhook.verify", { ok: true });
     return new NextResponse(challenge, { status: 200 });
   }
@@ -34,7 +36,25 @@ type Status = {
   errors?: Array<{ code?: number; title?: string; message?: string; error_data?: { details?: string } }>;
 };
 
+function verifyMetaSignature(rawBody: string, signatureHeader: string | null): boolean {
+  const secret = process.env.META_APP_SECRET || "";
+  if (!secret || secret.length < 16) {
+    // Fail closed in production; allow unsigned only in local dev.
+    return process.env.NODE_ENV !== "production";
+  }
+  if (!signatureHeader?.startsWith("sha256=")) return false;
+  const expected = crypto.createHmac("sha256", secret).update(rawBody, "utf8").digest("hex");
+  const provided = signatureHeader.slice("sha256=".length);
+  return timingSafeEqualStr(expected, provided);
+}
+
 export async function POST(req: NextRequest) {
+  const rawBody = await req.text();
+  if (!verifyMetaSignature(rawBody, req.headers.get("x-hub-signature-256"))) {
+    log.warn("whatsapp.webhook.bad_signature");
+    return NextResponse.json({ error: "invalid signature" }, { status: 401 });
+  }
+
   let body: {
     entry?: Array<{
       changes?: Array<{
@@ -48,7 +68,7 @@ export async function POST(req: NextRequest) {
   };
 
   try {
-    body = await req.json();
+    body = JSON.parse(rawBody);
   } catch {
     return NextResponse.json({ ok: true });
   }

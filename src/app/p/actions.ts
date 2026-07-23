@@ -12,8 +12,21 @@ import { getPricing } from "@/lib/pricing-settings";
 import { brandedEmail, notifyAdmin, sendEmail, sendLoginCodeWhatsApp } from "@/lib/notify";
 import { log, summarizeError } from "@/lib/log";
 import { stripe, stripeConfigured } from "@/lib/stripe";
+import { gmailConfigured } from "@/lib/google";
+import { allowDevOtpDisplay } from "@/lib/secure";
 
 const appUrl = () => process.env.APP_URL || "http://localhost:3000";
+
+/** Valid bcrypt hash used only to equalise login timing when the account is missing. */
+const LOGIN_DUMMY_HASH = "$2a$10$jIXu5fFVbg3ikfyxoWTwL.sLkQyG8lo/95eoTH8DTmJLzZCI7uUs2";
+
+async function passwordMatches(password: string, hash: string | null | undefined) {
+  try {
+    return await bcrypt.compare(password || " ", hash || LOGIN_DUMMY_HASH);
+  } catch {
+    return false;
+  }
+}
 
 function toastUrl(base: string, msg: string, icon = "✓", bg = "#0E9384") {
   const q = new URLSearchParams({ toast: msg, ticon: icon, tbg: bg });
@@ -43,6 +56,14 @@ async function requireVerified(token: string) {
 const OTP_TTL_MS = 10 * 60 * 1000; // codes valid for 10 minutes
 const OTP_MAX_ATTEMPTS = 5;
 
+function channelReady(channel: "email" | "whatsapp") {
+  if (channel === "whatsapp") {
+    return !!(process.env.WHATSAPP_TOKEN && process.env.WHATSAPP_PHONE_NUMBER_ID);
+  }
+  // Real mail = Gmail OAuth (primary) or Resend fallback
+  return gmailConfigured() || !!process.env.RESEND_API_KEY;
+}
+
 export async function sendOtp(formData: FormData) {
   const token = String(formData.get("token"));
   const channel = formData.get("channel") === "whatsapp" ? "whatsapp" : "email";
@@ -53,50 +74,76 @@ export async function sendOtp(formData: FormData) {
     redirect(toastUrl(`/p/${token}`, "Too many codes requested — please wait a few minutes", "!", "#E0A429"));
   }
 
+  if (channel === "whatsapp" && (!patient.phone || patient.phone === "—")) {
+    redirect(toastUrl(`/p/${token}`, "No phone number on this proposal — try email instead", "!", "#E0A429"));
+  }
+
+  if (!channelReady(channel) && !allowDevOtpDisplay()) {
+    log.error("otp.channel.unconfigured", { channel, patientId: patient.id });
+    redirect(
+      toastUrl(
+        `/p/${token}`,
+        channel === "whatsapp"
+          ? "WhatsApp isn't available right now — please try email"
+          : "Email isn't available right now — please try WhatsApp or contact the practice",
+        "!",
+        "#E0A429"
+      )
+    );
+  }
+
   const code = String(crypto.randomInt(100000, 1000000)); // crypto-secure 6 digits
   await db.patient.update({
     where: { id: patient.id },
     data: {
-      otpHash: await bcrypt.hash(code, 10),
+      otpHash: await bcrypt.hash(code, 12),
       otpExpiresAt: new Date(Date.now() + OTP_TTL_MS),
       otpAttempts: 0,
     },
   });
 
-  // Show the code on-screen ONLY when the channel genuinely has no keys
-  // configured (local testing). A real send failure must never leak the code.
-  const emailConfigured = !!process.env.RESEND_API_KEY;
-  const waConfigured = !!process.env.WHATSAPP_TOKEN && !!process.env.WHATSAPP_PHONE_NUMBER_ID;
-
   try {
-    if (channel === "whatsapp" && patient.phone) {
+    if (channel === "whatsapp") {
       const r = await sendLoginCodeWhatsApp(patient.phone, code);
-      if (r.error) {
-        log.error("otp.whatsapp.fail", { patientId: patient.id, ...summarizeError(r.error) });
+      if (r.error || r.simulated) {
+        log.error("otp.whatsapp.fail", {
+          patientId: patient.id,
+          simulated: !!r.simulated,
+          ...(r.error ? summarizeError(r.error) : { message: "simulated" }),
+        });
         throw new Error("WhatsApp OTP failed");
       }
-      if (r.simulated) log.warn("otp.whatsapp.simulated", { patientId: patient.id });
-      else log.info("otp.whatsapp.ok", { patientId: patient.id });
+      log.info("otp.whatsapp.ok", { patientId: patient.id });
     } else {
-      await sendEmail(
+      const r = await sendEmail(
         patient.email,
         `${code} is your Dental Scotland verification code`,
         brandedEmail(
           "Your verification code",
-          `<p style="font-size:15px;line-height:1.7;color:#3C4a59;">Hi ${patient.firstName}, use this code to open your Invisalign proposal. It expires in 10 minutes.</p>
+          `<p style="font-size:15px;line-height:1.7;color:#3C4a59;">Hi ${patient.firstName}, use this code to open your Invisalign proposal. It expires in 10 minutes and can only be used once.</p>
            <div style="text-align:center;margin:22px 0;"><span style="display:inline-block;background:#F0FBF8;color:#0B7A6E;font-size:34px;font-weight:800;letter-spacing:.35em;padding:16px 28px 16px 38px;border-radius:14px;">${code}</span></div>
            <p style="font-size:12.5px;color:#9AA6B4;">If you didn't request this, you can safely ignore this email.</p>`
         )
       );
+      if (r.simulated && !allowDevOtpDisplay()) {
+        log.error("otp.email.simulated", { patientId: patient.id });
+        throw new Error("Email OTP simulated");
+      }
+      log.info("otp.email.ok", { patientId: patient.id, via: "via" in r ? r.via : "resend" });
     }
   } catch (e) {
-    console.error("OTP send failed:", e);
+    // Invalidate the stored hash so a failed send cannot be guessed from a partial leak.
+    await db.patient.update({
+      where: { id: patient.id },
+      data: { otpHash: null, otpExpiresAt: null, otpAttempts: 0 },
+    });
+    log.error("otp.send.fail", { patientId: patient.id, channel, ...summarizeError(e) });
     redirect(toastUrl(`/p/${token}`, "We couldn't send your code — please try again or use the other option", "!", "#E0A429"));
   }
 
   const q = new URLSearchParams({ otp: "sent", channel });
-  const unconfigured = channel === "whatsapp" ? !waConfigured : !emailConfigured;
-  if (unconfigured) q.set("devcode", code);
+  // Dev-only: never expose OTP in production URLs or HTML.
+  if (allowDevOtpDisplay() && !channelReady(channel)) q.set("devcode", code);
   redirect(`/p/${token}?${q.toString()}`);
 }
 
@@ -108,17 +155,32 @@ export async function verifyOtp(formData: FormData) {
   const fail = (msg: string) =>
     redirect(`/p/${token}?otp=sent&${new URLSearchParams({ toast: msg, ticon: "!", tbg: "#E0A429" })}`);
 
+  if (code.length !== 6) {
+    fail("Enter the 6-digit code we sent you");
+  }
   if (!patient.otpHash || !patient.otpExpiresAt || patient.otpExpiresAt < new Date()) {
     fail("That code has expired — please request a new one");
   }
   if (patient.otpAttempts >= OTP_MAX_ATTEMPTS) {
+    await db.patient.update({
+      where: { id: patient.id },
+      data: { otpHash: null, otpExpiresAt: null },
+    });
     fail("Too many attempts — please request a new code");
   }
   if (!(await bcrypt.compare(code, patient.otpHash!))) {
-    await db.patient.update({ where: { id: patient.id }, data: { otpAttempts: { increment: 1 } } });
+    const attempts = patient.otpAttempts + 1;
+    await db.patient.update({
+      where: { id: patient.id },
+      data: {
+        otpAttempts: { increment: 1 },
+        ...(attempts >= OTP_MAX_ATTEMPTS ? { otpHash: null, otpExpiresAt: null } : {}),
+      },
+    });
     fail("That code isn't right — please check and try again");
   }
 
+  // One-time use: clear hash immediately on success.
   await db.patient.update({
     where: { id: patient.id },
     data: {
@@ -129,6 +191,7 @@ export async function verifyOtp(formData: FormData) {
     },
   });
   await createPatientSession(patient.id);
+  log.info("otp.verify.ok", { patientId: patient.id });
   redirect(`/p/${token}`);
 }
 
@@ -157,7 +220,8 @@ export async function patientLogin(formData: FormData) {
   // Max 5 attempts per email per 15 minutes
   if (!rateLimit(`plogin:${email}`, 5, 15 * 60 * 1000)) redirect("/login?error=1");
   const patient = await db.patient.findUnique({ where: { email } });
-  if (!patient?.passwordHash || !(await bcrypt.compare(password, patient.passwordHash))) {
+  const ok = await passwordMatches(password, patient?.passwordHash);
+  if (!patient?.passwordHash || !ok) {
     redirect("/login?error=1");
   }
   await createPatientSession(patient.id);

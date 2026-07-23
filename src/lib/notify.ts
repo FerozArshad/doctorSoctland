@@ -65,10 +65,15 @@ export function whatsappTemplatesEnabled() {
 
 const waLang = () => process.env.WHATSAPP_TEMPLATE_LANG || "en_GB";
 
-/** Template names — must match Meta WhatsApp Manager exactly once approved. */
+/** Template names — must match WhatsApp Manager exactly.
+ *  Note (2026-07-23): Meta templates were created with a typo + swapped bodies:
+ *  - `payment_reminder` body = "plan is ready…" (use for proposal send)
+ *  - `porposal_ready` body = "reminder…" (use for reminder send)
+ *  Override with WHATSAPP_TPL_* if you recreate correctly named templates later.
+ */
 export const WA_TEMPLATES = {
-  proposal: process.env.WHATSAPP_TPL_PROPOSAL || "proposal_ready",
-  reminder: process.env.WHATSAPP_TPL_REMINDER || "payment_reminder",
+  proposal: process.env.WHATSAPP_TPL_PROPOSAL || "payment_reminder",
+  reminder: process.env.WHATSAPP_TPL_REMINDER || "porposal_ready",
   loginCode: process.env.WHATSAPP_TPL_LOGIN || "login_code",
 } as const;
 
@@ -102,26 +107,35 @@ export async function sendWhatsApp(toPhone: string, body: string): Promise<Whats
   return { ...r, via: "text" };
 }
 
-/** Named utility / auth template with body {{1}}, {{2}}, … parameters. */
+/** Named utility / auth template with body {{1}}, {{2}}, … parameters.
+ *  Auth copy-code templates also need the OTP repeated on the URL button.
+ */
 export async function sendWhatsAppTemplate(
   toPhone: string,
   templateName: string,
-  bodyParams: string[] = []
+  bodyParams: string[] = [],
+  opts?: { buttonCode?: string }
 ): Promise<WhatsAppSendResult> {
   const to = normalisePhone(toPhone);
   if (!whatsappConfigured() || !to) {
     console.log(`[whatsapp:simulated:template] to=${toPhone} name=${templateName} params=${JSON.stringify(bodyParams)}`);
     return { simulated: true };
   }
-  const components =
-    bodyParams.length > 0
-      ? [
-          {
-            type: "body",
-            parameters: bodyParams.map((text) => ({ type: "text", text })),
-          },
-        ]
-      : [];
+  const components: Array<Record<string, unknown>> = [];
+  if (bodyParams.length > 0) {
+    components.push({
+      type: "body",
+      parameters: bodyParams.map((text) => ({ type: "text", text })),
+    });
+  }
+  if (opts?.buttonCode) {
+    components.push({
+      type: "button",
+      sub_type: "url",
+      index: "0",
+      parameters: [{ type: "text", text: opts.buttonCode }],
+    });
+  }
   const r = await graphSend(to, {
     type: "template",
     template: {
@@ -135,7 +149,7 @@ export async function sendWhatsAppTemplate(
 
 /**
  * Proposal outbound: template when enabled, else text fallback.
- * Expected template `proposal_ready`: Hi {{1}} … link {{2}}
+ * Uses Meta template whose body is the "plan is ready" copy (see WA_TEMPLATES).
  */
 export async function sendProposalWhatsApp(p: Patient): Promise<WhatsAppSendResult> {
   const body = proposalWhatsAppText(p);
@@ -150,7 +164,7 @@ export async function sendProposalWhatsApp(p: Patient): Promise<WhatsAppSendResu
 
 /**
  * Day-1 sequence reminder.
- * Expected template `payment_reminder`: Hi {{1}} … link {{2}}
+ * Uses Meta template whose body is the reminder copy (see WA_TEMPLATES).
  */
 export async function sendReminderWhatsApp(p: Patient, cfg: PricingConfig = PRICING_DEFAULTS): Promise<WhatsAppSendResult> {
   const body = reminderWhatsAppText(p, cfg);
@@ -162,11 +176,11 @@ export async function sendReminderWhatsApp(p: Patient, cfg: PricingConfig = PRIC
 
 /**
  * OTP / login code.
- * Expected Authentication template `login_code` with body {{1}} = code.
+ * Authentication template `login_code` needs body {{1}} + Copy-code button param.
  */
 export async function sendLoginCodeWhatsApp(toPhone: string, code: string): Promise<WhatsAppSendResult> {
   if (whatsappTemplatesEnabled()) {
-    return sendWhatsAppTemplate(toPhone, WA_TEMPLATES.loginCode, [code]);
+    return sendWhatsAppTemplate(toPhone, WA_TEMPLATES.loginCode, [code], { buttonCode: code });
   }
   return sendWhatsApp(
     toPhone,

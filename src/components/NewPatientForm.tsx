@@ -85,6 +85,9 @@ export default function NewPatientForm({ cfg }: { cfg: PricingConfig }) {
     }
   };
 
+  const price = priceForPence(alignerCount, cfg);
+  const net = Math.max(0, price - cfg.upfrontPence);
+
   const pkgBtn = (active: boolean): React.CSSProperties => ({
     flex: 1, padding: 12, borderRadius: 11, fontSize: 13.5, fontWeight: 700, cursor: "pointer",
     display: "flex", flexDirection: "column", gap: 2, alignItems: "flex-start",
@@ -182,9 +185,17 @@ export default function NewPatientForm({ cfg }: { cfg: PricingConfig }) {
             <span style={{ fontSize: 13, color: "#7A8696" }}>Package</span>
             <span style={{ fontSize: 14, fontWeight: 800 }}>Invisalign {pkg}</span>
           </div>
+          <div style={{ display: "flex", justifyContent: "space-between", padding: "14px 16px", borderBottom: "1px solid #F1F4F8" }}>
+            <span style={{ fontSize: 13, color: "#7A8696" }}>Treatment total</span>
+            <span style={{ fontSize: 14, fontWeight: 800 }}>{fmt(price)}</span>
+          </div>
+          <div style={{ display: "flex", justifyContent: "space-between", padding: "14px 16px", borderBottom: "1px solid #F1F4F8" }}>
+            <span style={{ fontSize: 13, color: "#7A8696" }}>Booking already paid</span>
+            <span style={{ fontSize: 14, fontWeight: 800, color: "#B4530A" }}>− {fmt(cfg.upfrontPence)}</span>
+          </div>
           <div style={{ display: "flex", justifyContent: "space-between", padding: "14px 16px", background: "#F0FBF8" }}>
-            <span style={{ fontSize: 13, color: "#0B7A6E", fontWeight: 600 }}>Total investment</span>
-            <span style={{ fontSize: 17, fontWeight: 800, color: "#0B7A6E" }}>{fmt(priceForPence(alignerCount, cfg))}</span>
+            <span style={{ fontSize: 13, color: "#0B7A6E", fontWeight: 600 }}>Amount to pay</span>
+            <span style={{ fontSize: 17, fontWeight: 800, color: "#0B7A6E" }}>{fmt(net)}</span>
           </div>
         </div>
         <div style={{ marginTop: 14, padding: "14px 16px", borderRadius: 12, background: "#FBFCFD", border: "1px solid #EEF2F6", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
@@ -192,7 +203,7 @@ export default function NewPatientForm({ cfg }: { cfg: PricingConfig }) {
           <span style={{ fontSize: 15, fontWeight: 800, color: "#0B7A6E" }}>£875</span>
         </div>
         <div style={{ fontSize: 12, color: "#9AA6B4", marginTop: 14, lineHeight: 1.6 }}>
-          Pricing auto-calculates from aligner count · ≤{cfg.tier1MaxAligners} → {fmt(cfg.tier1Pence)} · {cfg.tier1MaxAligners + 1}–{cfg.tier2MaxAligners} → {fmt(cfg.tier2Pence)} · {cfg.tier2MaxAligners + 1}+ → {fmt(cfg.tier3Pence)}
+          Every patient has already paid the {fmt(cfg.upfrontPence)} booking — proposals always show the reduced balance.
         </div>
       </div>
     </form>

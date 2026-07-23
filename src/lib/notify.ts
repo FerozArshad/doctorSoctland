@@ -314,7 +314,7 @@ export function proposalEmailHtml(p: Patient, cfg: PricingConfig = PRICING_DEFAU
 }
 
 export function proposalWhatsAppText(p: Patient) {
-  return `Hi ${p.firstName}! 🦷 Your personalised Invisalign treatment proposal from Dental Scotland is ready.\n\n✅ ${p.alignerCount} aligners · ≈${estMonths(p.alignerCount)} months · ${fmt(p.pricePence)}\n🎬 Watch your smile transformation video and choose a payment option here:\n${proposalLink(p)}\n\nQuestions? Just reply to this message.`;
+  return `Hi ${p.firstName}! 🦷 Your personalised Invisalign treatment proposal from Dental Scotland is ready.\n\n✅ ${p.alignerCount} aligners · ≈${estMonths(p.alignerCount)} months · ${fmt(netPricePence(p.pricePence, p.upfrontPaidPence))} left to pay${p.upfrontPaidPence > 0 ? ` (after ${fmt(p.upfrontPaidPence)} booking credit)` : ""}\n🎬 Watch your smile transformation video and choose a payment option here:\n${proposalLink(p)}\n\nQuestions? Just reply to this message.`;
 }
 
 export function receiptEmailHtml(p: Patient, amountPence: number, what: string) {

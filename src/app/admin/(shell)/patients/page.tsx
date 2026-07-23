@@ -1,7 +1,7 @@
 import { db } from "@/lib/db";
 import { patientWhere, requireAdmin } from "@/lib/auth";
 import { COORDINATORS } from "@/lib/coordinators";
-import { fmt } from "@/lib/pricing";
+import { fmt, netPricePence } from "@/lib/pricing";
 import { avatarBg, initials, timeAgo } from "@/lib/status";
 import TopBar from "@/components/TopBar";
 import PatientsTable, { PatientRow } from "@/components/PatientsTable";
@@ -24,7 +24,7 @@ export default async function PatientsPage() {
     avatarBg: avatarBg(c.id),
     alignerCount: c.alignerCount,
     pkg: c.pkg,
-    priceFmt: fmt(c.pricePence),
+    priceFmt: fmt(netPricePence(c.pricePence, c.upfrontPaidPence)),
     status: c.status,
     financeStatus: c.financeStatus || "none",
     lastAgo: c.activities[0] ? timeAgo(c.activities[0].createdAt) : "—",

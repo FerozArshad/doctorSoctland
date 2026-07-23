@@ -171,8 +171,15 @@ export default async function ProposalPage({
                       <div style={{ fontSize: 16, fontWeight: 800, marginTop: 3 }}>Invisalign {c.pkg}</div>
                     </div>
                     <div style={{ padding: "12px 12px", background: "#F0FBF8" }}>
-                      <div style={{ fontSize: 11, color: "#0B7A6E", fontWeight: 600 }}>Total</div>
-                      <div style={{ fontSize: 20, fontWeight: 800, marginTop: 2, color: "#0B7A6E" }}>{fmt(c.pricePence)}</div>
+                      <div style={{ fontSize: 11, color: "#0B7A6E", fontWeight: 600 }}>
+                        {c.upfrontPaidPence > 0 ? "Amount to pay" : "Total"}
+                      </div>
+                      <div style={{ fontSize: 20, fontWeight: 800, marginTop: 2, color: "#0B7A6E" }}>{fmt(net)}</div>
+                      {c.upfrontPaidPence > 0 && (
+                        <div style={{ fontSize: 10.5, color: "#5C6a79", marginTop: 3, lineHeight: 1.35 }}>
+                          {fmt(c.pricePence)} − {fmt(c.upfrontPaidPence)} booking
+                        </div>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -218,7 +225,7 @@ export default async function ProposalPage({
 
                 {c.upfrontPaidPence > 0 && !paid && !depositPaid && (
                   <div style={{ border: "1px solid #CFEDE5", background: "#F4FCFA", borderRadius: 10, padding: "9px 11px", marginBottom: 10, fontSize: 12, color: "#3C4a59", lineHeight: 1.45 }}>
-                    ✓ Credit <strong>{fmt(c.upfrontPaidPence)}</strong> applied — balance <strong style={{ color: "#0B7A6E" }}>{fmt(net)}</strong>.
+                    ✓ Your <strong>{fmt(c.upfrontPaidPence)}</strong> booking payment is credited. Treatment {fmt(c.pricePence)} − {fmt(c.upfrontPaidPence)} = <strong style={{ color: "#0B7A6E" }}>{fmt(net)}</strong> left to pay.
                   </div>
                 )}
 

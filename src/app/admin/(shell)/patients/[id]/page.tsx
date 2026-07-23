@@ -278,8 +278,15 @@ export default async function PatientProfile({ params }: { params: { id: string 
                     <div style={{ fontSize: 18, fontWeight: 800, marginTop: 6 }}>{c.pkg}</div>
                   </div>
                   <div style={{ background: "#F0FBF8", border: "1px solid #CFEDE5", borderRadius: 12, padding: 14 }}>
-                    <div style={{ fontSize: 12, color: "#0B7A6E", fontWeight: 600 }}>Total</div>
-                    <div style={{ fontSize: 22, fontWeight: 800, marginTop: 4, color: "#0B7A6E" }}>{fmt(c.pricePence)}</div>
+                    <div style={{ fontSize: 12, color: "#0B7A6E", fontWeight: 600 }}>
+                      {c.upfrontPaidPence > 0 ? "Amount to pay" : "Total"}
+                    </div>
+                    <div style={{ fontSize: 22, fontWeight: 800, marginTop: 4, color: "#0B7A6E" }}>{fmt(netOwed)}</div>
+                    {c.upfrontPaidPence > 0 && (
+                      <div style={{ fontSize: 11.5, color: "#5C6a79", marginTop: 4 }}>
+                        {fmt(c.pricePence)} − {fmt(c.upfrontPaidPence)} booking
+                      </div>
+                    )}
                   </div>
                 </div>
                 <div style={{ marginTop: 16, display: "flex", alignItems: "center", gap: 12, padding: "12px 14px", borderRadius: 12, background: "#0E1A2B" }}>
@@ -322,7 +329,7 @@ export default async function PatientProfile({ params }: { params: { id: string 
                 )}
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 10 }}>
                   <span style={{ fontSize: 26, fontWeight: 800 }}>{fmt(c.amountPaidPence)}</span>
-                  <span style={{ fontSize: 13.5, color: "#7A8696" }}>of {fmt(c.pricePence)} collected</span>
+                  <span style={{ fontSize: 13.5, color: "#7A8696" }}>of {fmt(netOwed)} to collect</span>
                 </div>
                 <div style={{ height: 12, borderRadius: 8, background: "#F0F3F7", overflow: "hidden" }}>
                   <div style={{ height: "100%", borderRadius: 8, background: "linear-gradient(90deg,#0E9384,#12B39E)", width: paidPct + "%" }} />

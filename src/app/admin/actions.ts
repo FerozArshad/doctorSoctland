@@ -439,6 +439,8 @@ export async function createPatient(formData: FormData) {
       status: "draft",
       pricePence: priceForPence(alignerCount, cfg),
       discountPct: cfg.discountPct,
+      // Every patient has already paid the consultation/booking — deduct it from what they still owe.
+      upfrontPaidPence: cfg.upfrontPence,
       ownerId: admin.id,
       activities: { create: { text: "Draft proposal created" } },
     },

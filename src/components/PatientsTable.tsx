@@ -133,7 +133,7 @@ export default function PatientsTable({ rows }: { rows: PatientRow[] }) {
           <div
             key={r.id}
             className="row-hover"
-            onClick={() => router.push(`/admin/patients/${r.id}`)}
+            onClick={() => router.push(r.status === "draft" ? `/admin/patients/${r.id}/edit` : `/admin/patients/${r.id}`)}
             style={{ display: "grid", gridTemplateColumns: grid, padding: "14px 20px", alignItems: "center", borderBottom: "1px solid #F1F4F8", cursor: "pointer" }}
           >
             <div style={{ display: "flex", alignItems: "center", gap: 12, minWidth: 0 }}>
@@ -169,8 +169,12 @@ export default function PatientsTable({ rows }: { rows: PatientRow[] }) {
               )}
             </div>
             <div style={{ fontSize: 13, color: "#7A8696" }}>{r.lastAgo}</div>
-            <div style={{ textAlign: "right", color: "#B4BECB" }}>
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m9 18 6-6-6-6" /></svg>
+            <div style={{ textAlign: "right", color: "#B4BECB", fontSize: 12, fontWeight: 700 }}>
+              {r.status === "draft" ? (
+                <span style={{ color: "#0E9384" }}>Continue →</span>
+              ) : (
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m9 18 6-6-6-6" /></svg>
+              )}
             </div>
           </div>
         );

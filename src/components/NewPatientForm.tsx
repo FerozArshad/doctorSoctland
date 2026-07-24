@@ -37,7 +37,7 @@ function NewPatientActions() {
             Saving…
           </span>
         ) : (
-          "Save as draft"
+          "Save draft & continue later"
         )}
       </button>
       <button
@@ -177,7 +177,7 @@ export default function NewPatientForm({ cfg }: { cfg: PricingConfig }) {
 
         <NewPatientActions />
         <div style={{ fontSize: 12, color: "#9AA6B4", marginTop: 12, lineHeight: 1.6 }}>
-          “Create &amp; send” emails the secure proposal link and sends a WhatsApp message if a phone number is provided.
+          “Save draft” stores the proposal under <strong>Patients → Draft</strong> so you can finish later. “Create &amp; send” emails the secure link and sends WhatsApp if a phone number is provided.
         </div>
       </div>
 

@@ -34,6 +34,7 @@ export default async function EditPatientPage({ params }: { params: { id: string
             notes: p.notes,
             paidUpfront: p.upfrontPaidPence > 0,
             ownerId: p.ownerId,
+            status: p.status,
           }}
           cfg={cfg}
           owners={owners}

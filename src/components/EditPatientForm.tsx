@@ -1,10 +1,11 @@
 "use client";
 // Edit an existing patient — mirrors the New-patient form, pre-filled, plus the
-// booking-credit toggle. Editable at any status (even after paid/done).
-// Pricing tiers come from the editable config (admin → Settings), passed in by the page.
-import { useState } from "react";
+// booking-credit toggle. Draft proposals can be saved and resumed, or saved and sent.
+import { useEffect, useState } from "react";
+import { useFormStatus } from "react-dom";
 import { updatePatient } from "@/app/admin/actions";
 import { estMonths, fmt, priceForPence, type PricingConfig } from "@/lib/pricing";
+import SentByPicker from "@/components/SentByPicker";
 
 export type EditPatientInitial = {
   id: string;
@@ -18,12 +19,90 @@ export type EditPatientInitial = {
   notes: string;
   paidUpfront: boolean;
   ownerId: string | null;
+  status: string;
 };
+
+function EditPatientActions({ isDraft, patientId }: { isDraft: boolean; patientId: string }) {
+  const { pending } = useFormStatus();
+  const [intent, setIntent] = useState<"draft" | "send" | "save" | null>(null);
+
+  useEffect(() => {
+    if (!pending) setIntent(null);
+  }, [pending]);
+
+  const spinner = (dark: boolean) => (
+    <span className={dark ? "ds-spinner ds-spinner-dark" : "ds-spinner"} aria-hidden="true" />
+  );
+
+  if (!isDraft) {
+    return (
+      <div style={{ display: "flex", gap: 12, marginTop: 26 }}>
+        <a className="btn btn-outline" href={`/admin/patients/${patientId}`} style={{ flex: 1, textAlign: "center", textDecoration: "none" }}>
+          Cancel
+        </a>
+        <button type="submit" className="btn btn-teal" name="intent" value="save" disabled={pending} style={{ flex: 1.3 }}>
+          {pending ? "Saving…" : "Save changes"}
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <>
+      <div style={{ height: 1, background: "#EEF2F6", margin: "24px 0" }} />
+      <SentByPicker />
+      <div style={{ display: "flex", gap: 12, marginTop: 26, flexWrap: "wrap" }}>
+        <a className="btn btn-outline" href={`/admin/patients`} style={{ flex: "1 1 120px", textAlign: "center", textDecoration: "none" }}>
+          Back to list
+        </a>
+        <button
+          type="submit"
+          className="btn btn-outline"
+          name="intent"
+          value="draft"
+          disabled={pending}
+          onClick={() => setIntent("draft")}
+          style={{ flex: "1.2 1 140px" }}
+        >
+          {pending && intent === "draft" ? (
+            <span style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 10 }}>
+              {spinner(true)}
+              Saving…
+            </span>
+          ) : (
+            "Save draft"
+          )}
+        </button>
+        <button
+          type="submit"
+          className="btn btn-teal"
+          name="intent"
+          value="send"
+          disabled={pending}
+          onClick={() => setIntent("send")}
+          style={{ flex: "1.4 1 160px" }}
+        >
+          {pending && intent === "send" ? (
+            <span style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 10 }}>
+              {spinner(false)}
+              Sending…
+            </span>
+          ) : (
+            "Save & send proposal"
+          )}
+        </button>
+      </div>
+      <div style={{ fontSize: 12, color: "#9AA6B4", marginTop: 12, lineHeight: 1.6 }}>
+        Save draft keeps this as a draft in your patient list — open it anytime from <strong>Patients → Draft</strong> to finish and send.
+      </div>
+    </>
+  );
+}
 
 export default function EditPatientForm({
   patient,
   cfg,
-  owners, // only passed for Super Admins — enables reassigning the patient to an admin
+  owners,
 }: {
   patient: EditPatientInitial;
   cfg: PricingConfig;
@@ -39,7 +118,7 @@ export default function EditPatientForm({
   const [notes, setNotes] = useState(patient.notes);
   const [paidUpfront, setPaidUpfront] = useState(patient.paidUpfront);
   const [errs, setErrs] = useState({ first: false, email: false });
-  const [submitting, setSubmitting] = useState(false);
+  const isDraft = patient.status === "draft";
 
   const price = priceForPence(alignerCount, cfg);
   const net = Math.max(0, price - (paidUpfront ? cfg.upfrontPence : 0));
@@ -52,7 +131,6 @@ export default function EditPatientForm({
       setErrs({ first, email: em });
       return;
     }
-    setSubmitting(true);
   };
 
   const pkgBtn = (active: boolean): React.CSSProperties => ({
@@ -67,8 +145,17 @@ export default function EditPatientForm({
     <form action={updatePatient} onSubmit={validate} className="ds-view" style={{ display: "grid", gridTemplateColumns: "1.3fr 1fr", gap: 18, alignItems: "start" }}>
       <input type="hidden" name="patientId" value={patient.id} />
       <div className="card" style={{ padding: 26 }}>
-        <div style={{ fontSize: 16, fontWeight: 800 }}>Edit patient details</div>
-        <div style={{ fontSize: 13, color: "#7A8696", marginTop: 2 }}>Changes are saved immediately — the proposal updates for the patient too.</div>
+        <div style={{ fontSize: 16, fontWeight: 800 }}>{isDraft ? "Draft proposal" : "Edit patient details"}</div>
+        <div style={{ fontSize: 13, color: "#7A8696", marginTop: 2 }}>
+          {isDraft
+            ? "Save your progress as a draft and return later, or send when the proposal is ready."
+            : "Changes are saved immediately — the proposal updates for the patient too."}
+        </div>
+        {isDraft && (
+          <div style={{ marginTop: 14, padding: "12px 14px", borderRadius: 11, background: "#FBF3E2", border: "1px solid #F0DCA8", fontSize: 13, color: "#8A5A12", lineHeight: 1.5 }}>
+            This proposal is still a <strong>draft</strong> — the patient has not been emailed yet.
+          </div>
+        )}
 
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14, marginTop: 22 }}>
           <div>
@@ -146,10 +233,7 @@ export default function EditPatientForm({
           <textarea className="input" name="notes" value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Anything the coordinator should know…" rows={3} style={{ resize: "vertical" }} />
         </div>
 
-        <div style={{ display: "flex", gap: 12, marginTop: 26 }}>
-          <a className="btn btn-outline" href={`/admin/patients/${patient.id}`} style={{ flex: 1, textAlign: "center", textDecoration: "none" }}>Cancel</a>
-          <button className="btn btn-teal" disabled={submitting} style={{ flex: 1.3 }}>{submitting ? "Saving…" : "Save changes"}</button>
-        </div>
+        <EditPatientActions isDraft={isDraft} patientId={patient.id} />
       </div>
 
       {/* summary */}

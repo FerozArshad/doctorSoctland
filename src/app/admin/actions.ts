@@ -608,23 +608,38 @@ export async function createPatient(formData: FormData) {
         )
       );
     }
-    // Same patient, accessible — if they chose Create & send, deliver on the existing record.
+    // Same email — update saved draft or resend on the existing record.
+    const draftData = {
+      firstName,
+      lastName,
+      email,
+      phone,
+      alignerCount,
+      pkg,
+      videoUrl,
+      notes,
+      pricePence: priceForPence(alignerCount, cfg),
+      upfrontPaidPence: paidUpfront ? cfg.upfrontPence : 0,
+      activities: {
+        create: { text: send ? "Proposal updated before send" : "Draft proposal saved" },
+      },
+    };
+    await db.patient.update({ where: { id: existing.id }, data: draftData });
     if (send) {
       await deliverProposal(existing.id, pickCoordinator(formData));
       redirect(
         toastUrl(
           `/admin/patients/${existing.id}`,
-          `That email is already on file — proposal sent to ${existing.firstName}`,
+          `Proposal sent to ${firstName}`,
           "✉"
         )
       );
     }
     redirect(
       toastUrl(
-        `/admin/patients/${existing.id}`,
-        "A patient with that email already exists — use Send proposal on their profile",
-        "!",
-        "#E0A429"
+        `/admin/patients/${existing.id}/edit`,
+        `Draft saved for ${firstName} — continue anytime`,
+        "✓"
       )
     );
   }
@@ -652,14 +667,15 @@ export async function createPatient(formData: FormData) {
     await deliverProposal(patient.id, pickCoordinator(formData));
     redirect(toastUrl(`/admin/patients/${patient.id}`, `Patient created & proposal sent to ${firstName}`, "✉"));
   }
-  redirect(toastUrl(`/admin/patients/${patient.id}`, `Draft saved for ${firstName}`));
+  redirect(toastUrl(`/admin/patients/${patient.id}/edit`, `Draft saved for ${firstName} — finish and send when ready`, "✓"));
 }
 
 // Edit an existing patient — allowed at any status (even after paid/done).
 export async function updatePatient(formData: FormData) {
   const cfg = await getPricing();
   const id = String(formData.get("patientId"));
-  const { admin } = await requireOwnedPatient(id);
+  const intent = String(formData.get("intent") || "save");
+  const { admin, patient } = await requireOwnedPatient(id);
   // Only a Super Admin may reassign ownership (the field only renders for them).
   const ownerRaw = formData.get("ownerId");
   const ownerChange =
@@ -696,9 +712,26 @@ export async function updatePatient(formData: FormData) {
       pricePence: priceForPence(alignerCount, cfg),
       upfrontPaidPence: paidUpfront ? cfg.upfrontPence : 0,
       ...ownerChange,
-      activities: { create: { text: "Patient details updated by admin" } },
+      activities: {
+        create: {
+          text:
+            intent === "send" && patient.status === "draft"
+              ? "Draft completed — proposal sent"
+              : intent === "draft"
+                ? "Draft proposal saved"
+                : "Patient details updated by admin",
+        },
+      },
     },
   });
+
+  if (intent === "send" && patient.status === "draft") {
+    await deliverProposal(id, pickCoordinator(formData));
+    redirect(toastUrl(`/admin/patients/${id}`, `Proposal sent to ${firstName}`, "✉"));
+  }
+  if (intent === "draft") {
+    redirect(toastUrl(`/admin/patients/${id}/edit`, "Draft saved — pick up where you left off", "✓"));
+  }
   redirect(toastUrl(`/admin/patients/${id}`, "Patient details updated", "✓"));
 }
 

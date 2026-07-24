@@ -2,6 +2,7 @@ import Link from "next/link";
 import { db } from "@/lib/db";
 import { fmt, netPricePence } from "@/lib/pricing";
 import { avatarBg, initials, statusOf, timeAgo, STATUS, StatusKey } from "@/lib/status";
+import { publicActivityText } from "@/lib/activity-display";
 import TopBar from "@/components/TopBar";
 import { patientWhere, requireAdmin } from "@/lib/auth";
 
@@ -83,7 +84,7 @@ export default async function Dashboard() {
     .flatMap((c) =>
       c.activities.map((a) => ({
         ts: a.createdAt,
-        text: a.text,
+        text: publicActivityText(a.text),
         name: c.firstName + " " + c.lastName,
         initials: initials(c.firstName, c.lastName),
         bg: avatarBg(c.id),

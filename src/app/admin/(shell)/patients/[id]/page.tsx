@@ -13,6 +13,7 @@ import FormSubmitButton from "@/components/FormSubmitButton";
 import DeletePatientButton from "@/components/DeletePatientButton";
 import AdminFileUpload from "@/components/AdminFileUpload";
 import { isMessageActivity } from "@/lib/messages";
+import { publicActivityText } from "@/lib/activity-display";
 import { patientTemplateText } from "@/lib/patient-templates";
 import { CONSENT_PARAGRAPHS, CONSENT_TITLE } from "@/lib/consent";
 
@@ -457,7 +458,7 @@ export default async function PatientProfile({ params }: { params: { id: string 
                     <div key={a.id} style={{ display: "flex", gap: 12, padding: "9px 0" }}>
                       <div style={{ width: 8, height: 8, borderRadius: "50%", background: "#0E9384", marginTop: 6, flex: "none" }} />
                       <div>
-                        <div style={{ fontSize: 13, color: "#2C3847", lineHeight: 1.4 }}>{a.text}</div>
+                        <div style={{ fontSize: 13, color: "#2C3847", lineHeight: 1.4 }}>{publicActivityText(a.text)}</div>
                         <div style={{ fontSize: 11.5, color: "#9AA6B4", marginTop: 1 }}>{timeAgo(a.createdAt)}</div>
                       </div>
                     </div>

@@ -106,18 +106,17 @@ export async function GET(req: NextRequest) {
       try {
         const r = await sendWhatsApp(p.phone, waBody);
         if (r.error) {
-          const summary = summarizeError(r.error);
-          waNote = ` · WhatsApp failed — ${summary.message}`;
-          log.error("sequence.whatsapp.fail", { patientId: p.id, touch: touch.n, ...summary });
+          log.error("sequence.whatsapp.fail", { patientId: p.id, touch: touch.n, ...summarizeError(r.error) });
+          waNote = " · WhatsApp not sent";
         } else if (r.simulated) {
-          waNote = " · WhatsApp simulated";
+          waNote = " · WhatsApp not sent";
           log.warn("sequence.whatsapp.simulated", { patientId: p.id, touch: touch.n });
         } else {
-          waNote = " · WhatsApp queued";
+          waNote = " · WhatsApp sent";
           log.info("sequence.whatsapp.ok", { patientId: p.id, touch: touch.n, messageId: r.messageId || null });
         }
       } catch (e) {
-        waNote = " · WhatsApp failed";
+        waNote = " · WhatsApp not sent";
         log.error("sequence.whatsapp.fail", { patientId: p.id, touch: touch.n, ...summarizeError(e) });
       }
     }

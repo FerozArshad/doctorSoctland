@@ -184,7 +184,7 @@ export async function GET(req: NextRequest) {
           where: { id: p.id },
           data: {
             status: "overdue",
-            activities: { create: { text: `Instalment ${inst.number}/3 failed — ${detail.slice(0, 120)}` } },
+            activities: { create: { text: `Instalment ${inst.number}/3 failed` } },
           },
         }),
       ]);

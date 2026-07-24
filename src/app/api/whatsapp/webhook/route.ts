@@ -116,23 +116,18 @@ async function handleStatus(st: Status) {
 
   let text: string;
   if (status === "delivered") {
-    text = `WhatsApp delivered to +${waId}`;
-  } else if (err?.code === 131042) {
-    text =
-      `WhatsApp delivery failed to +${waId} — Meta blocked delivery (code 131042). ` +
-      `Usually the WhatsApp Business Account is inactive (health 141008) or billing is not attached to this WABA. ` +
-      `Check Admin → WhatsApp health, then WhatsApp Manager → Account overview / Payment settings.`;
-  } else if (err?.code === 141008) {
-    text =
-      `WhatsApp delivery failed to +${waId} — WhatsApp Business Account is not active (code 141008). ` +
-      `Open WhatsApp Manager → Account overview and request activation / Meta support.`;
-  } else if (err?.code === 131047) {
-    text =
-      `WhatsApp delivery failed to +${waId} — outside 24h window; use an approved template (code 131047).`;
+    text = "WhatsApp delivered";
   } else {
-    text = `WhatsApp delivery ${status} to +${waId}${errMsg ? ` — ${errMsg}` : ""}${
-      err?.code ? ` (code ${err.code})` : ""
-    }`;
+    log.error("whatsapp.delivery.failed", {
+      patientId: patient.id,
+      waId,
+      status,
+      messageId: messageId || null,
+      code: err?.code || null,
+      message: errMsg || null,
+      errors: st.errors,
+    });
+    text = "WhatsApp not delivered";
   }
   await db.activity.create({ data: { patientId: patient.id, text } });
 }

@@ -217,12 +217,11 @@ export async function testWhatsAppConnection() {
     }
     if (!health.ok) {
       const top = health.blockers[0];
+      log.error("whatsapp.health.blocked", { blockers: health.blockers, summary: health.summary });
       redirect(
         toastUrl(
           "/admin/whatsapp",
-          top
-            ? `BLOCKED: ${top.entity} ${top.code || ""} — ${top.description}`.replace(/\s+/g, " ").trim()
-            : health.summary,
+          "WhatsApp is not ready — messages may not deliver. Details are in server logs.",
           "!",
           "#E0A429"
         )
@@ -238,7 +237,8 @@ export async function testWhatsAppConnection() {
       )
     );
   } catch (e) {
-    redirect(toastUrl("/admin/whatsapp", e instanceof Error ? e.message : "Test failed", "!", "#E0A429"));
+    log.error("whatsapp.test.fail", summarizeError(e));
+    redirect(toastUrl("/admin/whatsapp", "WhatsApp check failed — see server logs", "!", "#E0A429"));
   }
 }
 
@@ -845,31 +845,23 @@ async function deliverProposal(patientId: string, sentBy?: Coordinator) {
       proposalEmailHtml(patient, cfg),
       fromHeader(co)
     );
-    results.push(`Proposal emailed to ${patient.email} from ${co.name}`);
+    results.push(`Proposal email sent`);
     log.info("proposal.email.ok", { patientId });
   } catch (e) {
     const summary = summarizeError(e);
     log.error("proposal.email.fail", { patientId, ...summary });
-    results.push(`Email to ${patient.email} failed — ${summary.message}`);
+    results.push(`Email not sent`);
   }
   if (patient.phone && patient.phone !== "—") {
     const r = await sendProposalWhatsApp(patient);
     if (r.error) {
-      const summary = summarizeError(r.error);
-      results.push(`WhatsApp to ${patient.phone} failed — ${summary.message}`);
-      log.error("proposal.whatsapp.fail", { patientId, phone: patient.phone, ...summary });
+      log.error("proposal.whatsapp.fail", { patientId, phone: patient.phone, ...summarizeError(r.error) });
+      results.push(`WhatsApp not sent`);
     } else if (r.simulated) {
-      results.push(`WhatsApp to ${patient.phone} simulated (check keys)`);
+      results.push(`WhatsApp not sent`);
       log.warn("proposal.whatsapp.simulated", { patientId, phone: patient.phone });
     } else {
-      // Meta "accepted" ≠ delivered — webhook reports delivered/failed (e.g. 131042 billing).
-      const bits = [
-        `WhatsApp accepted for ${patient.phone} (queued by Meta — delivery status follows)`,
-        r.waId ? `wa_id=${r.waId}` : null,
-        r.messageStatus ? `status=${r.messageStatus}` : null,
-        r.messageId ? `id=${r.messageId.slice(0, 24)}…` : null,
-      ].filter(Boolean);
-      results.push(bits.join(" · "));
+      results.push(`WhatsApp sent`);
       log.info("proposal.whatsapp.ok", {
         patientId,
         phone: patient.phone,
@@ -903,17 +895,15 @@ export async function sendProposal(formData: FormData) {
   const co = pickCoordinator(formData);
   const results = await deliverProposal(id, co);
   const wa = results.find((r) => r.startsWith("WhatsApp"));
-  const emailFailed = results.some((r) => r.includes("Email") && r.includes("failed"));
+  const emailFailed = results.some((r) => r === "Email not sent");
   const msg = emailFailed
-    ? `Email failed — ${wa || "check configuration"}`
-    : wa?.includes("failed")
-      ? `Proposal emailed from ${co.name}, but WhatsApp failed`
-      : wa?.includes("simulated")
-        ? `Proposal emailed from ${co.name} (WhatsApp not live yet)`
-        : wa
-          ? `Proposal sent by email + WhatsApp from ${co.name}`
-          : `Proposal emailed to patient from ${co.name}`;
-  const warn = emailFailed || wa?.includes("failed") || wa?.includes("simulated");
+    ? "Proposal email not sent — check configuration"
+    : wa === "WhatsApp not sent"
+      ? `Proposal emailed from ${co.name} — WhatsApp not sent`
+      : wa === "WhatsApp sent"
+        ? `Proposal sent by email + WhatsApp from ${co.name}`
+        : `Proposal emailed to patient from ${co.name}`;
+  const warn = emailFailed || wa === "WhatsApp not sent";
   redirect(toastUrl(`/admin/patients/${id}`, msg, warn ? "!" : "✉", warn ? "#E0A429" : "#0E9384"));
 }
 

@@ -1,6 +1,7 @@
 import type { Activity, Patient } from "@prisma/client";
 import { LOCK_DAYS, TOUCHES } from "./sequence";
 import { receivesProposalFollowUps } from "./follow-ups";
+import { publicMessageSummary } from "./activity-display";
 
 export type MessageChannel = "email" | "whatsapp" | "both";
 
@@ -54,11 +55,17 @@ const UNPAID_STATUSES = ["sent", "interested", "awaiting"];
 
 export function isMessageActivity(text: string): boolean {
   return (
+    text.startsWith("Proposal email") ||
     text.startsWith("Proposal emailed") ||
     text.startsWith("WhatsApp sent") ||
+    text.startsWith("WhatsApp not sent") ||
+    text.startsWith("WhatsApp delivered") ||
+    text.startsWith("WhatsApp not delivered") ||
     text.startsWith("WhatsApp accepted") ||
     text.startsWith("WhatsApp to ") ||
     text.startsWith("WhatsApp delivery") ||
+    text.startsWith("Email not sent") ||
+    text.startsWith("Email sent") ||
     /^Follow-up \d+\/7 sent/.test(text) ||
     text.startsWith("Email sent:") ||
     text.includes("link emailed to patient") ||
@@ -68,15 +75,18 @@ export function isMessageActivity(text: string): boolean {
 
 function channelFromActivity(text: string): MessageChannel {
   if (text.startsWith("WhatsApp")) return "whatsapp";
-  if (text.startsWith("Email sent:")) return "email";
-  if (/^Follow-up 1\/7 sent/.test(text)) return "both";
+  if (text.startsWith("Email sent:") || text.startsWith("Email not sent")) return "email";
+  if (/^Follow-up 1\/7 sent/.test(text) && text.includes("WhatsApp sent")) return "both";
+  if (/^Follow-up 1\/7 sent/.test(text)) return "email";
+  if (/^Follow-up \d+\/7 sent/.test(text) && text.includes("WhatsApp")) return "both";
   if (/^Follow-up \d+\/7 sent/.test(text)) return "email";
+  if (text.startsWith("Proposal email")) return "email";
   if (text.startsWith("Proposal emailed")) return "email";
   return "email";
 }
 
 function kindFromActivity(text: string): SentMessageRecord["kind"] {
-  if (text.startsWith("Proposal emailed") || text.startsWith("WhatsApp")) return "proposal";
+  if (text.startsWith("Proposal email") || text.startsWith("Proposal emailed") || text.startsWith("WhatsApp")) return "proposal";
   if (/^Follow-up \d+\/7 sent/.test(text)) return "follow-up";
   if (text.includes("Finance") || text.includes("finance")) return "finance";
   if (text.startsWith("Email sent:")) return "manual";
@@ -91,9 +101,9 @@ export function sentMessagesFromActivities(activities: Activity[]): SentMessageR
       key: `sent:${a.id}`,
       at: a.createdAt,
       channel: channelFromActivity(a.text),
-      summary: a.text,
+      summary: publicMessageSummary(a.text),
       kind: kindFromActivity(a.text),
-      failed: /failed|simulated/i.test(a.text),
+      failed: /not sent|not delivered|failed|simulated/i.test(a.text),
     }))
     .sort((a, b) => b.at.getTime() - a.at.getTime());
 }

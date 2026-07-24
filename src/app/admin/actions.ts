@@ -1,17 +1,19 @@
 "use server";
 
 import { redirect } from "next/navigation";
+import { revalidatePath } from "next/cache";
 import bcrypt from "bcryptjs";
 import { db } from "@/lib/db";
 import { canAccessPatient, clearAdminSession, createAdminSession, requireAdmin } from "@/lib/auth";
 import { fmt, fullPricePence, netPricePence, priceForPence } from "@/lib/pricing";
 import { getPricing } from "@/lib/pricing-settings";
 import { COORDINATORS, coordinatorFor, fromHeader, FALLBACK_COORDINATOR, type Coordinator } from "@/lib/coordinators";
-import { brandedEmail, financeLinkEmailHtml, proposalEmailHtml, sendEmail, sendProposalWhatsApp, sendWhatsApp, escapeHtml } from "@/lib/notify";
+import { brandedEmail, financeLinkEmailHtml, proposalEmailHtml, sendEmail, sendProposalWhatsApp, sendWhatsApp, escapeHtml, adminWelcomeEmailHtml, notifyAdmin } from "@/lib/notify";
 import { firstNameOf } from "@/lib/status";
 import { log, summarizeError } from "@/lib/log";
 import { patientTemplateText, patientTemplateTitle, type PatientTemplateId } from "@/lib/patient-templates";
-import { getWhatsAppConfig } from "@/lib/whatsapp-settings";
+import { getWhatsAppConfig, getWhatsAppHealth } from "@/lib/whatsapp-settings";
+import { FOLLOW_UPS_COMPLETE_TOUCH } from "@/lib/follow-ups";
 
 const ADMIN_LOGIN_DUMMY = "$2a$10$jIXu5fFVbg3ikfyxoWTwL.sLkQyG8lo/95eoTH8DTmJLzZCI7uUs2";
 
@@ -200,32 +202,89 @@ export async function testWhatsAppConnection() {
     redirect(toastUrl("/admin/whatsapp", "Save Phone Number ID + token first", "!", "#E0A429"));
   }
   try {
-    const res = await fetch(
-      `https://graph.facebook.com/v21.0/${encodeURIComponent(cfg.phoneNumberId)}?fields=display_phone_number,verified_name,quality_rating`,
-      { headers: { Authorization: `Bearer ${cfg.token}` } }
-    );
-    const json = (await res.json()) as {
-      error?: { message?: string };
-      display_phone_number?: string;
-      verified_name?: string;
-      quality_rating?: string;
-    };
-    if (!res.ok) {
+    const health = await getWhatsAppHealth();
+    if (!health) {
+      redirect(toastUrl("/admin/whatsapp", "Could not load WhatsApp health", "!", "#E0A429"));
+    }
+    if (!health.ok) {
+      const top = health.blockers[0];
       redirect(
-        toastUrl("/admin/whatsapp", `Meta error: ${json.error?.message || "connection failed"}`, "!", "#E0A429")
+        toastUrl(
+          "/admin/whatsapp",
+          top
+            ? `BLOCKED: ${top.entity} ${top.code || ""} — ${top.description}`.replace(/\s+/g, " ").trim()
+            : health.summary,
+          "!",
+          "#E0A429"
+        )
       );
     }
     redirect(
       toastUrl(
         "/admin/whatsapp",
-        `Connected: ${json.verified_name || "WhatsApp"} · ${json.display_phone_number || cfg.phoneNumberId}${
-          json.quality_rating ? ` · quality ${json.quality_rating}` : ""
+        `Ready: ${health.verifiedName || "WhatsApp"} · ${health.displayPhone || cfg.phoneNumberId}${
+          health.wabaId ? ` · WABA ${health.wabaId}` : ""
         }`,
         "✓"
       )
     );
   } catch (e) {
     redirect(toastUrl("/admin/whatsapp", e instanceof Error ? e.message : "Test failed", "!", "#E0A429"));
+  }
+}
+
+/** Complete Cloud API phone registration (moves WABA out of onboarding). Max 10 attempts / 72h. */
+export async function registerWhatsAppPhone(formData: FormData) {
+  const me = await requireAdmin();
+  if (!me.isSuperAdmin) redirect("/admin");
+  const cfg = await getWhatsAppConfig();
+  if (!cfg.token || !cfg.phoneNumberId) {
+    redirect(toastUrl("/admin/whatsapp", "Save Phone Number ID + token first", "!", "#E0A429"));
+  }
+
+  const pin = String(formData.get("pin") || process.env.WHATSAPP_PIN || process.env.WhatsApp_pin || "").trim();
+  if (!/^\d{6}$/.test(pin)) {
+    redirect(toastUrl("/admin/whatsapp", "Enter the 6-digit two-step PIN for this number", "!", "#E0A429"));
+  }
+
+  try {
+    const res = await fetch(
+      `https://graph.facebook.com/v21.0/${encodeURIComponent(cfg.phoneNumberId)}/register`,
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${cfg.token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ messaging_product: "whatsapp", pin }),
+      }
+    );
+    const json = (await res.json()) as { success?: boolean; error?: { message?: string; code?: number } };
+    if (!res.ok) {
+      const code = json.error?.code;
+      const msg = json.error?.message || "Registration failed";
+      if (code === 133016) {
+        redirect(
+          toastUrl(
+            "/admin/whatsapp",
+            "Too many register attempts — wait 72 hours before trying again (Meta limit)",
+            "!",
+            "#E0A429"
+          )
+        );
+      }
+      if (code === 133005) {
+        redirect(toastUrl("/admin/whatsapp", "PIN mismatch — use the existing 6-digit PIN for this number", "!", "#E0A429"));
+      }
+      redirect(toastUrl("/admin/whatsapp", `Meta register error: ${msg}`, "!", "#E0A429"));
+    }
+
+    log.info("whatsapp.phone.registered", { adminId: me.id, phoneNumberId: cfg.phoneNumberId });
+    const health = await getWhatsAppHealth();
+    const note = health?.ok ? " · health OK" : health?.summary ? ` · ${health.summary}` : "";
+    redirect(toastUrl("/admin/whatsapp", `Phone registered with Meta${note}`, "✓"));
+  } catch (e) {
+    redirect(toastUrl("/admin/whatsapp", e instanceof Error ? e.message : "Registration failed", "!", "#E0A429"));
   }
 }
 
@@ -248,14 +307,68 @@ export async function createAdminAccount(formData: FormData) {
   if (password.length < 8) {
     redirect(toastUrl("/admin/team", "Password must be at least 8 characters", "!", "#E0A429"));
   }
-  if (await db.admin.findUnique({ where: { email } })) {
-    redirect(toastUrl("/admin/team", "An admin with that email already exists", "!", "#E0A429"));
+  const existing = await db.admin.findUnique({ where: { email } });
+  if (existing) {
+    redirect(
+      toastUrl(
+        "/admin/team",
+        `${existing.name} already uses ${email} — remove them first, or use a different email`,
+        "!",
+        "#E0A429"
+      )
+    );
   }
 
   await db.admin.create({
     data: { name, email, role, isSuperAdmin, passwordHash: await bcrypt.hash(password, 10) },
   });
-  redirect(toastUrl("/admin/team", `${name} can now log in as ${email} (Admin)`, "✓"));
+
+  const loginUrl = `${(process.env.APP_URL || "http://localhost:3000").replace(/\/$/, "")}/admin/login`;
+  try {
+    await sendEmail(email, "Your Dental Scotland admin login", adminWelcomeEmailHtml(name, email, password, loginUrl));
+  } catch (e) {
+    console.error("admin.welcome.email.fail", e);
+    revalidatePath("/admin/team");
+    redirect(toastUrl("/admin/team", `${name} created but welcome email failed — resend from Team`, "!", "#E0A429"));
+  }
+
+  revalidatePath("/admin/team");
+  redirect(toastUrl("/admin/team", `${name} created — login details emailed to ${email}`, "✉"));
+}
+
+/** Super Admin — resend login credentials to an existing admin. */
+export async function resendAdminInvite(formData: FormData) {
+  const me = await requireAdmin();
+  if (!me.isSuperAdmin) redirect("/admin");
+
+  const adminId = String(formData.get("adminId") || "").trim();
+  const password = String(formData.get("password") || "");
+  if (!adminId || password.length < 8) {
+    redirect(toastUrl("/admin/team", "Password must be at least 8 characters", "!", "#E0A429"));
+  }
+
+  const target = await db.admin.findUnique({ where: { id: adminId } });
+  if (!target) redirect(toastUrl("/admin/team", "Admin not found", "!", "#E0A429"));
+
+  await db.admin.update({
+    where: { id: adminId },
+    data: { passwordHash: await bcrypt.hash(password, 10) },
+  });
+
+  const loginUrl = `${(process.env.APP_URL || "http://localhost:3000").replace(/\/$/, "")}/admin/login`;
+  try {
+    await sendEmail(
+      target.email,
+      "Your Dental Scotland admin login",
+      adminWelcomeEmailHtml(target.name, target.email, password, loginUrl)
+    );
+  } catch (e) {
+    console.error("admin.invite.resend.fail", e);
+    redirect(toastUrl("/admin/team", "Password updated but email failed to send", "!", "#E0A429"));
+  }
+
+  revalidatePath("/admin/team");
+  redirect(toastUrl("/admin/team", `Login details emailed to ${target.email}`, "✉"));
 }
 
 /** Super Admin only — remove another Admin/Super Admin. Cannot remove yourself or the last Super Admin. */
@@ -285,6 +398,7 @@ export async function deleteAdminAccount(formData: FormData) {
 
   await db.admin.delete({ where: { id: adminId } });
   log.info("admin.account.deleted", { by: me.id, removedId: adminId, removedEmail: target.email });
+  revalidatePath("/admin/team");
   redirect(toastUrl("/admin/team", `${target.name} removed from the team`, "✓"));
 }
 
@@ -390,6 +504,7 @@ export async function createPatient(formData: FormData) {
   const pkg = formData.get("pkg") === "Express" ? "Express" : "Go";
   const videoUrl = String(formData.get("videoUrl") || "").trim();
   const notes = String(formData.get("notes") || "").trim();
+  const paidUpfront = formData.get("paidUpfront") === "on";
 
   if (!firstName || !/.+@.+\..+/.test(email)) redirect("/admin/patients/new?error=1");
 
@@ -439,8 +554,7 @@ export async function createPatient(formData: FormData) {
       status: "draft",
       pricePence: priceForPence(alignerCount, cfg),
       discountPct: cfg.discountPct,
-      // Every patient has already paid the consultation/booking — deduct it from what they still owe.
-      upfrontPaidPence: cfg.upfrontPence,
+      upfrontPaidPence: paidUpfront ? cfg.upfrontPence : 0,
       ownerId: admin.id,
       activities: { create: { text: "Draft proposal created" } },
     },
@@ -526,6 +640,10 @@ export async function approveFinance(formData: FormData) {
     console.error(e);
     emailOk = false;
   }
+  await notifyAdmin(
+    `💷 Finance link sent to ${patient.firstName} ${patient.lastName}`,
+    `Approved finance application — link emailed to ${patient.email}. View: ${process.env.APP_URL || ""}/admin/patients/${patient.id}`
+  ).catch(console.error);
   // redirect() throws NEXT_REDIRECT — must be called outside the try/catch.
   if (emailOk) redirect(toastUrl(`/admin/patients/${id}`, `Approved — finance link emailed to ${patient.firstName}`, "✉"));
   redirect(toastUrl(`/admin/patients/${id}`, "Saved, but the email failed to send — check email config", "!", "#E0A429"));
@@ -553,41 +671,74 @@ export async function setFinanceStatus(formData: FormData) {
 
 const ADMIN_UPLOAD_TYPES = new Set(["image/jpeg", "image/png", "image/webp", "application/pdf"]);
 const ADMIN_UPLOAD_MAX_BYTES = 2 * 1024 * 1024;
-const ADMIN_UPLOAD_MAX_FILES = 12;
+const ADMIN_UPLOAD_MAX_FILES = 5;
 
-/** Admin uploads a file onto a patient record (visible on their proposal). */
+/** Admin uploads one or more files onto a patient record (visible on their proposal). */
 export async function adminUploadPatientFile(formData: FormData) {
   const id = String(formData.get("patientId"));
   await requireOwnedPatient(id);
-  const file = formData.get("file");
-  if (!(file instanceof File) || file.size <= 0) {
-    redirect(toastUrl(`/admin/patients/${id}`, "Choose a file to upload", "!", "#E0A429"));
+  const raw = [
+    ...formData.getAll("files"),
+    ...formData.getAll("file"),
+  ].filter((f): f is File => f instanceof File && f.size > 0);
+
+  if (raw.length === 0) {
+    redirect(toastUrl(`/admin/patients/${id}`, "Choose one or more files to upload", "!", "#E0A429"));
   }
-  const count = await db.patientUpload.count({ where: { patientId: id } });
-  if (count >= ADMIN_UPLOAD_MAX_FILES) {
-    redirect(toastUrl(`/admin/patients/${id}`, `Maximum ${ADMIN_UPLOAD_MAX_FILES} files`, "!", "#E0A429"));
+
+  const existing = await db.patientUpload.count({ where: { patientId: id } });
+  if (existing + raw.length > ADMIN_UPLOAD_MAX_FILES) {
+    redirect(
+      toastUrl(
+        `/admin/patients/${id}`,
+        `Maximum ${ADMIN_UPLOAD_MAX_FILES} files (${existing} already uploaded)`,
+        "!",
+        "#E0A429"
+      )
+    );
   }
-  if (!ADMIN_UPLOAD_TYPES.has(file.type)) {
-    redirect(toastUrl(`/admin/patients/${id}`, "Only JPG, PNG, WebP or PDF allowed", "!", "#E0A429"));
+
+  const saved: string[] = [];
+  for (const file of raw) {
+    if (!ADMIN_UPLOAD_TYPES.has(file.type)) {
+      redirect(toastUrl(`/admin/patients/${id}`, `"${file.name}" must be JPG, PNG, WebP or PDF`, "!", "#E0A429"));
+    }
+    if (file.size > ADMIN_UPLOAD_MAX_BYTES) {
+      redirect(toastUrl(`/admin/patients/${id}`, `"${file.name}" must be under 2 MB`, "!", "#E0A429"));
+    }
+    const buf = Buffer.from(await file.arrayBuffer());
+    const created = await db.patientUpload.create({
+      data: {
+        patientId: id,
+        fileName: file.name.slice(0, 180),
+        mimeType: file.type,
+        sizeBytes: file.size,
+        dataBase64: buf.toString("base64"),
+        uploadedBy: "admin",
+      },
+    });
+    saved.push(created.fileName);
   }
-  if (file.size > ADMIN_UPLOAD_MAX_BYTES) {
-    redirect(toastUrl(`/admin/patients/${id}`, "Each file must be under 2 MB", "!", "#E0A429"));
-  }
-  const buf = Buffer.from(await file.arrayBuffer());
-  const created = await db.patientUpload.create({
+
+  await db.activity.create({
     data: {
       patientId: id,
-      fileName: file.name.slice(0, 180),
-      mimeType: file.type,
-      sizeBytes: file.size,
-      dataBase64: buf.toString("base64"),
-      uploadedBy: "admin",
+      text:
+        saved.length === 1
+          ? `Admin uploaded file: ${saved[0]}`
+          : `Admin uploaded ${saved.length} files: ${saved.join(", ")}`,
     },
   });
-  await db.activity.create({
-    data: { patientId: id, text: `Admin uploaded file: ${created.fileName}` },
-  });
-  redirect(toastUrl(`/admin/patients/${id}`, `Uploaded ${created.fileName}`, "✓"));
+  const patient = await db.patient.findUnique({ where: { id }, select: { proposalToken: true } });
+  revalidatePath(`/admin/patients/${id}`);
+  if (patient?.proposalToken) revalidatePath(`/p/${patient.proposalToken}`);
+  redirect(
+    toastUrl(
+      `/admin/patients/${id}`,
+      saved.length === 1 ? `Uploaded ${saved[0]}` : `Uploaded ${saved.length} files`,
+      "✓"
+    )
+  );
 }
 
 // Sends the proposal by email + WhatsApp and logs activity.
@@ -688,6 +839,7 @@ export async function recordDeposit(formData: FormData) {
     data: {
       status: "deposit",
       amountPaidPence: dep,
+      sequenceTouch: FOLLOW_UPS_COMPLETE_TOUCH,
       activities: { create: { text: `${fmt(dep)} deposit recorded` } },
       payments: { create: { amountPence: dep, type: "manual", status: "paid", paidAt: new Date() } },
     },
@@ -704,6 +856,7 @@ export async function markPaid(formData: FormData) {
     data: {
       status: "paid",
       amountPaidPence: full,
+      sequenceTouch: FOLLOW_UPS_COMPLETE_TOUCH,
       activities: { create: { text: `Marked paid in full — ${fmt(full)}` } },
       payments: { create: { amountPence: full - patient.amountPaidPence, type: "manual", status: "paid", paidAt: new Date() } },
     },

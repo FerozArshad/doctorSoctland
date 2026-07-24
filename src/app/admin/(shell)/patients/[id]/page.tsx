@@ -15,7 +15,6 @@ import AdminFileUpload from "@/components/AdminFileUpload";
 import { isMessageActivity } from "@/lib/messages";
 import { patientTemplateText } from "@/lib/patient-templates";
 import { CONSENT_PARAGRAPHS, CONSENT_TITLE } from "@/lib/consent";
-import { FOLLOW_UP_BOOKING_URL } from "@/lib/coordinators";
 
 export const dynamic = "force-dynamic";
 
@@ -143,15 +142,6 @@ export default async function PatientProfile({ params }: { params: { id: string 
               </div>
             </div>
             <div style={{ display: "flex", gap: 10, flexWrap: "wrap", justifyContent: "flex-end" }}>
-              <a
-                href={FOLLOW_UP_BOOKING_URL}
-                target="_blank"
-                rel="noreferrer"
-                className="btn btn-outline"
-                style={{ padding: "11px 16px", fontSize: 13.5, textDecoration: "none" }}
-              >
-                Book a follow-up call
-              </a>
               <Link href={`/admin/patients/${c.id}/edit`} className="btn btn-outline" style={{ padding: "11px 16px", fontSize: 13.5, textDecoration: "none" }}>
                 Edit
               </Link>
@@ -259,6 +249,45 @@ export default async function PatientProfile({ params }: { params: { id: string 
                     </form>
                   ) : null}
                 </div>
+              </div>
+
+              {/* files — above treatment plan */}
+              <div className="card" style={{ padding: 24 }}>
+                <div style={{ fontSize: 15, fontWeight: 800, marginBottom: 4 }}>Files &amp; documents</div>
+                <div style={{ fontSize: 12.5, color: "#7A8696", marginBottom: 14 }}>
+                  Upload up to 5 files for this patient (consent forms, photos, PDFs). They appear at the top of the patient&apos;s proposal — patients can view but not upload.
+                  {c.uploads.length > 0 && (
+                    <>
+                      {" "}
+                      <Link href={`/p/${c.proposalToken}?preview=admin`} style={{ color: "#0E9384", fontWeight: 700 }}>
+                        Preview proposal →
+                      </Link>
+                    </>
+                  )}
+                </div>
+                <AdminFileUpload patientId={c.id} />
+                {c.uploads.length === 0 ? (
+                  <div style={{ marginTop: 14, fontSize: 13.5, color: "#9AA6B4" }}>No files yet.</div>
+                ) : (
+                  <div style={{ display: "flex", flexDirection: "column", gap: 10, marginTop: 14 }}>
+                    {c.uploads.map((u) => (
+                      <a
+                        key={u.id}
+                        href={`data:${u.mimeType};base64,${u.dataBase64}`}
+                        download={u.fileName}
+                        style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, padding: "12px 14px", borderRadius: 11, border: "1px solid #EEF2F6", background: "#FBFCFD", textDecoration: "none", color: "inherit" }}
+                      >
+                        <div style={{ minWidth: 0 }}>
+                          <div style={{ fontSize: 13.5, fontWeight: 700, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>📎 {u.fileName}</div>
+                          <div style={{ fontSize: 12, color: "#9AA6B4", marginTop: 2 }}>
+                            {Math.round(u.sizeBytes / 1024)} KB · {u.uploadedBy === "admin" ? "Admin" : "Patient"} · {u.createdAt.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}
+                          </div>
+                        </div>
+                        <span style={{ fontSize: 12.5, fontWeight: 700, color: "#0E9384", flex: "none" }}>Download</span>
+                      </a>
+                    ))}
+                  </div>
+                )}
               </div>
 
               {/* plan */}
@@ -397,36 +426,6 @@ export default async function PatientProfile({ params }: { params: { id: string 
               </div>
 
               <MessageLog patient={c} activities={c.activities} />
-
-              <div className="card" style={{ padding: 24 }}>
-                <div style={{ fontSize: 15, fontWeight: 800, marginBottom: 4 }}>Files &amp; documents</div>
-                <div style={{ fontSize: 12.5, color: "#7A8696", marginBottom: 14 }}>
-                  Upload files for this patient (ID, photos, PDFs). Patients can also attach files on their proposal.
-                </div>
-                <AdminFileUpload patientId={c.id} />
-                {c.uploads.length === 0 ? (
-                  <div style={{ marginTop: 14, fontSize: 13.5, color: "#9AA6B4" }}>No files yet.</div>
-                ) : (
-                  <div style={{ display: "flex", flexDirection: "column", gap: 10, marginTop: 14 }}>
-                    {c.uploads.map((u) => (
-                      <a
-                        key={u.id}
-                        href={`data:${u.mimeType};base64,${u.dataBase64}`}
-                        download={u.fileName}
-                        style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, padding: "12px 14px", borderRadius: 11, border: "1px solid #EEF2F6", background: "#FBFCFD", textDecoration: "none", color: "inherit" }}
-                      >
-                        <div style={{ minWidth: 0 }}>
-                          <div style={{ fontSize: 13.5, fontWeight: 700, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>📎 {u.fileName}</div>
-                          <div style={{ fontSize: 12, color: "#9AA6B4", marginTop: 2 }}>
-                            {Math.round(u.sizeBytes / 1024)} KB · {u.uploadedBy === "admin" ? "Admin" : "Patient"} · {u.createdAt.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}
-                          </div>
-                        </div>
-                        <span style={{ fontSize: 12.5, fontWeight: 700, color: "#0E9384", flex: "none" }}>Download</span>
-                      </a>
-                    ))}
-                  </div>
-                )}
-              </div>
             </div>
 
             <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>

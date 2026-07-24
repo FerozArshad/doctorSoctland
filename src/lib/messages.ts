@@ -1,5 +1,6 @@
 import type { Activity, Patient } from "@prisma/client";
 import { LOCK_DAYS, TOUCHES } from "./sequence";
+import { receivesProposalFollowUps } from "./follow-ups";
 
 export type MessageChannel = "email" | "whatsapp" | "both";
 
@@ -28,7 +29,7 @@ export type UpcomingMessage = {
 
 export type NotificationItem = {
   key: string;
-  kind: "upcoming" | "sent";
+  kind: "upcoming" | "sent" | "instalment";
   patientId: string;
   patientName: string;
   title: string;
@@ -49,7 +50,7 @@ export type MessageNotifications = {
   alertCount: number;
 };
 
-const UNPAID_STATUSES = ["sent", "interested", "awaiting", "overdue"];
+const UNPAID_STATUSES = ["sent", "interested", "awaiting"];
 
 export function isMessageActivity(text: string): boolean {
   return (
@@ -98,10 +99,10 @@ export function sentMessagesFromActivities(activities: Activity[]): SentMessageR
 }
 
 export function nextScheduledMessage(
-  p: Pick<Patient, "id" | "firstName" | "lastName" | "status" | "proposalSentAt" | "sequenceTouch" | "priceLockExpired" | "phone">
+  p: Pick<Patient, "id" | "firstName" | "lastName" | "status" | "proposalSentAt" | "sequenceTouch" | "priceLockExpired" | "phone" | "financeStatus" | "paymentPreference">
 ): UpcomingMessage | null {
   if (p.status === "draft") return null;
-  if (!UNPAID_STATUSES.includes(p.status) || p.priceLockExpired) return null;
+  if (!receivesProposalFollowUps(p)) return null;
   if (p.sequenceTouch >= TOUCHES.length) return null;
 
   const next = TOUCHES.find((t) => t.n > p.sequenceTouch);
@@ -129,13 +130,73 @@ export function nextScheduledMessage(
   };
 }
 
+export function buildInstalmentNotifications(
+  instalments: Array<{
+    id: string;
+    number: number;
+    amountPence: number;
+    dueDate: Date;
+    status: string;
+    patient: { id: string; firstName: string; lastName: string };
+  }>,
+  prefs: { readKeys?: string[]; dismissedKeys?: string[] } = {}
+): NotificationItem[] {
+  const read = new Set(prefs.readKeys || []);
+  const dismissed = new Set(prefs.dismissedKeys || []);
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const soon = new Date(today.getTime() + 3 * 86400000);
+
+  return instalments
+    .flatMap((inst) => {
+      const patientName = `${inst.patient.firstName} ${inst.patient.lastName}`.trim();
+      const dueDay = new Date(inst.dueDate);
+      dueDay.setHours(0, 0, 0, 0);
+      const overdue = inst.status === "failed" || (inst.status === "scheduled" && dueDay.getTime() < today.getTime());
+      const dueToday = inst.status === "scheduled" && dueDay.getTime() === today.getTime();
+      const dueSoon = inst.status === "scheduled" && inst.dueDate <= soon && !overdue;
+      const key = `inst:${inst.id}`;
+      if (dismissed.has(key)) return [];
+      const when = formatMessageDate(inst.dueDate);
+      const title = overdue
+        ? `Instalment ${inst.number}/3 overdue`
+        : dueToday
+          ? `Instalment ${inst.number}/3 due today`
+          : `Instalment ${inst.number}/3 due soon`;
+      const detail = overdue
+        ? `${patientName} · ${fmtPence(inst.amountPence)} · was due ${when}${inst.status === "failed" ? " · charge failed" : ""}`
+        : `${patientName} · ${fmtPence(inst.amountPence)} · due ${when}`;
+      return [
+        {
+          key,
+          kind: "instalment" as const,
+          patientId: inst.patient.id,
+          patientName,
+          title,
+          detail,
+          dueDate: inst.dueDate,
+          dueToday,
+          overdue,
+          failed: inst.status === "failed",
+          unread: !read.has(key) || overdue || dueToday || dueSoon,
+        },
+      ];
+    })
+    .sort((a, b) => (a.dueDate?.getTime() || 0) - (b.dueDate?.getTime() || 0));
+}
+
+function fmtPence(p: number) {
+  return `£${(p / 100).toLocaleString("en-GB", { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
+}
+
 export function buildMessageNotifications(
   patients: Array<
-    Pick<Patient, "id" | "firstName" | "lastName" | "status" | "proposalSentAt" | "sequenceTouch" | "priceLockExpired" | "phone"> & {
+    Pick<Patient, "id" | "firstName" | "lastName" | "status" | "proposalSentAt" | "sequenceTouch" | "priceLockExpired" | "phone" | "financeStatus" | "paymentPreference"> & {
       activities: Activity[];
     }
   >,
-  prefs: { readKeys?: string[]; dismissedKeys?: string[] } = {}
+  prefs: { readKeys?: string[]; dismissedKeys?: string[] } = {},
+  instalments: Parameters<typeof buildInstalmentNotifications>[0] = []
 ): MessageNotifications {
   const read = new Set(prefs.readKeys || []);
   const dismissed = new Set(prefs.dismissedKeys || []);
@@ -160,7 +221,10 @@ export function buildMessageNotifications(
     .sort((a, b) => a.dueDate.getTime() - b.dueDate.getTime())
     .slice(0, 15);
 
+  const instalmentItems = buildInstalmentNotifications(instalments, prefs);
+
   const items: NotificationItem[] = [
+    ...instalmentItems,
     ...upcoming.map((u) => ({
       key: u.key,
       kind: "upcoming" as const,

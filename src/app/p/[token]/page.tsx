@@ -6,10 +6,14 @@ import { getAdmin, getPatientSession } from "@/lib/auth";
 import { estMonths, finance36Pence, fmt, fullPricePence, instalmentPence, netPricePence } from "@/lib/pricing";
 import { getPricing } from "@/lib/pricing-settings";
 import { COMP_ITEMS, COMP_TOTAL, WHY_US } from "@/lib/content";
-import { FOLLOW_UP_BOOKING_URL } from "@/lib/coordinators";
+import { followUpBookingUrl, coordinatorFor } from "@/lib/coordinators";
 import BrandLogo from "@/components/BrandLogo";
 import CreateAccountCard from "@/components/CreateAccountCard";
 import PaymentOptionsForm, { PayOption } from "@/components/PaymentOptionsForm";
+import ProposalDocuments from "@/components/ProposalDocuments";
+import FinanceAppliedBox from "@/components/FinanceAppliedBox";
+import FollowUpCallCard from "@/components/FollowUpCallCard";
+import ProposalHashScroll from "@/components/ProposalHashScroll";
 import OtpGate from "@/components/OtpGate";
 import VideoBlock from "@/components/VideoBlock";
 import Toast from "@/components/Toast";
@@ -25,6 +29,13 @@ export default async function ProposalPage({
 }) {
   const c = await db.patient.findUnique({
     where: { proposalToken: params.token },
+    include: {
+      uploads: {
+        where: { uploadedBy: "admin" },
+        orderBy: { createdAt: "desc" },
+        select: { id: true, fileName: true, mimeType: true, sizeBytes: true },
+      },
+    },
   });
   if (!c) notFound();
 
@@ -56,8 +67,14 @@ export default async function ProposalPage({
   const full = fullPricePence(net, c.discountPct);
   const instal = instalmentPence(net, cfg.depositPence);
   const fin36 = finance36Pence(net);
+  const co = coordinatorFor(c.sentByName, c.sentByEmail);
+  const followUpBooking = followUpBookingUrl(co);
   const paid = c.status === "paid";
   const depositPaid = c.status === "deposit";
+  const financeApplied =
+    c.financeStatus === "applied" ||
+    c.financeStatus === "accepted" ||
+    (c.paymentPreference === "finance" && !!c.consentSignedAt);
   const applicant = {
     firstName: c.firstName,
     lastName: c.lastName,
@@ -98,6 +115,7 @@ export default async function ProposalPage({
 
   return (
     <div style={{ minHeight: "100vh", background: "linear-gradient(180deg,#E8F1F3 0%,#F4F7F9 42%,#EEF2F5 100%)", display: "flex", flexDirection: "column" }}>
+      <ProposalHashScroll />
       {admin && (
         <div style={{ background: "#0B7A6E", color: "#EAFBF7", padding: "10px 20px", display: "flex", alignItems: "center", justifyContent: "space-between", fontSize: 13, fontWeight: 600, gap: 12, flexWrap: "wrap" }}>
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
@@ -139,6 +157,16 @@ export default async function ProposalPage({
                 Hi {c.firstName} — review your plan on the left, then choose how to pay on the right. You&apos;ll agree &amp; e-sign before anything is charged.
               </p>
             </div>
+
+            <ProposalDocuments
+              token={c.proposalToken}
+              docs={c.uploads.map((u) => ({
+                id: u.id,
+                fileName: u.fileName,
+                mimeType: u.mimeType,
+                sizeBytes: u.sizeBytes,
+              }))}
+            />
 
             {/* Desktop: plan left | payment right | video full-width under both
                 Mobile: plan → payment → video (clear reading order) */}
@@ -218,66 +246,13 @@ export default async function ProposalPage({
                   flexDirection: "column",
                 }}
               >
-                <h2 style={{ fontSize: 15, fontWeight: 800, margin: 0, color: "#0E1A2B" }}>How would you like to pay?</h2>
-                <p style={{ fontSize: 12, color: "#6B7785", margin: "4px 0 11px", lineHeight: 1.4 }}>
-                  Choose one. Next step is agree &amp; e-sign — under a minute.
-                </p>
-
-                {c.upfrontPaidPence > 0 && !paid && !depositPaid && (
-                  <div
-                    style={{
-                      border: "2px solid #0E9384",
-                      background: "linear-gradient(180deg, #E8FBF5 0%, #F4FCFA 100%)",
-                      borderRadius: 14,
-                      padding: "16px 16px 14px",
-                      marginBottom: 14,
-                      boxShadow: "0 8px 20px -12px rgba(14,147,132,.45)",
-                    }}
-                  >
-                    <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
-                      <span
-                        style={{
-                          width: 28,
-                          height: 28,
-                          borderRadius: "50%",
-                          background: "#0E9384",
-                          color: "#fff",
-                          display: "grid",
-                          placeItems: "center",
-                          fontWeight: 800,
-                          fontSize: 14,
-                          flex: "none",
-                        }}
-                      >
-                        ✓
-                      </span>
-                      <div style={{ fontSize: 14.5, fontWeight: 800, color: "#0B7A6E", lineHeight: 1.3 }}>
-                        Booking payment credited
-                      </div>
-                    </div>
-                    <div style={{ fontSize: 14, color: "#2C3847", lineHeight: 1.5, fontWeight: 600 }}>
-                      Your <strong style={{ color: "#0B7A6E" }}>{fmt(c.upfrontPaidPence)}</strong> booking is already paid.
-                    </div>
-                    <div style={{ fontSize: 13.5, color: "#5C6a79", marginTop: 6, lineHeight: 1.45 }}>
-                      Treatment {fmt(c.pricePence)} − {fmt(c.upfrontPaidPence)} booking
-                    </div>
-                    <div
-                      style={{
-                        marginTop: 12,
-                        padding: "12px 14px",
-                        borderRadius: 11,
-                        background: "#0E9384",
-                        color: "#fff",
-                        display: "flex",
-                        alignItems: "baseline",
-                        justifyContent: "space-between",
-                        gap: 10,
-                      }}
-                    >
-                      <span style={{ fontSize: 13, fontWeight: 700, opacity: 0.95 }}>Left to pay</span>
-                      <span style={{ fontSize: 26, fontWeight: 800, letterSpacing: "-.02em" }}>{fmt(net)}</span>
-                    </div>
-                  </div>
+                <h2 style={{ fontSize: 15, fontWeight: 800, margin: 0, color: "#0E1A2B" }}>
+                  {financeApplied && !paid && !depositPaid ? "Finance application" : "How would you like to pay?"}
+                </h2>
+                {!financeApplied && (
+                  <p style={{ fontSize: 12, color: "#6B7785", margin: "4px 0 11px", lineHeight: 1.4 }}>
+                    Choose one. Next step is agree &amp; e-sign — under a minute.
+                  </p>
                 )}
 
                 {paid ? (
@@ -291,13 +266,83 @@ export default async function ProposalPage({
                       Remaining 3 × <strong>{fmt(instal)}</strong> collected automatically each month.
                     </div>
                   </div>
+                ) : financeApplied ? (
+                  <FinanceAppliedBox firstName={c.firstName} />
                 ) : (
-                  <PaymentOptionsForm
-                    token={c.proposalToken}
-                    options={payOptions}
-                    applicant={applicant}
-                    compact
-                  />
+                  <>
+                    {!paid && !depositPaid && (
+                      <FollowUpCallCard
+                        token={c.proposalToken}
+                        coordinatorName={co.name}
+                        bookingUrl={followUpBooking}
+                        compact
+                      />
+                    )}
+
+                    {c.upfrontPaidPence > 0 && (
+                      <div
+                        style={{
+                          border: "2px solid #0E9384",
+                          background: "linear-gradient(180deg, #E8FBF5 0%, #F4FCFA 100%)",
+                          borderRadius: 14,
+                          padding: "16px 16px 14px",
+                          marginBottom: 14,
+                          boxShadow: "0 8px 20px -12px rgba(14,147,132,.45)",
+                        }}
+                      >
+                        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
+                          <span
+                            style={{
+                              width: 28,
+                              height: 28,
+                              borderRadius: "50%",
+                              background: "#0E9384",
+                              color: "#fff",
+                              display: "grid",
+                              placeItems: "center",
+                              fontWeight: 800,
+                              fontSize: 14,
+                              flex: "none",
+                            }}
+                          >
+                            £
+                          </span>
+                          <div style={{ fontSize: 14.5, fontWeight: 800, color: "#0B7A6E", lineHeight: 1.3 }}>
+                            Booking credit included
+                          </div>
+                        </div>
+                        <div style={{ fontSize: 14, color: "#2C3847", lineHeight: 1.5, fontWeight: 600 }}>
+                          A <strong style={{ color: "#0B7A6E" }}>{fmt(c.upfrontPaidPence)}</strong> booking credit is applied to your treatment total.
+                        </div>
+                        <div style={{ fontSize: 13.5, color: "#5C6a79", marginTop: 6, lineHeight: 1.45 }}>
+                          Treatment {fmt(c.pricePence)} − {fmt(c.upfrontPaidPence)} credit
+                        </div>
+                        <div
+                          style={{
+                            marginTop: 12,
+                            padding: "12px 14px",
+                            borderRadius: 11,
+                            background: "#0E9384",
+                            color: "#fff",
+                            display: "flex",
+                            alignItems: "baseline",
+                            justifyContent: "space-between",
+                            gap: 10,
+                          }}
+                        >
+                          <span style={{ fontSize: 13, fontWeight: 700, opacity: 0.95 }}>Amount to pay</span>
+                          <span style={{ fontSize: 26, fontWeight: 800, letterSpacing: "-.02em" }}>{fmt(net)}</span>
+                        </div>
+                      </div>
+                    )}
+
+                    <PaymentOptionsForm
+                      token={c.proposalToken}
+                      options={payOptions}
+                      applicant={applicant}
+                      compact
+                    />
+                  </>
                 )}
               </section>
 
@@ -326,24 +371,6 @@ export default async function ProposalPage({
             {!admin && c.passwordHash && !loggedIn && (
               <div style={{ marginTop: 16, padding: "11px 14px", borderRadius: 11, background: "#F6F9FA", border: "1px solid #EEF2F6", fontSize: 13, color: "#5C6a79" }}>
                 You have a patient account — <Link href="/login" style={{ color: "#0E9384", fontWeight: 700 }}>log in</Link> any time to return here.
-              </div>
-            )}
-
-            {!paid && (
-              <div className="ds-proposal-cta" style={{ marginTop: 18, padding: "16px 18px", borderRadius: 14, background: "#0E1A2B", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 14, flexWrap: "wrap" }}>
-                <div>
-                  <div style={{ color: "#fff", fontSize: 15, fontWeight: 800 }}>Questions before you choose?</div>
-                  <div style={{ color: "#9FB2C8", fontSize: 12.5, marginTop: 3, lineHeight: 1.45 }}>Happy to talk it through — no obligation.</div>
-                </div>
-                <a
-                  href={FOLLOW_UP_BOOKING_URL}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="btn btn-teal"
-                  style={{ padding: "11px 18px", fontSize: 13.5, fontWeight: 800, whiteSpace: "nowrap", textDecoration: "none" }}
-                >
-                  Book a follow-up call
-                </a>
               </div>
             )}
 

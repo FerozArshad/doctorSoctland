@@ -23,14 +23,36 @@ export default async function AdminShell({ children }: { children: React.ReactNo
       proposalSentAt: true,
       sequenceTouch: true,
       priceLockExpired: true,
+      financeStatus: true,
+      paymentPreference: true,
       phone: true,
       activities: { orderBy: { createdAt: "desc" }, take: 30 },
     },
   });
-  const messageNotifications = buildMessageNotifications(patientsForMessages, {
-    readKeys: admin.notifReadKeys,
-    dismissedKeys: admin.notifDismissedKeys,
+  const instalmentsForAlerts = await db.instalment.findMany({
+    where: {
+      status: { in: ["scheduled", "failed"] },
+      patient: patientWhere(admin),
+    },
+    select: {
+      id: true,
+      number: true,
+      amountPence: true,
+      dueDate: true,
+      status: true,
+      patient: { select: { id: true, firstName: true, lastName: true } },
+    },
+    orderBy: { dueDate: "asc" },
+    take: 20,
   });
+  const messageNotifications = buildMessageNotifications(
+    patientsForMessages,
+    {
+      readKeys: admin.notifReadKeys,
+      dismissedKeys: admin.notifDismissedKeys,
+    },
+    instalmentsForAlerts
+  );
 
   return (
     <MessageNotificationsProvider data={messageNotifications}>

@@ -1,7 +1,7 @@
 "use client";
 
 import FormSubmitButton from "@/components/FormSubmitButton";
-import { saveWhatsAppSettings, testWhatsAppConnection } from "@/app/admin/actions";
+import { saveWhatsAppSettings, testWhatsAppConnection, registerWhatsAppPhone } from "@/app/admin/actions";
 
 type Cfg = {
   token: string;
@@ -17,6 +17,16 @@ type Cfg = {
   source: string;
 };
 
+type Health = {
+  ok: boolean;
+  canSendMessage: string;
+  displayPhone: string;
+  verifiedName: string;
+  wabaId: string;
+  blockers: Array<{ entity: string; code: number; description: string; solution: string }>;
+  summary: string;
+};
+
 function maskSecret(value: string) {
   const v = value.trim();
   if (!v) return "";
@@ -27,11 +37,14 @@ function maskSecret(value: string) {
 export default function WhatsAppSettingsForm({
   cfg,
   appUrl,
+  health,
 }: {
   cfg: Cfg;
   appUrl: string;
+  health: Health | null;
 }) {
   const connected = !!(cfg.token && cfg.phoneNumberId);
+  const blocked = !!(health && !health.ok);
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 18, maxWidth: 720 }}>
@@ -47,12 +60,12 @@ export default function WhatsAppSettingsForm({
           <span
             className="badge"
             style={{
-              background: connected ? "#E6F6EA" : "#FBF3E2",
-              color: connected ? "#1C7C3A" : "#B7791F",
+              background: blocked ? "#FBE9E8" : connected ? "#E6F6EA" : "#FBF3E2",
+              color: blocked ? "#C23B34" : connected ? "#1C7C3A" : "#B7791F",
               padding: "6px 11px",
             }}
           >
-            {connected ? "Connected" : "Not connected"}
+            {blocked ? "Blocked by Meta" : connected ? "Connected" : "Not connected"}
           </span>
         </div>
         <div style={{ marginTop: 12, fontSize: 12.5, color: "#8A96A5" }}>
@@ -60,14 +73,64 @@ export default function WhatsAppSettingsForm({
           {cfg.phoneNumberId ? ` · Phone Number ID ${cfg.phoneNumberId}` : ""}
           {cfg.token ? ` · Token ${maskSecret(cfg.token)}` : ""}
         </div>
-        <div style={{ marginTop: 14, padding: "12px 14px", borderRadius: 11, background: "#FBE9E8", border: "1px solid #F0C4C0", fontSize: 13, color: "#8A2E2A", lineHeight: 1.55 }}>
-          <strong>If messages show “accepted” but patients never receive them:</strong> Meta is blocking delivery with billing error{" "}
-          <code>131042</code>. Fix in{" "}
-          <a href="https://business.facebook.com/settings/whatsapp-business-accounts" target="_blank" rel="noreferrer" style={{ color: "#8A2E2A", fontWeight: 700 }}>
-            Meta Business Suite → WhatsApp Accounts → Billing
-          </a>
-          : assign an active payment method (and tax info) to the <em>WhatsApp</em> account — not only the Business Manager wallet.
-        </div>
+
+        {health && (
+          <div
+            style={{
+              marginTop: 14,
+              padding: "12px 14px",
+              borderRadius: 11,
+              background: blocked ? "#FBE9E8" : "#E6F6EA",
+              border: `1px solid ${blocked ? "#F0C4C0" : "#B7E4D4"}`,
+              fontSize: 13,
+              color: blocked ? "#8A2E2A" : "#1C7C3A",
+              lineHeight: 1.55,
+            }}
+          >
+            <strong>Live Meta health:</strong> {health.summary}
+            {health.displayPhone ? (
+              <div style={{ marginTop: 6, opacity: 0.9 }}>
+                Number: {health.verifiedName || "WhatsApp"} · {health.displayPhone}
+                {health.wabaId ? ` · WABA ${health.wabaId}` : ""}
+              </div>
+            ) : null}
+            {blocked && health.blockers.length > 0 && (
+              <ul style={{ margin: "10px 0 0", paddingLeft: 18 }}>
+                {health.blockers.map((b) => (
+                  <li key={`${b.entity}-${b.code}-${b.description}`}>
+                    <strong>
+                      {b.entity}
+                      {b.code ? ` ${b.code}` : ""}:
+                    </strong>{" "}
+                    {b.description}
+                    {b.solution ? ` — ${b.solution}` : ""}
+                  </li>
+                ))}
+              </ul>
+            )}
+            {blocked && (
+              <div style={{ marginTop: 10 }}>
+                Open{" "}
+                <a
+                  href="https://business.facebook.com/latest/whatsapp_manager/overview"
+                  target="_blank"
+                  rel="noreferrer"
+                  style={{ color: "#8A2E2A", fontWeight: 700 }}
+                >
+                  WhatsApp Manager → Account overview
+                </a>{" "}
+                for WABA <strong>Dental Scotland</strong> and activate / request review with Meta support.
+                Payment cards alone will not fix error <code>141008</code> (WABA not active).
+              </div>
+            )}
+          </div>
+        )}
+
+        {!health && connected && (
+          <div style={{ marginTop: 14, padding: "12px 14px", borderRadius: 11, background: "#FBF3E2", border: "1px solid #F0D9A8", fontSize: 13, color: "#8A5A12", lineHeight: 1.55 }}>
+            Could not load Meta health status. Use <strong>Test Cloud API</strong> below.
+          </div>
+        )}
       </div>
 
       <form action={saveWhatsAppSettings} className="card" style={{ padding: 24 }}>
@@ -158,13 +221,43 @@ export default function WhatsAppSettingsForm({
       <form action={testWhatsAppConnection} className="card" style={{ padding: 20 }}>
         <div style={{ fontSize: 15, fontWeight: 800 }}>Test connection</div>
         <div style={{ fontSize: 13, color: "#7A8696", marginTop: 4, lineHeight: 1.5 }}>
-          Calls Meta Graph with your saved Phone Number ID + token (no message is sent).
+          Checks Meta Graph credentials <em>and</em> live WABA health (whether Meta will actually deliver).
         </div>
         <FormSubmitButton
           className="btn btn-outline"
           style={{ marginTop: 14, padding: "11px 16px" }}
           label="Test Cloud API"
           pendingLabel="Testing…"
+        />
+      </form>
+
+      <form action={registerWhatsAppPhone} className="card" style={{ padding: 20 }}>
+        <div style={{ fontSize: 15, fontWeight: 800 }}>Register phone with Cloud API</div>
+        <div style={{ fontSize: 13, color: "#7A8696", marginTop: 4, lineHeight: 1.55 }}>
+          If Meta shows WABA status <strong>Onboarding</strong> or error <code>141008</code>, complete registration
+          for Phone Number ID <strong>{cfg.phoneNumberId || "1186752691194998"}</strong> (not the WABA id). Uses Meta&apos;s{" "}
+          <code>POST /&#123;phone-number-id&#125;/register</code> endpoint.{" "}
+          <strong>Max 10 attempts per 72 hours</strong> — wrong PINs count toward the limit.
+        </div>
+        <div style={{ marginTop: 14 }}>
+          <label className="label">6-digit two-step PIN</label>
+          <input
+            className="input"
+            name="pin"
+            type="password"
+            inputMode="numeric"
+            pattern="\d{6}"
+            maxLength={6}
+            autoComplete="off"
+            placeholder="••••••"
+            required
+          />
+        </div>
+        <FormSubmitButton
+          className="btn btn-teal"
+          style={{ marginTop: 14, padding: "11px 16px", width: "100%" }}
+          label="Register +44 7915 357177 with Meta"
+          pendingLabel="Registering…"
         />
       </form>
     </div>

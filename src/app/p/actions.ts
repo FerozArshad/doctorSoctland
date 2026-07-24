@@ -2,6 +2,7 @@
 // Patient-facing actions: account creation, login, payments, interest signals.
 
 import { redirect } from "next/navigation";
+import { revalidatePath } from "next/cache";
 import crypto from "crypto";
 import bcrypt from "bcryptjs";
 import { db } from "@/lib/db";
@@ -9,7 +10,7 @@ import { createPatientSession, getAdmin, getPatientSession } from "@/lib/auth";
 import { rateLimit } from "@/lib/ratelimit";
 import { fmt, fullPricePence, netPricePence } from "@/lib/pricing";
 import { getPricing } from "@/lib/pricing-settings";
-import { brandedEmail, notifyAdmin, sendEmail, sendLoginCodeWhatsApp, whatsappConfigured } from "@/lib/notify";
+import { brandedEmail, escapeHtml, notifyAdmin, notifyFinanceApplication, sendEmail, sendLoginCodeWhatsApp, whatsappConfigured } from "@/lib/notify";
 import { log, summarizeError } from "@/lib/log";
 import type Stripe from "stripe";
 import { stripe, stripeConfigured } from "@/lib/stripe";
@@ -17,6 +18,7 @@ import { gmailConfigured } from "@/lib/google";
 import { allowDevOtpDisplay } from "@/lib/secure";
 import { checkoutAssetUrl, stripeCheckoutBranding, stripeCheckoutCustomText } from "@/lib/stripe-branding";
 import { BRAND } from "@/lib/brand";
+import { FOLLOW_UPS_COMPLETE_TOUCH } from "@/lib/follow-ups";
 import { patientTemplateText, patientTemplateTitle } from "@/lib/patient-templates";
 
 const appUrl = () => process.env.APP_URL || "http://localhost:3000";
@@ -231,7 +233,7 @@ export async function patientLogin(formData: FormData) {
 }
 
 // ── Stripe checkout ─────────────────────────────────────────────────────
-async function launchCheckout(token: string, type: "full" | "deposit"): Promise<never> {
+async function createCheckoutUrl(token: string, type: "full" | "deposit"): Promise<string> {
   const patient = await requireVerified(token);
 
   if (!stripeConfigured()) {
@@ -316,7 +318,14 @@ async function launchCheckout(token: string, type: "full" | "deposit"): Promise<
     data: { patientId: patient.id, amountPence: amount, type, status: "pending", stripeSessionId: session.id },
   });
 
-  redirect(session.url!);
+  if (!session.url) {
+    redirect(toastUrl(`/p/${token}`, "Could not start payment — please try again", "!", "#E0A429"));
+  }
+  return session.url;
+}
+
+async function launchCheckout(token: string, type: "full" | "deposit"): Promise<never> {
+  redirect(await createCheckoutUrl(token, type));
 }
 
 export async function startCheckout(formData: FormData) {
@@ -374,13 +383,17 @@ export async function uploadPatientFile(formData: FormData): Promise<
 
 /**
  * Consent + e-signature gate for every payment route.
- * Previously only finance opened the modal — full/deposit skipped it.
- * Returns a success payload for finance/interested (client shows SuccessModal).
- * full/deposit redirect into Stripe Checkout and never return.
+ * Stripe / finance URLs are returned to the client so they open in a new tab.
  */
 export async function completePaymentConsent(
   formData: FormData
-): Promise<{ ok: true; title: string; body: string } | void> {
+): Promise<
+  | { ok: true; title: string; body: string }
+  | { ok: true; openUrl: string; title: string; body: string }
+  | { ok: true; openUrl: string; inline?: boolean }
+  | { ok: true; inline: true }
+  | void
+> {
   const token = String(formData.get("token"));
   const choiceRaw = String(formData.get("choice") || "");
   const choice = (["full", "deposit", "finance", "interested"].includes(choiceRaw) ? choiceRaw : "") as
@@ -435,6 +448,7 @@ export async function completePaymentConsent(
       status: nextStatus,
       paymentPreference: choice === "interested" ? patient.paymentPreference : choice,
       ...(choice === "finance" ? { financeStatus: "applied" } : {}),
+      ...(choice === "finance" ? { sequenceTouch: FOLLOW_UPS_COMPLETE_TOUCH } : {}),
       activities: {
         create: [
           { text: "Agreed and consented (e-signed)" },
@@ -447,29 +461,58 @@ export async function completePaymentConsent(
 
   const name = `${firstName || patient.firstName} ${lastName || patient.lastName}`.trim();
   const greet = firstName || patient.firstName;
-  // Don't block the patient on admin email/WhatsApp.
-  void notifyAdmin(
-    choice === "finance"
-      ? `📝 ${name} applied for 0% finance (consent signed)`
-      : choice === "interested"
+
+  if (choice === "finance") {
+    const title = patientTemplateTitle("finance_received");
+    const bodyText = patientTemplateText("finance_received", greet);
+    try {
+      await sendEmail(
+        patient.email,
+        `${title} — Dental Scotland`,
+        brandedEmail(title, `<p style="font-size:15px;line-height:1.7;color:#3C4a59;white-space:pre-wrap;">${escapeHtml(bodyText)}</p>`)
+      );
+    } catch (e) {
+      console.error("finance.confirmation.email.fail", e);
+    }
+    try {
+      await notifyFinanceApplication(
+        { id: patient.id, firstName: patient.firstName, lastName: patient.lastName, email: patient.email, sentByEmail: patient.sentByEmail },
+        note
+      );
+    } catch (e) {
+      console.error("finance.notify.fail", e);
+    }
+    revalidatePath(`/p/${token}`);
+  } else {
+    void notifyAdmin(
+      choice === "interested"
         ? `⭐ ${name} is interested (consent signed)`
         : `💷 ${name} chose: ${labels[choice]} (consent signed)`,
-    `${name} signed consent${dob ? `, DOB ${dob}` : ""} and selected “${labels[choice]}”. View: ${appUrl()}/admin/patients/${patient.id}` +
-      (note ? ` — Their message: “${note}”` : "")
-  );
+      `${name} signed consent${dob ? `, DOB ${dob}` : ""} and selected “${labels[choice]}”. View: ${appUrl()}/admin/patients/${patient.id}` +
+        (note ? ` — Their message: “${note}”` : "")
+    );
+  }
 
   if (choice === "full" || choice === "deposit") {
-    await launchCheckout(token, choice);
+    const openUrl = await createCheckoutUrl(token, choice);
+    return {
+      ok: true,
+      openUrl,
+      title: choice === "full" ? "Continue to secure payment" : "Continue to pay your deposit",
+      body: `Hi ${greet}, your consent is saved. Stripe Checkout opens in a new tab — keep this proposal open. When you've finished paying, return here.`,
+    };
   }
 
   if (choice === "finance") {
     const financeUrl = process.env.FINANCE_APPLY_URL;
-    if (financeUrl && !financeUrl.includes("example.com")) redirect(financeUrl);
-    return {
-      ok: true,
-      title: patientTemplateTitle("finance_received"),
-      body: patientTemplateText("finance_received", greet),
-    };
+    if (financeUrl && !financeUrl.includes("example.com")) {
+      return {
+        ok: true,
+        openUrl: financeUrl,
+        inline: true,
+      };
+    }
+    return { ok: true, inline: true };
   }
 
   return {
@@ -515,6 +558,23 @@ export async function markInterested(formData: FormData) {
     `${patient.firstName} clicked I'M INTERESTED on their ${fmt(patient.pricePence)} Invisalign proposal. View: ${appUrl()}/admin/patients/${patient.id}`
   );
   redirect(toastUrl(`/p/${token}`, "Brilliant! We've let your Treatment Coordinator know", "★", "#9B51E0"));
+}
+
+/** Log when patient opens the follow-up booking link (no redirect — opens in new tab). */
+export async function logFollowUpCall(token: string) {
+  const patient = await db.patient.findUnique({ where: { proposalToken: token } });
+  if (!patient) return;
+  await db.patient.update({
+    where: { id: patient.id },
+    data: {
+      status: patient.status === "paid" || patient.status === "deposit" ? patient.status : "interested",
+      activities: { create: { text: "Opened follow-up call booking from proposal" } },
+    },
+  });
+  void notifyAdmin(
+    `📞 ${patient.firstName} ${patient.lastName} booked a follow-up call`,
+    `${patient.firstName} opened the virtual follow-up booking from their proposal. View: ${appUrl()}/admin/patients/${patient.id}`
+  );
 }
 
 export async function bookCall(formData: FormData) {

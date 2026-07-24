@@ -20,6 +20,7 @@ export default function NotificationsBell() {
     return () => document.removeEventListener("mousedown", close);
   }, [open]);
 
+  const instalments = data.items.filter((i) => i.kind === "instalment");
   const upcoming = data.items.filter((i) => i.kind === "upcoming");
   const recent = data.items.filter((i) => i.kind === "sent");
 
@@ -45,8 +46,26 @@ export default function NotificationsBell() {
         <div style={{ position: "absolute", top: "calc(100% + 8px)", right: 0, width: 380, maxHeight: 520, overflow: "auto", background: "#fff", border: "1px solid #E7ECF2", borderRadius: 14, boxShadow: "0 18px 40px -18px rgba(16,32,54,.35)", zIndex: 50 }}>
           <div style={{ padding: "14px 16px", borderBottom: "1px solid #F1F4F8" }}>
             <div style={{ fontSize: 14, fontWeight: 800 }}>Notifications</div>
-            <div style={{ fontSize: 12, color: "#7A8696", marginTop: 2 }}>Live from patients — follow-ups &amp; sends</div>
+            <div style={{ fontSize: 12, color: "#7A8696", marginTop: 2 }}>Follow-ups, instalments &amp; sends</div>
           </div>
+
+          <Section title="Instalments" empty="No instalments due or overdue." hasItems={instalments.length > 0}>
+            {instalments.map((u) => (
+              <Row
+                key={u.key}
+                href={`/admin/patients/${u.patientId}`}
+                title={u.title}
+                detail={u.detail}
+                meta={u.dueDate ? `Due ${u.dueDate.toLocaleDateString("en-GB", { day: "numeric", month: "short" })}` : undefined}
+                unread={!!u.unread}
+                failed={!!u.failed || !!u.overdue}
+                accent={u.overdue ? "#C23B34" : u.dueToday ? "#B7791F" : "#0E9384"}
+                onOpen={() => setOpen(false)}
+                onRead={() => data.markRead(u.key)}
+                onRemove={() => data.remove(u.key)}
+              />
+            ))}
+          </Section>
 
           <Section title="Next to send" empty="No follow-ups scheduled." hasItems={upcoming.length > 0}>
             {upcoming.map((u) => (

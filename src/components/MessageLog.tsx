@@ -12,7 +12,7 @@ export default function MessageLog({
   patient,
   activities,
 }: {
-  patient: Pick<Patient, "id" | "firstName" | "lastName" | "status" | "proposalSentAt" | "sequenceTouch" | "priceLockExpired" | "phone">;
+  patient: Pick<Patient, "id" | "firstName" | "lastName" | "status" | "proposalSentAt" | "sequenceTouch" | "priceLockExpired" | "phone" | "financeStatus" | "paymentPreference">;
   activities: Activity[];
 }) {
   const sent = sentMessagesFromActivities(activities);

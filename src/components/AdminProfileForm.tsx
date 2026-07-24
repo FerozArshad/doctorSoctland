@@ -24,7 +24,7 @@ export default function AdminProfileForm({
 
       <div style={{ marginTop: 18 }}>
         <label className="label">Full name</label>
-        <input className="input" name="name" defaultValue={name} required placeholder="M. Arfan" />
+        <input className="input" name="name" defaultValue={name} required placeholder="Your full name" />
       </div>
       <div style={{ marginTop: 14 }}>
         <label className="label">Email (login)</label>

@@ -6,7 +6,7 @@ import type { Patient } from "@prisma/client";
 import { estMonths, fmt, fullPricePence, instalmentPence, netPricePence, PRICING_DEFAULTS, type PricingConfig } from "./pricing";
 import { gmailConfigured, sendGmail } from "./google";
 import { log, summarizeError } from "./log";
-import { getWhatsAppConfig } from "./whatsapp-settings";
+import { getWhatsAppConfig, getWhatsAppHealth } from "./whatsapp-settings";
 
 const appUrl = () => process.env.APP_URL || "http://localhost:3000";
 
@@ -86,13 +86,40 @@ async function graphSend(to: string, payload: Record<string, unknown>): Promise<
   const token = c.token.trim();
   const phoneId = c.phoneNumberId.trim();
   if (!token || !phoneId) return { simulated: true };
+
+  // Meta may return HTTP 200 "accepted" even when the WABA cannot deliver.
+  // Fail early with the real health_status blocker (e.g. 141008 inactive WABA).
+  const health = await getWhatsAppHealth();
+  if (health && !health.ok) {
+    const top = health.blockers[0];
+    const detail = top
+      ? `${top.description}${top.code ? ` (code ${top.code})` : ""}${top.solution ? ` — ${top.solution}` : ""}`
+      : health.summary;
+    const error = JSON.stringify({
+      error: {
+        message: detail,
+        code: top?.code || 0,
+        error_data: { details: health.summary, waba_id: health.wabaId || null },
+      },
+    });
+    log.error("whatsapp.send.blocked", {
+      to,
+      wabaId: health.wabaId || null,
+      blockers: health.blockers,
+      via: payload.type,
+    });
+    return { simulated: false, error };
+  }
+
+  // Cloud API expects digits only (no +).
+  const toDigits = to.replace(/\D/g, "");
   const res = await fetch(`https://graph.facebook.com/v21.0/${phoneId}/messages`, {
     method: "POST",
     headers: {
       Authorization: `Bearer ${token}`,
       "Content-Type": "application/json",
     },
-    body: JSON.stringify({ messaging_product: "whatsapp", to, ...payload }),
+    body: JSON.stringify({ messaging_product: "whatsapp", to: toDigits, ...payload }),
   });
   const raw = await res.text();
   let json: {
@@ -107,14 +134,14 @@ async function graphSend(to: string, payload: Record<string, unknown>): Promise<
   }
   if (!res.ok) {
     const summary = summarizeError(raw);
-    log.error("whatsapp.send", { to, ...summary, via: payload.type });
+    log.error("whatsapp.send", { to: toDigits, ...summary, via: payload.type });
     return { simulated: false, error: raw };
   }
   const messageId = json.messages?.[0]?.id;
   const messageStatus = json.messages?.[0]?.message_status;
   const waId = json.contacts?.[0]?.wa_id;
   log.info("whatsapp.send", {
-    to,
+    to: toDigits,
     waId: waId || null,
     messageId: messageId ? messageId.slice(0, 28) + "…" : null,
     messageStatus: messageStatus || "accepted",
@@ -254,6 +281,54 @@ export async function notifyAdmin(subject: string, text: string) {
   await Promise.all(jobs);
 }
 
+/** Email the coordinator + admin when a patient applies for finance. */
+export async function notifyFinanceApplication(
+  patient: Pick<Patient, "id" | "firstName" | "lastName" | "email" | "sentByEmail">,
+  note?: string
+) {
+  const name = `${patient.firstName} ${patient.lastName}`.trim();
+  const link = `${appUrl()}/admin/patients/${patient.id}`;
+  const subject = `📝 ${name} applied for 0% finance`;
+  const text =
+    `${name} (${patient.email}) signed consent and applied for 0% finance on their Invisalign proposal.` +
+    (note ? ` Message: “${note}”` : "") +
+    ` View: ${link}`;
+
+  await notifyAdmin(subject, text);
+
+  const recipients = new Set<string>();
+  if (patient.sentByEmail && /.+@.+\..+/.test(patient.sentByEmail)) recipients.add(patient.sentByEmail);
+  if (process.env.ADMIN_NOTIFY_EMAIL) recipients.add(process.env.ADMIN_NOTIFY_EMAIL);
+
+  const html = brandedEmail(
+    "Finance application received",
+    `<p style="font-size:15px;line-height:1.7;color:#3C4a59;"><strong>${escapeHtml(name)}</strong> has applied for 0% finance.</p>
+     <p style="font-size:15px;line-height:1.7;color:#3C4a59;">Patient email: ${escapeHtml(patient.email)}</p>
+     ${note ? `<p style="font-size:15px;line-height:1.7;color:#3C4a59;">Their message: “${escapeHtml(note)}”</p>` : ""}
+     <div style="text-align:center;margin:22px 0 8px;"><a href="${link}" style="display:inline-block;background:#0E9384;color:#fff;text-decoration:none;padding:13px 26px;border-radius:11px;font-weight:800;font-size:14.5px;">Open patient record →</a></div>`
+  );
+
+  await Promise.all(
+    Array.from(recipients).map((to) => sendEmail(to, subject, html).catch((e) => console.error(e)))
+  );
+}
+
+/** Welcome email when a Super Admin creates a team login. */
+export function adminWelcomeEmailHtml(name: string, email: string, password: string, loginUrl: string) {
+  return brandedEmail(
+    "Your Dental Scotland admin login",
+    `<p style="font-size:15px;line-height:1.7;color:#3C4a59;">Hi ${escapeHtml(name)},</p>
+     <p style="font-size:15px;line-height:1.7;color:#3C4a59;">A Super Admin has created your account on the Dental Scotland patient dashboard.</p>
+     <table style="width:100%;border:1px solid #E7ECF2;border-radius:14px;border-collapse:separate;border-spacing:0;overflow:hidden;margin:18px 0;">
+       <tr><td style="padding:12px 16px;border-bottom:1px solid #F1F4F8;font-size:13px;color:#7A8696;">Login URL</td><td style="padding:12px 16px;border-bottom:1px solid #F1F4F8;font-size:14px;font-weight:700;text-align:right;"><a href="${loginUrl}" style="color:#0E9384;">${escapeHtml(loginUrl)}</a></td></tr>
+       <tr><td style="padding:12px 16px;border-bottom:1px solid #F1F4F8;font-size:13px;color:#7A8696;">Email</td><td style="padding:12px 16px;border-bottom:1px solid #F1F4F8;font-size:14px;font-weight:700;text-align:right;">${escapeHtml(email)}</td></tr>
+       <tr><td style="padding:12px 16px;font-size:13px;color:#7A8696;">Password</td><td style="padding:12px 16px;font-size:14px;font-weight:800;text-align:right;">${escapeHtml(password)}</td></tr>
+     </table>
+     <p style="font-size:13px;line-height:1.7;color:#7A8696;">Please sign in and change your password in Settings after your first login.</p>
+     <div style="text-align:center;margin:22px 0 8px;"><a href="${loginUrl}" style="display:inline-block;background:#0E9384;color:#fff;text-decoration:none;padding:13px 26px;border-radius:11px;font-weight:800;font-size:14.5px;">Sign in →</a></div>`
+  );
+}
+
 // ── Templates ───────────────────────────────────────────────────────────
 export function proposalLink(p: Patient) {
   return `${appUrl()}/p/${p.proposalToken}`;
@@ -314,7 +389,7 @@ export function proposalEmailHtml(p: Patient, cfg: PricingConfig = PRICING_DEFAU
 }
 
 export function proposalWhatsAppText(p: Patient) {
-  return `Hi ${p.firstName}! 🦷 Your personalised Invisalign treatment proposal from Dental Scotland is ready.\n\n✅ ${p.alignerCount} aligners · ≈${estMonths(p.alignerCount)} months · ${fmt(netPricePence(p.pricePence, p.upfrontPaidPence))} left to pay${p.upfrontPaidPence > 0 ? ` (after ${fmt(p.upfrontPaidPence)} booking credit)` : ""}\n🎬 Watch your smile transformation video and choose a payment option here:\n${proposalLink(p)}\n\nQuestions? Just reply to this message.`;
+  return `Hi ${p.firstName}! 🦷 Your personalised Invisalign treatment proposal from Dental Scotland is ready.\n\n✅ ${p.alignerCount} aligners · ≈${estMonths(p.alignerCount)} months · ${fmt(netPricePence(p.pricePence, p.upfrontPaidPence))} to pay${p.upfrontPaidPence > 0 ? ` (includes ${fmt(p.upfrontPaidPence)} booking credit)` : ""}\n🎬 Watch your smile transformation video and choose a payment option here:\n${proposalLink(p)}\n\nQuestions? Just reply to this message.`;
 }
 
 export function receiptEmailHtml(p: Patient, amountPence: number, what: string) {
@@ -372,6 +447,41 @@ export function instalmentReminderEmailHtml(p: Patient, number: number, amountPe
   );
 }
 
+/** Sent when an instalment charge fails or is overdue. */
+export function instalmentFailedEmailHtml(p: Patient, number: number, amountPence: number, reason: string) {
+  const link = proposalLink(p);
+  return brandedEmail(
+    `Action needed: instalment ${number}/3 payment`,
+    `<p style="font-size:15px;line-height:1.7;color:#3C4a59;">Hi ${p.firstName},</p>
+     <p style="font-size:15px;line-height:1.7;color:#3C4a59;">We weren't able to collect instalment <strong>${number} of 3</strong> (<strong style="color:#B4530A;">${fmt(amountPence)}</strong>) for your Invisalign treatment.</p>
+     <p style="font-size:15px;line-height:1.7;color:#3C4a59;"><strong>Reason:</strong> ${escapeHtml(reason)}</p>
+     <p style="font-size:15px;line-height:1.7;color:#3C4a59;">Please reply to this email or contact us so we can update your payment details and keep your treatment on track.</p>
+     <div style="text-align:center;margin:22px 0 8px;"><a href="${link}" style="display:inline-block;background:#0E9384;color:#fff;text-decoration:none;padding:13px 26px;border-radius:11px;font-weight:800;font-size:14.5px;">View your proposal →</a></div>`
+  );
+}
+
+/** Sent when an instalment is past due but not yet collected. */
+export function instalmentOverdueEmailHtml(p: Patient, number: number, amountPence: number, dueDate: Date) {
+  const when = dueDate.toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" });
+  const link = proposalLink(p);
+  return brandedEmail(
+    `Overdue: instalment ${number}/3`,
+    `<p style="font-size:15px;line-height:1.7;color:#3C4a59;">Hi ${p.firstName},</p>
+     <p style="font-size:15px;line-height:1.7;color:#3C4a59;">Instalment <strong>${number} of 3</strong> (<strong style="color:#B4530A;">${fmt(amountPence)}</strong>) was due on <strong>${when}</strong> and has not been collected yet.</p>
+     <p style="font-size:15px;line-height:1.7;color:#3C4a59;">Please check your card details are up to date, or reply to this email and we'll help sort it out.</p>
+     <div style="text-align:center;margin:22px 0 8px;"><a href="${link}" style="display:inline-block;background:#0E9384;color:#fff;text-decoration:none;padding:13px 26px;border-radius:11px;font-weight:800;font-size:14.5px;">View your proposal →</a></div>`
+  );
+}
+
+export function instalmentReminderWhatsApp(p: Patient, number: number, amountPence: number, dueDate: Date) {
+  const when = dueDate.toLocaleDateString("en-GB", { day: "numeric", month: "short" });
+  return `Hi ${p.firstName} — Dental Scotland here. Friendly reminder: instalment ${number}/3 (${fmt(amountPence)}) is due on ${when}. We'll collect it automatically from your saved card. Reply if your details have changed.`;
+}
+
+export function instalmentOverdueWhatsApp(p: Patient, number: number, amountPence: number) {
+  return `Hi ${p.firstName} — Dental Scotland. Instalment ${number}/3 (${fmt(amountPence)}) is overdue. Please reply so we can update your payment details and keep your treatment on track.`;
+}
+
 // ── Payment reminder (for patients who've had a proposal but not yet paid) ──
 // Written in a warm, personal coordinator's voice — deliberately not generic.
 export function reminderEmailHtml(p: Patient, cfg: PricingConfig = PRICING_DEFAULTS) {
@@ -414,6 +524,6 @@ export function financeLinkEmailHtml(p: Patient, link: string) {
 export function reminderWhatsAppText(p: Patient, cfg: PricingConfig = PRICING_DEFAULTS) {
   const net = netPricePence(p.pricePence, p.upfrontPaidPence);
   const full = fullPricePence(net, p.discountPct);
-  const balance = p.upfrontPaidPence > 0 ? `just ${fmt(net)} left (your ${fmt(p.upfrontPaidPence)} booking is already credited)` : `${fmt(net)}`;
+  const balance = p.upfrontPaidPence > 0 ? `${fmt(net)} to pay (includes ${fmt(p.upfrontPaidPence)} booking credit)` : `${fmt(net)}`;
   return `Hi ${p.firstName}, it's Dental Scotland 🦷 Your Invisalign plan is still saved for you — no rush at all, we just didn't want you to miss it.\n\nThere's ${balance}, and paying in full saves ${p.discountPct}% (${fmt(full)}). You can also spread it with a ${fmt(cfg.depositPence)} deposit or 0% finance.\n\nHave a look and pick what suits you here:\n${proposalLink(p)}\n\nAny questions, just reply — a real person will help. 😊`;
 }

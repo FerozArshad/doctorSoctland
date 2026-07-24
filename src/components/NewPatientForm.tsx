@@ -74,6 +74,7 @@ export default function NewPatientForm({ cfg }: { cfg: PricingConfig }) {
   const [pkg, setPkg] = useState<"Express" | "Go">("Go");
   const [video, setVideo] = useState("");
   const [notes, setNotes] = useState("");
+  const [paidUpfront, setPaidUpfront] = useState(false);
   const [errs, setErrs] = useState({ first: false, email: false });
 
   const validate = (e: React.FormEvent<HTMLFormElement>) => {
@@ -86,7 +87,7 @@ export default function NewPatientForm({ cfg }: { cfg: PricingConfig }) {
   };
 
   const price = priceForPence(alignerCount, cfg);
-  const net = Math.max(0, price - cfg.upfrontPence);
+  const net = Math.max(0, price - (paidUpfront ? cfg.upfrontPence : 0));
 
   const pkgBtn = (active: boolean): React.CSSProperties => ({
     flex: 1, padding: 12, borderRadius: 11, fontSize: 13.5, fontWeight: 700, cursor: "pointer",
@@ -158,6 +159,20 @@ export default function NewPatientForm({ cfg }: { cfg: PricingConfig }) {
         </div>
 
         <div style={{ height: 1, background: "#EEF2F6", margin: "24px 0" }} />
+        <label style={{ display: "flex", gap: 10, alignItems: "flex-start", cursor: "pointer" }}>
+          <input
+            type="checkbox"
+            name="paidUpfront"
+            checked={paidUpfront}
+            onChange={(e) => setPaidUpfront(e.target.checked)}
+            style={{ width: 17, height: 17, accentColor: "#0E9384", marginTop: 2 }}
+          />
+          <span style={{ fontSize: 13.5, color: "#3C4a59", lineHeight: 1.55 }}>
+            <strong>{fmt(cfg.upfrontPence)} booking already paid</strong> — only tick if they have actually paid the consultation/booking fee. Otherwise the full treatment price is shown.
+          </span>
+        </label>
+
+        <div style={{ height: 1, background: "#EEF2F6", margin: "24px 0" }} />
         <SentByPicker />
 
         <NewPatientActions />
@@ -189,13 +204,15 @@ export default function NewPatientForm({ cfg }: { cfg: PricingConfig }) {
             <span style={{ fontSize: 13, color: "#7A8696" }}>Treatment total</span>
             <span style={{ fontSize: 14, fontWeight: 800 }}>{fmt(price)}</span>
           </div>
-          <div style={{ display: "flex", justifyContent: "space-between", padding: "14px 16px", borderBottom: "1px solid #F1F4F8" }}>
-            <span style={{ fontSize: 13, color: "#7A8696" }}>Booking already paid</span>
-            <span style={{ fontSize: 14, fontWeight: 800, color: "#B4530A" }}>− {fmt(cfg.upfrontPence)}</span>
-          </div>
-          <div style={{ display: "flex", justifyContent: "space-between", padding: "14px 16px", background: "#F0FBF8" }}>
-            <span style={{ fontSize: 13, color: "#0B7A6E", fontWeight: 600 }}>Amount to pay</span>
-            <span style={{ fontSize: 17, fontWeight: 800, color: "#0B7A6E" }}>{fmt(net)}</span>
+          {paidUpfront && (
+            <div style={{ display: "flex", justifyContent: "space-between", padding: "14px 16px", borderBottom: "1px solid #F1F4F8" }}>
+              <span style={{ fontSize: 13, color: "#7A8696" }}>Booking already paid</span>
+              <span style={{ fontSize: 14, fontWeight: 800, color: "#B4530A" }}>− {fmt(cfg.upfrontPence)}</span>
+            </div>
+          )}
+          <div style={{ display: "flex", justifyContent: "space-between", padding: "14px 16px", background: paidUpfront ? "#F0FBF8" : "#fff" }}>
+            <span style={{ fontSize: 13, color: paidUpfront ? "#0B7A6E" : "#7A8696", fontWeight: paidUpfront ? 600 : 400 }}>{paidUpfront ? "Amount to pay" : "Total"}</span>
+            <span style={{ fontSize: 17, fontWeight: 800, color: paidUpfront ? "#0B7A6E" : "#16202E" }}>{fmt(net)}</span>
           </div>
         </div>
         <div style={{ marginTop: 14, padding: "14px 16px", borderRadius: 12, background: "#FBFCFD", border: "1px solid #EEF2F6", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
@@ -203,7 +220,9 @@ export default function NewPatientForm({ cfg }: { cfg: PricingConfig }) {
           <span style={{ fontSize: 15, fontWeight: 800, color: "#0B7A6E" }}>£875</span>
         </div>
         <div style={{ fontSize: 12, color: "#9AA6B4", marginTop: 14, lineHeight: 1.6 }}>
-          Every patient has already paid the {fmt(cfg.upfrontPence)} booking — proposals always show the reduced balance.
+          {paidUpfront
+            ? `Booking credit of ${fmt(cfg.upfrontPence)} is deducted — patient pays ${fmt(net)}.`
+            : "No booking credit applied — patient sees the full treatment price until you tick the box above."}
         </div>
       </div>
     </form>

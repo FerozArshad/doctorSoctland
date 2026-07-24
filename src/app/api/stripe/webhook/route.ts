@@ -7,6 +7,7 @@ import { stripe } from "@/lib/stripe";
 import { fmt, fullPricePence, instalmentPence, netPricePence } from "@/lib/pricing";
 import { getPricing } from "@/lib/pricing-settings";
 import { notifyAdmin, receiptEmailHtml, depositScheduleEmailHtml, sendEmail } from "@/lib/notify";
+import { FOLLOW_UPS_COMPLETE_TOUCH } from "@/lib/follow-ups";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -70,6 +71,7 @@ async function handleCheckoutPaid(
       data: {
         status: "paid",
         amountPaidPence: fullPricePence(netPricePence(patient.pricePence, patient.upfrontPaidPence), patient.discountPct),
+        sequenceTouch: FOLLOW_UPS_COMPLETE_TOUCH,
         activities: { create: { text: `Paid in full via secure link — ${fmt(amount)}` } },
       },
     });
@@ -103,6 +105,7 @@ async function handleCheckoutPaid(
       where: { id: patientId },
       data: {
         status: "deposit",
+        sequenceTouch: FOLLOW_UPS_COMPLETE_TOUCH,
         // Record what Stripe actually took, not a hardcoded figure.
         amountPaidPence: amount,
         stripePaymentMethodId: pmId,

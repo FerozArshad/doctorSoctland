@@ -4,6 +4,7 @@
 // anything continues — this was previously finance-only, which is why the
 // popup looked "missing" on pay-in-full / deposit.
 import { useEffect, useRef, useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import { completePaymentConsent } from "@/app/p/actions";
 import { CONSENT_TITLE, CONSENT_PARAGRAPHS, CONSENT_CHECKBOX_LABEL } from "@/lib/consent";
 import SuccessModal from "@/components/SuccessModal";
@@ -41,6 +42,7 @@ export default function ConsentModal({
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState("");
   const [success, setSuccess] = useState<{ title: string; body: string } | null>(null);
+  const router = useRouter();
 
   useEffect(() => {
     if (!open) return;
@@ -132,15 +134,39 @@ export default function ConsentModal({
     fd.set("consent", "on");
 
     startTransition(async () => {
+      // Open synchronously so the browser does not block the payment tab.
+      const popup =
+        choice === "full" || choice === "deposit" || choice === "finance"
+          ? window.open("about:blank", "_blank")
+          : null;
       try {
         const result = await completePaymentConsent(fd);
-        // full/deposit redirect to Stripe — this line never runs in that case.
-        if (result?.ok) {
-          onClose();
+        if (!result?.ok) {
+          popup?.close();
+          return;
+        }
+        onClose();
+        if ("inline" in result && result.inline) {
+          router.refresh();
+          if ("openUrl" in result && result.openUrl) {
+            if (popup) popup.location.href = result.openUrl;
+            else window.open(result.openUrl, "_blank", "noopener,noreferrer");
+          } else {
+            popup?.close();
+          }
+          return;
+        }
+        if ("openUrl" in result && result.openUrl) {
+          if (popup) popup.location.href = result.openUrl;
+          else window.open(result.openUrl, "_blank", "noopener,noreferrer");
+        } else {
+          popup?.close();
+        }
+        if ("title" in result && "body" in result) {
           setSuccess({ title: result.title, body: result.body });
         }
       } catch (e) {
-        // Stripe / external finance URL redirects throw; rethrow so Next can navigate.
+        popup?.close();
         const msg = e instanceof Error ? e.message : String(e);
         if (msg === "NEXT_REDIRECT" || (e && typeof e === "object" && "digest" in e && String((e as { digest: unknown }).digest).includes("NEXT_REDIRECT"))) {
           throw e;

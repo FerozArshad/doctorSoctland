@@ -4,18 +4,21 @@
 // price lock expires — we stop emailing and flag the patient for a requote.
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { brandedEmail, notifyAdmin, sendEmail, sendReminderWhatsApp } from "@/lib/notify";
+import { brandedEmail, notifyAdmin, sendEmail, sendWhatsApp } from "@/lib/notify";
 import { firstNameOf } from "@/lib/status";
 import { getPricing } from "@/lib/pricing-settings";
-import { dueTouch, seqValues, LOCK_DAYS, TOUCHES } from "@/lib/sequence";
+import { receivesProposalFollowUps } from "@/lib/follow-ups";
+import { LOCK_DAYS, TOUCHES, dueTouch, seqValues } from "@/lib/sequence";
 import { fromHeader } from "@/lib/coordinators";
 import { bearerMatches } from "@/lib/secure";
+import { log, summarizeError } from "@/lib/log";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-// Proposal delivered but not yet paid. Excludes draft (not sent), deposit & paid.
-const UNPAID_STATUSES = ["sent", "interested", "awaiting", "overdue"];
+// Proposal delivered but not yet converted. Paid/deposit/finance patients are
+// filtered in code via receivesProposalFollowUps().
+const UNPAID_STATUSES = ["sent", "interested", "awaiting"];
 
 export async function GET(req: NextRequest) {
   if (!bearerMatches(req.headers.get("authorization"), process.env.CRON_SECRET)) {
@@ -51,12 +54,16 @@ export async function GET(req: NextRequest) {
     }
   }
   const patients = await db.patient.findMany({
-    where: { status: { in: UNPAID_STATUSES }, sequenceTouch: { lt: TOUCHES.length }, priceLockExpired: false },
+    where: { sequenceTouch: { lt: TOUCHES.length }, priceLockExpired: false },
   });
 
   const results: Array<{ patient: string; touch: number | null; sent: boolean; note?: string }> = [];
 
   for (const p of patients) {
+    if (!receivesProposalFollowUps(p)) {
+      results.push({ patient: `${p.firstName} ${p.lastName}`.trim(), touch: null, sent: false, note: "follow-ups stopped" });
+      continue;
+    }
     const start = p.proposalSentAt ?? p.createdAt;
     const days = Math.floor((Date.now() - start.getTime()) / 86400000);
 
@@ -92,9 +99,27 @@ export async function GET(req: NextRequest) {
       console.error(`sequence touch ${touch.n} to ${p.email} failed:`, e);
     }
 
-    // WhatsApp only on the first touch — daily WhatsApp would be intrusive.
-    if (sent && touch.n === 1 && p.phone && p.phone !== "—") {
-      await sendReminderWhatsApp(p, cfg).catch(() => {});
+    // WhatsApp on every touch (copy matches the 7-message sequence).
+    let waNote = "";
+    if (sent && p.phone && p.phone !== "—") {
+      const waBody = touch.whatsapp(p, v);
+      try {
+        const r = await sendWhatsApp(p.phone, waBody);
+        if (r.error) {
+          const summary = summarizeError(r.error);
+          waNote = ` · WhatsApp failed — ${summary.message}`;
+          log.error("sequence.whatsapp.fail", { patientId: p.id, touch: touch.n, ...summary });
+        } else if (r.simulated) {
+          waNote = " · WhatsApp simulated";
+          log.warn("sequence.whatsapp.simulated", { patientId: p.id, touch: touch.n });
+        } else {
+          waNote = " · WhatsApp queued";
+          log.info("sequence.whatsapp.ok", { patientId: p.id, touch: touch.n, messageId: r.messageId || null });
+        }
+      } catch (e) {
+        waNote = " · WhatsApp failed";
+        log.error("sequence.whatsapp.fail", { patientId: p.id, touch: touch.n, ...summarizeError(e) });
+      }
     }
 
     if (sent) {
@@ -102,7 +127,7 @@ export async function GET(req: NextRequest) {
         where: { id: p.id },
         data: {
           sequenceTouch: touch.n,
-          activities: { create: { text: `Follow-up ${touch.n}/7 sent — ${touch.label}` } },
+          activities: { create: { text: `Follow-up ${touch.n}/7 sent — ${touch.label}${waNote}` } },
         },
       });
     }

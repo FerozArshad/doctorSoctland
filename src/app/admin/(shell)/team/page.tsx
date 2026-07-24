@@ -4,9 +4,10 @@ import { redirect } from "next/navigation";
 import { db } from "@/lib/db";
 import { requireAdmin } from "@/lib/auth";
 import { initials, timeAgo } from "@/lib/status";
-import { createAdminAccount } from "@/app/admin/actions";
+import { createAdminAccount, resendAdminInvite } from "@/app/admin/actions";
 import TopBar from "@/components/TopBar";
 import DeleteAdminButton from "@/components/DeleteAdminButton";
+import FormSubmitButton from "@/components/FormSubmitButton";
 
 export const dynamic = "force-dynamic";
 
@@ -57,7 +58,14 @@ export default async function TeamPage() {
                   <div style={{ fontSize: 12, color: "#9AA6B4", marginTop: 4 }}>{counts[i]} patients · added {timeAgo(a.createdAt)}</div>
                 </div>
                 {!isSelf && (
-                  <div style={{ flex: "none" }}>
+                  <div style={{ flex: "none", display: "flex", flexDirection: "column", gap: 8, alignItems: "flex-end" }}>
+                    <form action={resendAdminInvite} style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                      <input type="hidden" name="adminId" value={a.id} />
+                      <input className="input" name="password" type="password" minLength={8} placeholder="New password" style={{ width: 120, padding: "7px 10px", fontSize: 12 }} required />
+                      <button type="submit" className="btn btn-outline" style={{ padding: "7px 10px", fontSize: 12, whiteSpace: "nowrap" }}>
+                        Email login
+                      </button>
+                    </form>
                     <DeleteAdminButton adminId={a.id} adminName={a.name} />
                   </div>
                 )}
@@ -67,7 +75,7 @@ export default async function TeamPage() {
           </div>
 
           {/* create admin */}
-          <form action={createAdminAccount} className="card" style={{ padding: 24 }}>
+          <form action={createAdminAccount} className="card" style={{ padding: 24 }} autoComplete="off">
             <div style={{ fontSize: 16, fontWeight: 800 }}>Add team member</div>
             <div style={{ fontSize: 13, color: "#7A8696", marginTop: 2, lineHeight: 1.6 }}>
               New accounts are always <strong>Admin</strong> (not Super Admin). They sign in at <strong>/admin/login</strong> and only see patients they own or send.
@@ -82,7 +90,7 @@ export default async function TeamPage() {
             </div>
             <div style={{ marginTop: 14 }}>
               <label className="label">Password * (min 8 characters)</label>
-              <input className="input" name="password" type="password" minLength={8} required />
+              <input className="input" name="password" type="password" minLength={8} required autoComplete="new-password" />
             </div>
             <div style={{ marginTop: 14 }}>
               <label className="label">Job title</label>
@@ -91,7 +99,12 @@ export default async function TeamPage() {
             <div style={{ marginTop: 14, padding: "11px 13px", borderRadius: 11, background: "#F4F6F9", fontSize: 12.5, color: "#5C6a79", lineHeight: 1.5 }}>
               Access level: <strong>Admin</strong> only. There is no option to create additional Super Admins.
             </div>
-            <button className="btn btn-teal" style={{ marginTop: 20, width: "100%", padding: 13 }}>Create admin user</button>
+            <FormSubmitButton
+              className="btn btn-teal"
+              style={{ marginTop: 20, width: "100%", padding: 13 }}
+              label="Create admin user"
+              pendingLabel="Creating…"
+            />
           </form>
         </div>
       </div>

@@ -7,7 +7,8 @@ import { canAccessPatient, clearAdminSession, createAdminSession, requireAdmin }
 import { fmt, fullPricePence, netPricePence, priceForPence } from "@/lib/pricing";
 import { getPricing } from "@/lib/pricing-settings";
 import { COORDINATORS, coordinatorFor, fromHeader, FALLBACK_COORDINATOR, type Coordinator } from "@/lib/coordinators";
-import { brandedEmail, financeLinkEmailHtml, proposalEmailHtml, sendEmail, sendProposalWhatsApp, sendWhatsApp, escapeHtml, adminWelcomeEmailHtml, adminPasswordResetEmailHtml, notifyAdmin } from "@/lib/notify";
+import { brandedEmail, emailConfigured, financeLinkEmailHtml, proposalEmailHtml, sendEmail, sendProposalWhatsApp, sendWhatsApp, escapeHtml, adminWelcomeEmailHtml, adminPasswordResetEmailHtml, notifyAdmin } from "@/lib/notify";
+import { gmailConfigured } from "@/lib/google";
 import { firstNameOf } from "@/lib/status";
 import { log, summarizeError } from "@/lib/log";
 import { patientTemplateText, patientTemplateTitle, type PatientTemplateId } from "@/lib/patient-templates";
@@ -119,6 +120,121 @@ export async function updateAdminProfile(formData: FormData) {
   });
   log.info("admin.profile.updated", { adminId: me.id });
   redirect(toastUrl("/admin/settings", "Profile updated", "✓"));
+}
+
+/** Send a test email to the logged-in admin's inbox (verifies Gmail/Resend on this server). */
+export async function sendAdminTestEmail() {
+  const me = await requireAdmin();
+  const { rateLimit } = await import("@/lib/ratelimit");
+  if (!rateLimit(`admin-test-email:${me.id}`, 5, 60 * 60 * 1000)) {
+    redirect(toastUrl("/admin/settings", "Too many test emails — wait an hour", "!", "#E0A429"));
+  }
+
+  if (!emailConfigured()) {
+    redirect(
+      toastUrl(
+        "/admin/settings",
+        "Email is not configured — add Gmail (GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, GMAIL_REFRESH_TOKEN) in Vercel Production, then redeploy",
+        "!",
+        "#E0A429"
+      )
+    );
+  }
+
+  const sentAt = new Date().toISOString();
+  const html = brandedEmail(
+    "Dental Scotland — test email",
+    `<p style="font-size:15px;line-height:1.7;color:#3C4a59;">This is a test email from the Dental Scotland dashboard.</p>
+     <p style="font-size:15px;line-height:1.7;color:#3C4a59;">If you received this, outbound email is working on <strong>${escapeHtml(process.env.APP_URL || "this server")}</strong>.</p>
+     <p style="font-size:13px;color:#7A8696;margin-top:16px;">Sent at ${escapeHtml(sentAt)} · via ${gmailConfigured() ? "Gmail" : "Resend"}</p>`
+  );
+
+  try {
+    const result = await sendEmail(me.email, "Dental Scotland — test email", html, undefined, { category: "test" });
+    if (result.simulated) {
+      redirect(toastUrl("/admin/settings", "Email is not configured on this server", "!", "#E0A429"));
+    }
+    log.info("admin.test.email", { adminId: me.id, to: me.email, via: result.via ?? "unknown" });
+    redirect(
+      toastUrl(
+        "/admin/settings",
+        `Test email sent to ${me.email} — check inbox and spam`,
+        "✉"
+      )
+    );
+  } catch (e) {
+    log.error("admin.test.email.fail", { adminId: me.id, to: me.email, ...summarizeError(e) });
+    redirect(toastUrl("/admin/settings", "Test email failed — check Vercel logs and Gmail settings", "!", "#E0A429"));
+  }
+}
+
+/** Super Admin — configure email alert recipients and failure monitoring. */
+export async function saveEmailSettings(formData: FormData) {
+  const me = await requireAdmin();
+  if (!me.isSuperAdmin) redirect("/admin");
+
+  const alertEmailsRaw = String(formData.get("alertEmails") || "");
+  const alertEmails = alertEmailsRaw
+    .split(/[,;\n]+/)
+    .map((e) => e.trim().toLowerCase())
+    .filter((e) => /.+@.+\..+/.test(e));
+
+  const failureThreshold = Math.max(1, Math.min(100, parseInt(String(formData.get("failureThreshold") || "5"), 10) || 5));
+  const failureWindowMinutes = Math.max(5, Math.min(1440, parseInt(String(formData.get("failureWindowMinutes") || "15"), 10) || 15));
+
+  await db.emailSettings.upsert({
+    where: { id: "default" },
+    update: { alertEmails, failureThreshold, failureWindowMinutes, updatedByEmail: me.email },
+    create: { id: "default", alertEmails, failureThreshold, failureWindowMinutes, updatedByEmail: me.email },
+  });
+
+  log.info("email.settings.save", { adminId: me.id, alertCount: alertEmails.length });
+  redirect(toastUrl("/admin/email/settings", "Email alert settings saved", "✓"));
+}
+
+/** Super Admin — retry a failed/deferred email from the logs dashboard. */
+export async function retryEmailLog(formData: FormData) {
+  const me = await requireAdmin();
+  if (!me.isSuperAdmin) redirect("/admin");
+
+  const { rateLimit } = await import("@/lib/ratelimit");
+  if (!rateLimit(`email-retry:${me.id}`, 30, 60 * 60 * 1000)) {
+    redirect(toastUrl("/admin/email", "Too many retries — wait an hour", "!", "#E0A429"));
+  }
+
+  const logId = String(formData.get("logId") || "").trim();
+  if (!logId) redirect(toastUrl("/admin/email", "Log entry not found", "!", "#E0A429"));
+
+  const row = await db.emailLog.findUnique({ where: { id: logId } });
+  if (!row) redirect(toastUrl("/admin/email", "Log entry not found", "!", "#E0A429"));
+  if (!["failed", "deferred", "bounced"].includes(row.status)) {
+    redirect(toastUrl("/admin/email", "Only failed emails can be retried", "!", "#E0A429"));
+  }
+  if (row.retryCount >= row.maxRetries) {
+    redirect(toastUrl("/admin/email", "Maximum retries reached for this email", "!", "#E0A429"));
+  }
+  if (!row.htmlBody) {
+    redirect(toastUrl("/admin/email", "Email body not stored — cannot retry", "!", "#E0A429"));
+  }
+
+  await db.emailLog.update({
+    where: { id: logId },
+    data: { retryCount: { increment: 1 } },
+  });
+
+  try {
+    await sendEmail(row.to, row.subject, row.htmlBody, row.fromAddress || undefined, {
+      category: `${row.category}_retry`,
+      patientId: row.patientId || undefined,
+      parentLogId: logId,
+      metadata: { retriedBy: me.email, originalLogId: logId },
+    });
+    log.info("email.retry.ok", { logId, by: me.id });
+    redirect(toastUrl("/admin/email", `Retry sent to ${row.to}`, "✉"));
+  } catch (e) {
+    log.error("email.retry.fail", { logId, by: me.id, ...summarizeError(e) });
+    redirect(toastUrl("/admin/email", "Retry failed — see latest log entry", "!", "#E0A429"));
+  }
 }
 
 // ── Pricing settings ────────────────────────────────────────────────────
@@ -886,7 +1002,8 @@ async function deliverProposal(patientId: string, sentBy?: Coordinator) {
       patient.email,
       "Your Invisalign Treatment Proposal — Dental Scotland",
       proposalEmailHtml(patient, cfg),
-      fromHeader(co)
+      fromHeader(co),
+      { category: "proposal", patientId: patient.id }
     );
     results.push(`Proposal email sent`);
     log.info("proposal.email.ok", { patientId });

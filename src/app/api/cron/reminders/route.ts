@@ -4,6 +4,7 @@
 // price lock expires — we stop emailing and flag the patient for a requote.
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
+import { warmGoogleAccessToken } from "@/lib/google";
 import { brandedEmail, notifyAdmin, sendEmail, sendWhatsApp } from "@/lib/notify";
 import { firstNameOf } from "@/lib/status";
 import { getPricing } from "@/lib/pricing-settings";
@@ -23,6 +24,13 @@ const UNPAID_STATUSES = ["sent", "interested", "awaiting"];
 export async function GET(req: NextRequest) {
   if (!bearerMatches(req.headers.get("authorization"), process.env.CRON_SECRET)) {
     return NextResponse.json({ error: "unauthorised" }, { status: 401 });
+  }
+
+  // Keep the Gmail access token warm before the daily email batch.
+  if (process.env.GMAIL_REFRESH_TOKEN) {
+    warmGoogleAccessToken().catch((e) =>
+      log.warn("gmail.token.warm.fail", { error: summarizeError(e) })
+    );
   }
 
   const appUrl = process.env.APP_URL || "http://localhost:3000";

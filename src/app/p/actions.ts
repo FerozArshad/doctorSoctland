@@ -127,7 +127,9 @@ export async function sendOtp(formData: FormData) {
           `<p style="font-size:15px;line-height:1.7;color:#3C4a59;">Hi ${patient.firstName}, use this code to open your Invisalign proposal. It expires in 10 minutes and can only be used once.</p>
            <div style="text-align:center;margin:22px 0;"><span style="display:inline-block;background:#F0FBF8;color:#0B7A6E;font-size:34px;font-weight:800;letter-spacing:.35em;padding:16px 28px 16px 38px;border-radius:14px;">${code}</span></div>
            <p style="font-size:12.5px;color:#9AA6B4;">If you didn't request this, you can safely ignore this email.</p>`
-        )
+        ),
+        undefined,
+        { category: "otp", patientId: patient.id }
       );
       if (r.simulated && !allowDevOtpDisplay()) {
         log.error("otp.email.simulated", { patientId: patient.id });

@@ -3,7 +3,7 @@
 import Link from "next/link";
 import NotificationsBell from "@/components/NotificationsBell";
 
-export default function TopBar({ title, sub }: { title: string; sub: string }) {
+export default function TopBar({ title, sub, actions }: { title: string; sub: string; actions?: React.ReactNode }) {
   return (
     <header style={{ height: 70, flex: "none", background: "#fff", borderBottom: "1px solid #E7ECF2", display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 28px" }}>
       <div>
@@ -11,6 +11,7 @@ export default function TopBar({ title, sub }: { title: string; sub: string }) {
         <div style={{ fontSize: 13, color: "#7A8696", marginTop: 1 }}>{sub}</div>
       </div>
       <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+        {actions}
         <NotificationsBell />
         <Link
           href="/admin/patients/new"

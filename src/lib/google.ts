@@ -1,8 +1,10 @@
 // Google OAuth (gmail.send) + Gmail REST send for a single sending mailbox.
 // One-time flow: an admin authorises at /api/auth/google, Google redirects back
 // with a code, we swap it for a refresh token and store it in env
-// (GMAIL_REFRESH_TOKEN). Sending then swaps that refresh token for a short-lived
-// access token and posts the message to the Gmail API — no heavy SDK needed.
+// (GMAIL_REFRESH_TOKEN). Access tokens are cached and refreshed automatically
+// before expiry — see google-token.ts.
+
+import { getGoogleAccessToken, invalidateGoogleAccessToken, seedGoogleAccessToken } from "./google-token";
 
 const AUTH_ENDPOINT = "https://accounts.google.com/o/oauth2/v2/auth";
 const TOKEN_ENDPOINT = "https://oauth2.googleapis.com/token";
@@ -56,24 +58,16 @@ export async function exchangeCodeForTokens(
     }),
   });
   if (!res.ok) throw new Error(`Google token exchange failed: ${res.status} ${await res.text()}`);
-  return res.json();
-}
-
-// Swap the stored refresh token for a fresh access token before each send.
-async function getAccessToken(): Promise<string> {
-  const res = await fetch(TOKEN_ENDPOINT, {
-    method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body: new URLSearchParams({
-      client_id: process.env.GOOGLE_CLIENT_ID!,
-      client_secret: process.env.GOOGLE_CLIENT_SECRET!,
-      refresh_token: process.env.GMAIL_REFRESH_TOKEN!,
-      grant_type: "refresh_token",
-    }),
-  });
-  if (!res.ok) throw new Error(`Google token refresh failed: ${res.status} ${await res.text()}`);
-  const json = (await res.json()) as { access_token: string };
-  return json.access_token;
+  const tokens = (await res.json()) as {
+    access_token: string;
+    refresh_token?: string;
+    expires_in: number;
+    scope: string;
+  };
+  if (tokens.access_token && tokens.expires_in) {
+    seedGoogleAccessToken(tokens.access_token, tokens.expires_in);
+  }
+  return tokens;
 }
 
 function base64Url(input: Buffer | string): string {
@@ -81,13 +75,9 @@ function base64Url(input: Buffer | string): string {
   return buf.toString("base64").replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
 }
 
-// Send an HTML email through Gmail. `from` should be the authorised mailbox
-// (or one of its verified send-as aliases), e.g. EMAIL_FROM.
-export async function sendGmail(to: string, subject: string, html: string, from: string): Promise<void> {
-  const accessToken = await getAccessToken();
-  // RFC 2047-encode the subject and base64 the body so £ and other UTF-8 survive.
+function buildMime(to: string, subject: string, html: string, from: string): string {
   const encodedSubject = `=?UTF-8?B?${Buffer.from(subject, "utf8").toString("base64")}?=`;
-  const mime =
+  return (
     [
       `From: ${from}`,
       `To: ${to}`,
@@ -97,12 +87,47 @@ export async function sendGmail(to: string, subject: string, html: string, from:
       "Content-Transfer-Encoding: base64",
     ].join("\r\n") +
     "\r\n\r\n" +
-    Buffer.from(html, "utf8").toString("base64");
+    Buffer.from(html, "utf8").toString("base64")
+  );
+}
 
-  const res = await fetch(SEND_ENDPOINT, {
+async function postGmailMessage(accessToken: string, mime: string): Promise<Response> {
+  return fetch(SEND_ENDPOINT, {
     method: "POST",
     headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
     body: JSON.stringify({ raw: base64Url(mime) }),
   });
-  if (!res.ok) throw new Error(`Gmail send failed: ${res.status} ${await res.text()}`);
 }
+
+// Send an HTML email through Gmail. `from` should be the authorised mailbox
+// (or one of its verified send-as aliases), e.g. EMAIL_FROM.
+export async function sendGmail(to: string, subject: string, html: string, from: string): Promise<{ messageId: string }> {
+  const mime = buildMime(to, subject, html, from);
+  let accessToken = await getGoogleAccessToken();
+  let res = await postGmailMessage(accessToken, mime);
+
+  // Token may have expired between cache check and send — refresh once and retry.
+  if (res.status === 401) {
+    invalidateGoogleAccessToken();
+    accessToken = await getGoogleAccessToken(true);
+    res = await postGmailMessage(accessToken, mime);
+  }
+
+  const body = await res.text();
+  if (!res.ok) {
+    const err = new Error(`Gmail send failed: ${res.status} ${body}`);
+    (err as Error & { httpStatus?: number }).httpStatus = res.status;
+    throw err;
+  }
+
+  let messageId = "";
+  try {
+    const json = JSON.parse(body) as { id?: string };
+    messageId = json.id || "";
+  } catch {
+    messageId = "";
+  }
+  return { messageId };
+}
+
+export { getGoogleAccessToken, getGoogleTokenStatus, warmGoogleAccessToken } from "./google-token";

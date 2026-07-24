@@ -8,6 +8,14 @@ import { estMonths, fmt, fullPricePence, instalmentPence, netPricePence, PRICING
 import { gmailConfigured, sendGmail } from "./google";
 import { log, summarizeError } from "./log";
 import { getWhatsAppConfig, getWhatsAppHealth } from "./whatsapp-settings";
+import {
+  classifyEmailError,
+  createEmailLog,
+  handleEmailFailureAlert,
+  markEmailLogFailed,
+  markEmailLogSent,
+  type SendEmailMeta,
+} from "./email-log";
 
 const appUrl = () => process.env.APP_URL || "http://localhost:3000";
 
@@ -24,16 +32,32 @@ export function escapeHtml(s: string): string {
 }
 
 // ── Email ────────────────────────────────────────────────────────────────
-// fromOverride lets a proposal/sequence email come from the coordinator who sent
-// it (e.g. "Millie Buchanan <millie@dentalscotland.com>"). The address must be a
-// verified send-as alias on the authorised Gmail account, or Gmail rewrites it.
-export async function sendEmail(to: string, subject: string, html: string, fromOverride?: string) {
+export type SendEmailResult = {
+  simulated: boolean;
+  via?: "gmail" | "resend";
+  logId?: string;
+  providerMessageId?: string;
+};
+
+type DeliverResult = {
+  simulated: boolean;
+  via?: "gmail" | "resend";
+  providerMessageId?: string;
+  apiResponse?: string;
+};
+
+/** Low-level send without audit logging (used for system alert emails). */
+export async function sendEmailRaw(to: string, subject: string, html: string, fromOverride?: string): Promise<DeliverResult> {
   const from = fromOverride || process.env.EMAIL_FROM || "Dental Scotland <concierge@dentalscotland.com>";
 
-  // Prefer Gmail when it's connected (GOOGLE_CLIENT_ID/SECRET + GMAIL_REFRESH_TOKEN).
   if (gmailConfigured()) {
-    await sendGmail(to, subject, html, from);
-    return { simulated: false, via: "gmail" as const };
+    const result = await sendGmail(to, subject, html, from);
+    return {
+      simulated: false,
+      via: "gmail",
+      providerMessageId: result.messageId,
+      apiResponse: JSON.stringify({ id: result.messageId }),
+    };
   }
 
   const key = process.env.RESEND_API_KEY;
@@ -46,15 +70,100 @@ export async function sendEmail(to: string, subject: string, html: string, fromO
     console.log(`[email:simulated] to=${to} subject="${subject}" (connect Gmail or set RESEND_API_KEY to send for real)`);
     return { simulated: true };
   }
+
   const resend = new Resend(key);
-  const { error } = await resend.emails.send({
-    from,
+  const { data, error } = await resend.emails.send({ from, to, subject, html });
+  if (error) throw new Error("Email failed: " + error.message);
+  return {
+    simulated: false,
+    via: "resend",
+    providerMessageId: data?.id || "",
+    apiResponse: JSON.stringify(data || {}),
+  };
+}
+
+// fromOverride lets a proposal/sequence email come from the coordinator who sent
+// it (e.g. "Millie Buchanan <millie@dentalscotland.com>"). The address must be a
+// verified send-as alias on the authorised Gmail account, or Gmail rewrites it.
+export async function sendEmail(
+  to: string,
+  subject: string,
+  html: string,
+  fromOverride?: string,
+  meta?: SendEmailMeta
+): Promise<SendEmailResult> {
+  const from = fromOverride || meta?.fromOverride || process.env.EMAIL_FROM || "Dental Scotland <concierge@dentalscotland.com>";
+  const category = meta?.category || "general";
+
+  if (meta?.skipLog) {
+    const result = await sendEmailRaw(to, subject, html, from);
+    return { simulated: result.simulated, via: result.via, providerMessageId: result.providerMessageId };
+  }
+
+  const logRow = await createEmailLog({
     to,
+    from,
     subject,
     html,
+    category,
+    patientId: meta?.patientId,
+    metadata: meta?.metadata,
+    parentLogId: meta?.parentLogId,
   });
-  if (error) throw new Error("Email failed: " + error.message);
-  return { simulated: false };
+
+  try {
+    const result = await sendEmailRaw(to, subject, html, from);
+    if (result.simulated) {
+      await markEmailLogSent(logRow.id, { provider: "simulated", apiResponse: '{"simulated":true}' });
+      return { simulated: true, logId: logRow.id };
+    }
+
+    await markEmailLogSent(logRow.id, {
+      provider: result.via || "unknown",
+      providerMessageId: result.providerMessageId,
+      apiResponse: result.apiResponse,
+    });
+    log.info("email.sent", { logId: logRow.id, to, category, via: result.via });
+    return {
+      simulated: false,
+      via: result.via,
+      logId: logRow.id,
+      providerMessageId: result.providerMessageId,
+    };
+  } catch (e) {
+    const httpStatus = (e as Error & { httpStatus?: number }).httpStatus;
+    const classified = classifyEmailError(e, httpStatus);
+    const provider = gmailConfigured() ? "gmail" : process.env.RESEND_API_KEY ? "resend" : "none";
+
+    await markEmailLogFailed(logRow.id, {
+      provider,
+      errorType: classified.errorType,
+      errorCode: classified.errorCode,
+      errorMessage: classified.message,
+      apiResponse: classified.message,
+      deferred: classified.errorType === "rate_limit",
+    });
+
+    log.error("email.send.fail", {
+      logId: logRow.id,
+      to,
+      category,
+      errorType: classified.errorType,
+      ...summarizeError(e),
+    });
+
+    await handleEmailFailureAlert({
+      logId: logRow.id,
+      to,
+      subject,
+      errorType: classified.errorType,
+      errorMessage: classified.message,
+      retryCount: logRow.retryCount,
+      maxRetries: logRow.maxRetries,
+    });
+
+    throw e;
+  }
 }
 
 // ── WhatsApp (Meta Business Cloud API) ──────────────────────────────────
@@ -298,7 +407,7 @@ async function sendAdminEmails(subject: string, html: string, extra?: (string | 
   await Promise.all(
     recipients.map(async (to) => {
       try {
-        const result = await sendEmail(to, subject, html);
+        const result = await sendEmail(to, subject, html, undefined, { category: "admin_alert" });
         log.info("admin.notify.email", { to, via: result.via ?? (result.simulated ? "simulated" : "unknown") });
       } catch (e) {
         log.error("admin.notify.email.fail", { to, error: summarizeError(e) });

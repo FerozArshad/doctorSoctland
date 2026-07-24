@@ -47,6 +47,48 @@ model WhatsAppSettings {
   updatedByEmail       String   @default("")
 }
 
+/// Email alert recipients + failure-rate monitoring thresholds.
+model EmailSettings {
+  id                   String    @id @default("default")
+  alertEmails          String[]  @default([])
+  failureThreshold     Int       @default(5)
+  failureWindowMinutes Int       @default(15)
+  lastSpikeAlertAt     DateTime?
+  updatedAt            DateTime  @updatedAt
+  updatedByEmail       String    @default("")
+}
+
+/// Audit log for every outbound email attempt.
+model EmailLog {
+  id                String    @id @default(cuid())
+  to                String
+  fromAddress       String    @default("")
+  subject           String
+  status            String    @default("queued")
+  provider          String    @default("")
+  providerMessageId String    @default("")
+  category          String    @default("general")
+  errorCode         String    @default("")
+  errorMessage      String    @default("")
+  errorType         String    @default("")
+  apiResponse       String    @default("")
+  htmlBody          String    @default("")
+  retryCount        Int       @default(0)
+  maxRetries        Int       @default(3)
+  parentLogId       String?
+  patientId         String?
+  metadata          String    @default("{}")
+  sentAt            DateTime?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  @@index([status, createdAt])
+  @@index([to, createdAt])
+  @@index([errorType, createdAt])
+  @@index([createdAt])
+  @@index([subject])
+}
+
 model Admin {
   id           String          @id @default(cuid())
   email        String          @unique

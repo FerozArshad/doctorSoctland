@@ -14,6 +14,7 @@ const NAV = [
   { key: "reports", label: "Monthly reports", href: "/admin/reports", d: "M3 3v18h18M8 17V9M13 17V5M18 17v-7" },
   { key: "pricing", label: "Pricing tiers", href: "/admin/pricing", d: "M12 1v22M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" },
   { key: "whatsapp", label: "WhatsApp", href: "/admin/whatsapp", superOnly: true, d: "M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z" },
+  { key: "email", label: "Email logs", href: "/admin/email", superOnly: true, d: "M4 4h16v16H4V4zm0 4l8 5 8-5" },
   { key: "team", label: "Team", href: "/admin/team", superOnly: true, d: "M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75" },
 ] as Array<{ key: string; label: string; href: string; superOnly?: boolean; d: string }>;
 
@@ -42,6 +43,8 @@ export default function Sidebar({
           ? "reports"
         : pathname.startsWith("/admin/whatsapp")
           ? "whatsapp"
+          : pathname.startsWith("/admin/email")
+            ? "email"
           : pathname.startsWith("/admin/team")
             ? "team"
             : pathname.startsWith("/admin/patients/new")

@@ -476,7 +476,14 @@ export async function completePaymentConsent(
     }
     try {
       await notifyFinanceApplication(
-        { id: patient.id, firstName: patient.firstName, lastName: patient.lastName, email: patient.email, sentByEmail: patient.sentByEmail },
+        {
+          id: patient.id,
+          firstName: patient.firstName,
+          lastName: patient.lastName,
+          email: patient.email,
+          sentByEmail: patient.sentByEmail,
+          ownerId: patient.ownerId,
+        },
         note
       );
     } catch (e) {

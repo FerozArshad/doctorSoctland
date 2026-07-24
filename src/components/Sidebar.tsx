@@ -3,6 +3,7 @@ import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { usePathname } from "next/navigation";
 import BrandLogo from "@/components/BrandLogo";
+import FormSubmitButton from "@/components/FormSubmitButton";
 import { adminLogout } from "@/app/admin/actions";
 
 const NAV = [
@@ -208,8 +209,9 @@ export default function Sidebar({
                 Edit profile
               </Link>
               <form action={adminLogout}>
-                <button
-                  type="submit"
+                <FormSubmitButton
+                  variant="link"
+                  pendingLabel="Signing out…"
                   role="menuitem"
                   style={{
                     display: "flex",
@@ -218,22 +220,23 @@ export default function Sidebar({
                     width: "100%",
                     padding: "10px 12px",
                     borderRadius: 8,
-                    border: "none",
-                    background: "transparent",
                     color: "#F2A7A0",
                     fontSize: 13.5,
                     fontWeight: 650,
-                    cursor: "pointer",
                     textAlign: "left",
+                    textDecoration: "none",
                   }}
-                >
-                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-                    <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
-                    <polyline points="16 17 21 12 16 7" />
-                    <line x1="21" y1="12" x2="9" y2="12" />
-                  </svg>
-                  Log out
-                </button>
+                  label={
+                    <>
+                      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                        <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+                        <polyline points="16 17 21 12 16 7" />
+                        <line x1="21" y1="12" x2="9" y2="12" />
+                      </svg>
+                      Log out
+                    </>
+                  }
+                />
               </form>
             </div>
           )}

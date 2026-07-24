@@ -2,6 +2,7 @@
 // First-visit password setup — turns the secure link into a patient account.
 import { useState } from "react";
 import { setPatientPassword } from "@/app/p/actions";
+import FormSubmitButton from "@/components/FormSubmitButton";
 
 export default function CreateAccountCard({ token, email }: { token: string; email: string }) {
   const [pw, setPw] = useState("");
@@ -33,7 +34,7 @@ export default function CreateAccountCard({ token, email }: { token: string; ema
           value={pw2} onChange={(e) => { setPw2(e.target.value); setErr(""); }}
           style={{ flex: 1, minWidth: 180, marginTop: 0 }}
         />
-        <button className="btn btn-teal" style={{ padding: "11px 22px", fontSize: 14 }}>Create account</button>
+        <FormSubmitButton label="Create account" pendingLabel="Creating…" style={{ padding: "11px 22px", fontSize: 14 }} />
       </form>
       {err && <div style={{ color: "#C23B34", fontSize: 13, fontWeight: 600, marginTop: 8 }}>{err}</div>}
     </div>

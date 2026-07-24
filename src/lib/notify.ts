@@ -3,6 +3,7 @@
 // so the app is fully usable in dev before credentials are added.
 import { Resend } from "resend";
 import type { Patient } from "@prisma/client";
+import { db } from "./db";
 import { estMonths, fmt, fullPricePence, instalmentPence, netPricePence, PRICING_DEFAULTS, type PricingConfig } from "./pricing";
 import { gmailConfigured, sendGmail } from "./google";
 import { log, summarizeError } from "./log";
@@ -283,7 +284,7 @@ export async function notifyAdmin(subject: string, text: string) {
 
 /** Email the coordinator + admin when a patient applies for finance. */
 export async function notifyFinanceApplication(
-  patient: Pick<Patient, "id" | "firstName" | "lastName" | "email" | "sentByEmail">,
+  patient: Pick<Patient, "id" | "firstName" | "lastName" | "email" | "sentByEmail" | "ownerId">,
   note?: string
 ) {
   const name = `${patient.firstName} ${patient.lastName}`.trim();
@@ -294,11 +295,13 @@ export async function notifyFinanceApplication(
     (note ? ` Message: “${note}”` : "") +
     ` View: ${link}`;
 
-  await notifyAdmin(subject, text);
-
   const recipients = new Set<string>();
-  if (patient.sentByEmail && /.+@.+\..+/.test(patient.sentByEmail)) recipients.add(patient.sentByEmail);
   if (process.env.ADMIN_NOTIFY_EMAIL) recipients.add(process.env.ADMIN_NOTIFY_EMAIL);
+  if (patient.sentByEmail && /.+@.+\..+/.test(patient.sentByEmail)) recipients.add(patient.sentByEmail);
+  if (patient.ownerId) {
+    const owner = await db.admin.findUnique({ where: { id: patient.ownerId }, select: { email: true } });
+    if (owner?.email && /.+@.+\..+/.test(owner.email)) recipients.add(owner.email);
+  }
 
   const html = brandedEmail(
     "Finance application received",
@@ -308,9 +311,16 @@ export async function notifyFinanceApplication(
      <div style="text-align:center;margin:22px 0 8px;"><a href="${link}" style="display:inline-block;background:#0E9384;color:#fff;text-decoration:none;padding:13px 26px;border-radius:11px;font-weight:800;font-size:14.5px;">Open patient record →</a></div>`
   );
 
-  await Promise.all(
-    Array.from(recipients).map((to) => sendEmail(to, subject, html).catch((e) => console.error(e)))
+  const jobs: Promise<unknown>[] = Array.from(recipients).map((to) =>
+    sendEmail(to, subject, html).catch((e) => console.error("finance.notify.email.fail", to, e))
   );
+
+  const waCfg = await getWhatsAppConfig();
+  if (waCfg.adminNotifyWhatsApp) {
+    jobs.push(sendWhatsApp(waCfg.adminNotifyWhatsApp, `${subject}\n${text}`).catch((e) => console.error(e)));
+  }
+
+  await Promise.all(jobs);
 }
 
 /** Welcome email when a Super Admin creates a team login. */

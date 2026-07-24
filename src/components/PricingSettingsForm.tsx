@@ -3,6 +3,7 @@
 // pence. Live preview shows exactly what a patient would be quoted.
 import { useState } from "react";
 import { updatePricing } from "@/app/admin/actions";
+import FormSubmitButton from "@/components/FormSubmitButton";
 import type { PricingConfig } from "@/lib/pricing";
 
 const gbp = (n: number) => "£" + n.toLocaleString("en-GB");
@@ -16,7 +17,6 @@ export default function PricingSettingsForm({ cfg }: { cfg: PricingConfig }) {
   const [dep, setDep] = useState(cfg.depositPence / 100);
   const [up, setUp] = useState(cfg.upfrontPence / 100);
   const [disc, setDisc] = useState(cfg.discountPct);
-  const [saving, setSaving] = useState(false);
 
   // Preview on the mid tier — the most common case.
   const net = Math.max(0, t2 - up);
@@ -30,7 +30,7 @@ export default function PricingSettingsForm({ cfg }: { cfg: PricingConfig }) {
   );
 
   return (
-    <form action={updatePricing} onSubmit={() => setSaving(true)} className="ds-view"
+    <form action={updatePricing} className="ds-view"
       style={{ display: "grid", gridTemplateColumns: "1.3fr 1fr", gap: 18, alignItems: "start" }}>
       <div className="card" style={{ padding: 26 }}>
         <div style={{ fontSize: 16, fontWeight: 800 }}>Pricing tiers</div>
@@ -87,10 +87,12 @@ export default function PricingSettingsForm({ cfg }: { cfg: PricingConfig }) {
           </div>
         </div>
 
-        <button className="btn btn-teal" disabled={saving || depTooBig}
-          style={{ marginTop: 26, width: "100%", padding: 13, fontSize: 15, opacity: saving || depTooBig ? 0.55 : 1 }}>
-          {saving ? "Saving…" : "Save pricing"}
-        </button>
+        <FormSubmitButton
+          label="Save pricing"
+          pendingLabel="Saving…"
+          disabled={depTooBig}
+          style={{ marginTop: 26, width: "100%", padding: 13, fontSize: 15, opacity: depTooBig ? 0.55 : 1 }}
+        />
       </div>
 
       {/* live preview */}

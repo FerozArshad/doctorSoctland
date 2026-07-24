@@ -26,6 +26,8 @@ export default function ConsentModal({
   choice,
   note,
   applicant,
+  previewMode = false,
+  financeRedirectUrl = null,
 }: {
   open: boolean;
   onClose: () => void;
@@ -33,6 +35,8 @@ export default function ConsentModal({
   choice: ConsentChoice;
   note?: string;
   applicant: Applicant;
+  previewMode?: boolean;
+  financeRedirectUrl?: string | null;
 }) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const drawing = useRef(false);
@@ -117,6 +121,10 @@ export default function ConsentModal({
           : "Confirm & submit";
 
   const submit = () => {
+    if (previewMode) {
+      setError("Preview mode — patient actions are disabled. Open the patient link from their email to pay or apply for finance.");
+      return;
+    }
     if (!consent || !hasSig) {
       setError("Please tick the consent box and add your e-signature.");
       return;
@@ -134,11 +142,10 @@ export default function ConsentModal({
     fd.set("consent", "on");
 
     startTransition(async () => {
-      // Open synchronously so the browser does not block the payment tab.
-      const popup =
-        choice === "full" || choice === "deposit" || choice === "finance"
-          ? window.open("about:blank", "_blank")
-          : null;
+      // Pre-open a tab only when we will navigate it to Stripe or an external finance portal.
+      const opensExternalTab =
+        choice === "full" || choice === "deposit" || (choice === "finance" && !!financeRedirectUrl);
+      const popup = opensExternalTab ? window.open("about:blank", "_blank") : null;
       try {
         const result = await completePaymentConsent(fd);
         if (!result?.ok) {

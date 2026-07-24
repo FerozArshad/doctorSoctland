@@ -82,6 +82,9 @@ export default async function ProposalPage({
     phone: c.phone,
     dateOfBirth: c.dateOfBirth,
   };
+  const financeApplyUrl = process.env.FINANCE_APPLY_URL;
+  const financeRedirectUrl =
+    financeApplyUrl && !financeApplyUrl.includes("example.com") ? financeApplyUrl : null;
 
   const payOptions: PayOption[] = [
     {
@@ -120,7 +123,7 @@ export default async function ProposalPage({
         <div style={{ background: "#0B7A6E", color: "#EAFBF7", padding: "10px 20px", display: "flex", alignItems: "center", justifyContent: "space-between", fontSize: 13, fontWeight: 600, gap: 12, flexWrap: "wrap" }}>
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
             <span style={{ width: 8, height: 8, borderRadius: "50%", background: "#8FF0DE", display: "inline-block", animation: "ds-pulse 2s infinite" }} />
-            Preview mode — this is exactly what {c.firstName} receives by email
+            Preview mode — layout only. Payments &amp; finance are disabled (use the patient&apos;s email link to test checkout).
           </div>
           <Link href={`/admin/patients/${c.id}`} style={{ background: "rgba(255,255,255,.15)", color: "#fff", padding: "7px 14px", borderRadius: 8, fontWeight: 600, fontSize: 13, textDecoration: "none" }}>
             ← Back to admin
@@ -341,6 +344,8 @@ export default async function ProposalPage({
                       options={payOptions}
                       applicant={applicant}
                       compact
+                      previewMode={!!admin}
+                      financeRedirectUrl={financeRedirectUrl}
                     />
                   </>
                 )}

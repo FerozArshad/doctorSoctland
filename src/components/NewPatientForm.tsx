@@ -1,17 +1,8 @@
 "use client";
 // Quick intake — creates a draft patient then opens the full proposal screen.
 import { useState } from "react";
-import { useFormStatus } from "react-dom";
 import { createPatient } from "@/app/admin/actions";
-
-function ContinueButton() {
-  const { pending } = useFormStatus();
-  return (
-    <button type="submit" className="btn btn-teal" disabled={pending} style={{ marginTop: 26, width: "100%", padding: 13 }}>
-      {pending ? "Opening proposal…" : "Continue to proposal"}
-    </button>
-  );
-}
+import FormSubmitButton from "@/components/FormSubmitButton";
 
 export default function NewPatientForm() {
   const [firstName, setFirstName] = useState("");
@@ -76,7 +67,11 @@ export default function NewPatientForm() {
           </div>
         </div>
 
-        <ContinueButton />
+        <FormSubmitButton
+          label="Continue to proposal"
+          pendingLabel="Opening proposal…"
+          style={{ marginTop: 26, width: "100%", padding: 13 }}
+        />
 
         <div style={{ fontSize: 12, color: "#9AA6B4", marginTop: 14, lineHeight: 1.6 }}>
           Aligners, package, video link, booking credit, <strong>Save draft</strong> and <strong>Send proposal</strong> are on the proposal screen.

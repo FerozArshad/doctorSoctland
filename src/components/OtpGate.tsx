@@ -1,6 +1,7 @@
 // Identity gate for the secure proposal link: the patient requests a
 // one-time code by email or WhatsApp, enters it, and the proposal unlocks.
 import BrandLogo from "@/components/BrandLogo";
+import FormSubmitButton from "@/components/FormSubmitButton";
 import { Suspense } from "react";
 import { sendOtp, verifyOtp } from "@/app/p/actions";
 import Toast from "@/components/Toast";
@@ -52,17 +53,22 @@ export default function OtpGate({
                 <form action={sendOtp}>
                   <input type="hidden" name="token" value={token} />
                   <input type="hidden" name="channel" value="email" />
-                  <button className="btn btn-teal" style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "center", gap: 9 }}>
-                    ✉ &nbsp;Email a code to {maskEmail(email)}
-                  </button>
+                  <FormSubmitButton
+                    label={`✉  Email a code to ${maskEmail(email)}`}
+                    pendingLabel="Sending code…"
+                    style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "center", gap: 9 }}
+                  />
                 </form>
                 {hasPhone && (
                   <form action={sendOtp}>
                     <input type="hidden" name="token" value={token} />
                     <input type="hidden" name="channel" value="whatsapp" />
-                    <button className="btn btn-outline" style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "center", gap: 9 }}>
-                      💬 &nbsp;WhatsApp a code to {maskPhone(phone)}
-                    </button>
+                    <FormSubmitButton
+                      variant="outline"
+                      label={`💬  WhatsApp a code to ${maskPhone(phone)}`}
+                      pendingLabel="Sending code…"
+                      style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "center", gap: 9 }}
+                    />
                   </form>
                 )}
               </div>
@@ -91,14 +97,20 @@ export default function OtpGate({
                     placeholder="••••••"
                     style={{ fontSize: 22, letterSpacing: ".45em", textAlign: "center", fontWeight: 800, padding: "13px" }}
                   />
-                  <button className="btn btn-teal" style={{ width: "100%", marginTop: 14 }}>Unlock my proposal →</button>
+                  <FormSubmitButton
+                    label="Unlock my proposal →"
+                    pendingLabel="Unlocking…"
+                    style={{ width: "100%", marginTop: 14 }}
+                  />
                 </form>
                 <form action={sendOtp} style={{ marginTop: 14, textAlign: "center" }}>
                   <input type="hidden" name="token" value={token} />
                   <input type="hidden" name="channel" value={channel} />
-                  <button style={{ background: "none", border: "none", color: "#0E9384", fontWeight: 700, fontSize: 13, cursor: "pointer", textDecoration: "underline" }}>
-                    Didn&apos;t get it? Send a new code
-                  </button>
+                  <FormSubmitButton
+                    variant="link"
+                    label="Didn't get it? Send a new code"
+                    pendingLabel="Sending…"
+                  />
                 </form>
               </>
             )}

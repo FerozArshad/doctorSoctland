@@ -165,11 +165,14 @@ export default async function PatientProfile({ params }: { params: { id: string 
                   pendingLabel="Sending…"
                 />
               </form>
-              <Link href={`/p/${c.proposalToken}?preview=admin`} className="btn btn-teal" style={{ padding: "11px 18px", fontSize: 13.5, display: "flex", alignItems: "center", gap: 8, textDecoration: "none" }}>
+              <Link href={`/p/${c.proposalToken}`} className="btn btn-teal" style={{ padding: "11px 18px", fontSize: 13.5, display: "flex", alignItems: "center", gap: 8, textDecoration: "none" }}>
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M10 13a5 5 0 0 0 7 0l3-3a5 5 0 0 0-7-7l-1.5 1.5M14 11a5 5 0 0 0-7 0l-3 3a5 5 0 0 0 7 7l1.5-1.5" />
                 </svg>
                 Open pay link
+              </Link>
+              <Link href={`/p/${c.proposalToken}?preview=admin`} className="btn btn-outline" style={{ padding: "11px 16px", fontSize: 13.5, textDecoration: "none" }}>
+                Preview layout
               </Link>
               {admin.isSuperAdmin && (
                 <DeletePatientButton patientId={c.id} patientName={`${c.firstName} ${c.lastName}`.trim()} />
@@ -222,9 +225,10 @@ export default async function PatientProfile({ params }: { params: { id: string 
                       <form key={s} action={setFinanceStatus}>
                         <input type="hidden" name="patientId" value={c.id} />
                         <input type="hidden" name="financeStatus" value={s} />
-                        <button
-                          type="submit"
-                          className="btn btn-outline"
+                        <FormSubmitButton
+                          variant="outline"
+                          label={s === "applied" ? "Pending" : s === "accepted" ? "Accepted" : "Not accepted"}
+                          pendingLabel="Updating…"
                           style={{
                             padding: "8px 12px",
                             fontSize: 12.5,
@@ -233,9 +237,7 @@ export default async function PatientProfile({ params }: { params: { id: string 
                             color: c.financeStatus === s ? "#0B7A6E" : "#5C6a79",
                             fontWeight: 700,
                           }}
-                        >
-                          {s === "applied" ? "Pending" : s === "accepted" ? "Accepted" : "Not accepted"}
-                        </button>
+                        />
                       </form>
                     ))}
                   </div>

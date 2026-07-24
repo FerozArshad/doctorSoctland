@@ -224,8 +224,59 @@ export default async function ProposalPage({
                 </p>
 
                 {c.upfrontPaidPence > 0 && !paid && !depositPaid && (
-                  <div style={{ border: "1px solid #CFEDE5", background: "#F4FCFA", borderRadius: 10, padding: "9px 11px", marginBottom: 10, fontSize: 12, color: "#3C4a59", lineHeight: 1.45 }}>
-                    ✓ Your <strong>{fmt(c.upfrontPaidPence)}</strong> booking payment is credited. Treatment {fmt(c.pricePence)} − {fmt(c.upfrontPaidPence)} = <strong style={{ color: "#0B7A6E" }}>{fmt(net)}</strong> left to pay.
+                  <div
+                    style={{
+                      border: "2px solid #0E9384",
+                      background: "linear-gradient(180deg, #E8FBF5 0%, #F4FCFA 100%)",
+                      borderRadius: 14,
+                      padding: "16px 16px 14px",
+                      marginBottom: 14,
+                      boxShadow: "0 8px 20px -12px rgba(14,147,132,.45)",
+                    }}
+                  >
+                    <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
+                      <span
+                        style={{
+                          width: 28,
+                          height: 28,
+                          borderRadius: "50%",
+                          background: "#0E9384",
+                          color: "#fff",
+                          display: "grid",
+                          placeItems: "center",
+                          fontWeight: 800,
+                          fontSize: 14,
+                          flex: "none",
+                        }}
+                      >
+                        ✓
+                      </span>
+                      <div style={{ fontSize: 14.5, fontWeight: 800, color: "#0B7A6E", lineHeight: 1.3 }}>
+                        Booking payment credited
+                      </div>
+                    </div>
+                    <div style={{ fontSize: 14, color: "#2C3847", lineHeight: 1.5, fontWeight: 600 }}>
+                      Your <strong style={{ color: "#0B7A6E" }}>{fmt(c.upfrontPaidPence)}</strong> booking is already paid.
+                    </div>
+                    <div style={{ fontSize: 13.5, color: "#5C6a79", marginTop: 6, lineHeight: 1.45 }}>
+                      Treatment {fmt(c.pricePence)} − {fmt(c.upfrontPaidPence)} booking
+                    </div>
+                    <div
+                      style={{
+                        marginTop: 12,
+                        padding: "12px 14px",
+                        borderRadius: 11,
+                        background: "#0E9384",
+                        color: "#fff",
+                        display: "flex",
+                        alignItems: "baseline",
+                        justifyContent: "space-between",
+                        gap: 10,
+                      }}
+                    >
+                      <span style={{ fontSize: 13, fontWeight: 700, opacity: 0.95 }}>Left to pay</span>
+                      <span style={{ fontSize: 26, fontWeight: 800, letterSpacing: "-.02em" }}>{fmt(net)}</span>
+                    </div>
                   </div>
                 )}
 

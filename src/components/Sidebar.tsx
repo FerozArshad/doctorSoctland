@@ -211,6 +211,29 @@ export default function Sidebar({
                 </svg>
                 Edit profile
               </Link>
+              {isSuperAdmin && (
+                <Link
+                  href="/admin/email"
+                  role="menuitem"
+                  onClick={() => setMenuOpen(false)}
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 10,
+                    padding: "10px 12px",
+                    borderRadius: 8,
+                    textDecoration: "none",
+                    color: "#E8EEF6",
+                    fontSize: 13.5,
+                    fontWeight: 650,
+                  }}
+                >
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                    <path d="M4 4h16v16H4V4zm0 4l8 5 8-5" />
+                  </svg>
+                  Email logs
+                </Link>
+              )}
               <form action={adminLogout}>
                 <FormSubmitButton
                   variant="link"

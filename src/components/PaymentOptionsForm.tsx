@@ -3,6 +3,7 @@
 // popup with e-signature (required for full / deposit / finance).
 import { useState } from "react";
 import ConsentModal, { Applicant, ConsentChoice } from "./ConsentModal";
+import type { ProposalDoc } from "./ProposalDocuments";
 
 export type PayOption = {
   key: "full" | "deposit" | "finance";
@@ -23,6 +24,7 @@ export default function PaymentOptionsForm({
   compact = false,
   previewMode = false,
   financeRedirectUrl = null,
+  docs = [],
 }: {
   token: string;
   options: PayOption[];
@@ -32,6 +34,7 @@ export default function PaymentOptionsForm({
   previewMode?: boolean;
   /** External finance portal — opens in a new tab after consent. */
   financeRedirectUrl?: string | null;
+  docs?: ProposalDoc[];
 }) {
   const [choice, setChoice] = useState<PayOption["key"]>(options[0]?.key ?? "full");
   const [note, setNote] = useState("");
@@ -49,6 +52,7 @@ export default function PaymentOptionsForm({
         applicant={applicant}
         previewMode={previewMode}
         financeRedirectUrl={financeRedirectUrl}
+        docs={docs}
       />
 
       <div style={{ display: "flex", flexDirection: "column", gap: compact ? 8 : 10 }}>

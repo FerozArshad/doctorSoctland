@@ -85,6 +85,12 @@ export default async function ProposalPage({
   const financeApplyUrl = process.env.FINANCE_APPLY_URL;
   const financeRedirectUrl =
     financeApplyUrl && !financeApplyUrl.includes("example.com") ? financeApplyUrl : null;
+  const proposalDocs = c.uploads.map((u) => ({
+    id: u.id,
+    fileName: u.fileName,
+    mimeType: u.mimeType,
+    sizeBytes: u.sizeBytes,
+  }));
 
   const payOptions: PayOption[] = [
     {
@@ -161,15 +167,7 @@ export default async function ProposalPage({
               </p>
             </div>
 
-            <ProposalDocuments
-              token={c.proposalToken}
-              docs={c.uploads.map((u) => ({
-                id: u.id,
-                fileName: u.fileName,
-                mimeType: u.mimeType,
-                sizeBytes: u.sizeBytes,
-              }))}
-            />
+            <ProposalDocuments token={c.proposalToken} docs={proposalDocs} />
 
             {/* Desktop: plan left | payment right | video full-width under both
                 Mobile: plan → payment → video (clear reading order) */}
@@ -346,6 +344,7 @@ export default async function ProposalPage({
                       compact
                       previewMode={!!admin}
                       financeRedirectUrl={financeRedirectUrl}
+                      docs={proposalDocs}
                     />
                   </>
                 )}

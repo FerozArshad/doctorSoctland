@@ -12,9 +12,11 @@ export type ProposalDoc = {
 export default function ProposalDocuments({
   token,
   docs,
+  compact = false,
 }: {
   token: string;
   docs: ProposalDoc[];
+  compact?: boolean;
 }) {
   const [active, setActive] = useState<ProposalDoc | null>(null);
   if (docs.length === 0) return null;
@@ -23,10 +25,14 @@ export default function ProposalDocuments({
 
   return (
     <>
-      <section style={{ marginTop: 18 }}>
-        <h2 style={{ fontSize: 15, fontWeight: 800, margin: "0 0 6px", color: "#0E1A2B" }}>Documents from the practice</h2>
-        <p style={{ fontSize: 12.5, color: "#6B7785", margin: "0 0 10px", lineHeight: 1.45 }}>
-          Tap a file to open it. These were shared by Dental Scotland for you to review.
+      <section style={{ marginTop: compact ? 14 : 18 }}>
+        <h2 style={{ fontSize: compact ? 13.5 : 15, fontWeight: 800, margin: "0 0 6px", color: "#0E1A2B" }}>
+          {compact ? "Attached documents" : "Documents from the practice"}
+        </h2>
+        <p style={{ fontSize: compact ? 11.5 : 12.5, color: "#6B7785", margin: "0 0 10px", lineHeight: 1.45 }}>
+          {compact
+            ? "Review these before signing — view only."
+            : "Tap a file to open it. These were shared by Dental Scotland for you to review."}
         </p>
         <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
           {docs.map((d) => (

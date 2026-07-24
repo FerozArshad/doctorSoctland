@@ -7,6 +7,7 @@ import { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { completePaymentConsent } from "@/app/p/actions";
 import { CONSENT_TITLE, CONSENT_PARAGRAPHS, CONSENT_CHECKBOX_LABEL } from "@/lib/consent";
+import ProposalDocuments, { type ProposalDoc } from "@/components/ProposalDocuments";
 import SuccessModal from "@/components/SuccessModal";
 
 export type Applicant = {
@@ -28,6 +29,7 @@ export default function ConsentModal({
   applicant,
   previewMode = false,
   financeRedirectUrl = null,
+  docs = [],
 }: {
   open: boolean;
   onClose: () => void;
@@ -37,6 +39,7 @@ export default function ConsentModal({
   applicant: Applicant;
   previewMode?: boolean;
   financeRedirectUrl?: string | null;
+  docs?: ProposalDoc[];
 }) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const drawing = useRef(false);
@@ -218,6 +221,8 @@ export default function ConsentModal({
                   </p>
                 ))}
               </div>
+
+              {docs.length > 0 && <ProposalDocuments token={token} docs={docs} compact />}
 
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginTop: 18 }}>
                 <div>

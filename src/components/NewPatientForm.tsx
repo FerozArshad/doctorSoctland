@@ -1,80 +1,23 @@
 "use client";
-// Add-patient form with live proposal preview — mirrors the design exactly.
-// Pricing tiers come from the editable config (admin → Settings), passed in by the page.
-import { useEffect, useState } from "react";
+// Quick intake — creates a draft patient then opens the full proposal screen.
+import { useState } from "react";
 import { useFormStatus } from "react-dom";
 import { createPatient } from "@/app/admin/actions";
-import { estMonths, fmt, priceForPence, type PricingConfig } from "@/lib/pricing";
-import SentByPicker from "./SentByPicker";
 
-function NewPatientActions() {
+function ContinueButton() {
   const { pending } = useFormStatus();
-  const [intent, setIntent] = useState<"draft" | "send" | null>(null);
-
-  useEffect(() => {
-    if (!pending) setIntent(null);
-  }, [pending]);
-
-  const spinner = (dark: boolean) => (
-    <span className={dark ? "ds-spinner ds-spinner-dark" : "ds-spinner"} aria-hidden="true" />
-  );
-
   return (
-    <div style={{ display: "flex", gap: 12, marginTop: 26 }}>
-      <button
-        type="submit"
-        className="btn btn-outline"
-        name="intent"
-        value="draft"
-        disabled={pending}
-        aria-busy={pending && intent === "draft"}
-        onClick={() => setIntent("draft")}
-        style={{ flex: 1 }}
-      >
-        {pending && intent === "draft" ? (
-          <span style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 10 }}>
-            {spinner(true)}
-            Saving…
-          </span>
-        ) : (
-          "Save draft & continue later"
-        )}
-      </button>
-      <button
-        type="submit"
-        className="btn btn-teal"
-        name="intent"
-        value="send"
-        disabled={pending}
-        aria-busy={pending && intent === "send"}
-        onClick={() => setIntent("send")}
-        style={{ flex: 1.3 }}
-      >
-        {pending && intent === "send" ? (
-          <span style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 10 }}>
-            {spinner(false)}
-            Sending…
-          </span>
-        ) : pending ? (
-          "Please wait…"
-        ) : (
-          "Create & send proposal"
-        )}
-      </button>
-    </div>
+    <button type="submit" className="btn btn-teal" disabled={pending} style={{ marginTop: 26, width: "100%", padding: 13 }}>
+      {pending ? "Opening proposal…" : "Continue to proposal"}
+    </button>
   );
 }
 
-export default function NewPatientForm({ cfg }: { cfg: PricingConfig }) {
+export default function NewPatientForm() {
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
-  const [alignerCount, setAlignerCount] = useState(14);
-  const [pkg, setPkg] = useState<"Express" | "Go">("Go");
-  const [video, setVideo] = useState("");
-  const [notes, setNotes] = useState("");
-  const [paidUpfront, setPaidUpfront] = useState(false);
   const [errs, setErrs] = useState({ first: false, email: false });
 
   const validate = (e: React.FormEvent<HTMLFormElement>) => {
@@ -86,143 +29,57 @@ export default function NewPatientForm({ cfg }: { cfg: PricingConfig }) {
     }
   };
 
-  const price = priceForPence(alignerCount, cfg);
-  const net = Math.max(0, price - (paidUpfront ? cfg.upfrontPence : 0));
-
-  const pkgBtn = (active: boolean): React.CSSProperties => ({
-    flex: 1, padding: 12, borderRadius: 11, fontSize: 13.5, fontWeight: 700, cursor: "pointer",
-    display: "flex", flexDirection: "column", gap: 2, alignItems: "flex-start",
-    background: active ? "#0E9384" : "#fff",
-    color: active ? "#fff" : "#3C4a59",
-    border: active ? "1.5px solid #0E9384" : "1.5px solid #E1E7EE",
-  });
-
   return (
-    <form action={createPatient} onSubmit={validate} className="ds-view" style={{ display: "grid", gridTemplateColumns: "1.3fr 1fr", gap: 18, alignItems: "start" }}>
+    <form action={createPatient} onSubmit={validate} className="ds-view" style={{ maxWidth: 520 }}>
+      <input type="hidden" name="intent" value="draft" />
       <div className="card" style={{ padding: 26 }}>
-        <div style={{ fontSize: 16, fontWeight: 800 }}>Patient details</div>
-        <div style={{ fontSize: 13, color: "#7A8696", marginTop: 2 }}>Enter details from the ClinCheck assessment.</div>
+        <div style={{ fontSize: 16, fontWeight: 800 }}>New patient</div>
+        <div style={{ fontSize: 13, color: "#7A8696", marginTop: 4, lineHeight: 1.55 }}>
+          Enter the patient&apos;s contact details, then build the full treatment proposal on the next screen — including save draft and send.
+        </div>
 
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14, marginTop: 22 }}>
           <div>
             <label className="label">First name *</label>
-            <input className={"input" + (errs.first ? " err" : "")} name="firstName" value={firstName} onChange={(e) => { setFirstName(e.target.value); setErrs((s) => ({ ...s, first: false })); }} placeholder="First name" />
+            <input
+              className={"input" + (errs.first ? " err" : "")}
+              name="firstName"
+              value={firstName}
+              onChange={(e) => {
+                setFirstName(e.target.value);
+                setErrs((s) => ({ ...s, first: false }));
+              }}
+              placeholder="First name"
+            />
           </div>
           <div>
             <label className="label">Last name</label>
             <input className="input" name="lastName" value={lastName} onChange={(e) => setLastName(e.target.value)} placeholder="Last name" />
           </div>
-          <div>
+          <div style={{ gridColumn: "1 / -1" }}>
             <label className="label">Email *</label>
-            <input className={"input" + (errs.email ? " err" : "")} name="email" value={email} onChange={(e) => { setEmail(e.target.value); setErrs((s) => ({ ...s, email: false })); }} placeholder="name@email.com" />
+            <input
+              className={"input" + (errs.email ? " err" : "")}
+              name="email"
+              type="email"
+              value={email}
+              onChange={(e) => {
+                setEmail(e.target.value);
+                setErrs((s) => ({ ...s, email: false }));
+              }}
+              placeholder="name@email.com"
+            />
           </div>
-          <div>
+          <div style={{ gridColumn: "1 / -1" }}>
             <label className="label">Phone (WhatsApp)</label>
             <input className="input" name="phone" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="Mobile number" />
           </div>
         </div>
 
-        <div style={{ height: 1, background: "#EEF2F6", margin: "24px 0" }} />
-        <div style={{ fontSize: 14, fontWeight: 800, marginBottom: 6 }}>Treatment plan</div>
+        <ContinueButton />
 
-        <div style={{ marginTop: 12 }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            <label className="label">Number of aligners</label>
-            <span style={{ fontSize: 20, fontWeight: 800, color: "#0E9384" }}>{alignerCount}</span>
-          </div>
-          <input type="range" name="alignerCount" min={1} max={40} value={alignerCount} onChange={(e) => setAlignerCount(parseInt(e.target.value) || 1)} style={{ width: "100%", marginTop: 10, accentColor: "#0E9384" }} />
-          <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, color: "#9AA6B4", marginTop: 2 }}>
-            <span>1</span><span>20</span><span>40</span>
-          </div>
-        </div>
-
-        <div style={{ marginTop: 20 }}>
-          <label className="label">Package</label>
-          <input type="hidden" name="pkg" value={pkg} />
-          <div style={{ display: "flex", gap: 10, marginTop: 8 }}>
-            <button type="button" onClick={() => setPkg("Express")} style={pkgBtn(pkg === "Express")}>
-              Express <span style={{ fontWeight: 500, opacity: 0.7 }}>≤ 7 aligners</span>
-            </button>
-            <button type="button" onClick={() => setPkg("Go")} style={pkgBtn(pkg === "Go")}>
-              Go <span style={{ fontWeight: 500, opacity: 0.7 }}>up to 20+</span>
-            </button>
-          </div>
-        </div>
-
-        <div style={{ marginTop: 20 }}>
-          <label className="label">ClinCheck video link</label>
-          <input className="input" name="videoUrl" value={video} onChange={(e) => setVideo(e.target.value)} placeholder="Paste ClinCheck video URL" />
-        </div>
-        <div style={{ marginTop: 16 }}>
-          <label className="label">Notes</label>
-          <textarea className="input" name="notes" value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Optional notes for the team…" rows={3} style={{ resize: "vertical" }} />
-        </div>
-
-        <div style={{ height: 1, background: "#EEF2F6", margin: "24px 0" }} />
-        <label style={{ display: "flex", gap: 10, alignItems: "flex-start", cursor: "pointer" }}>
-          <input
-            type="checkbox"
-            name="paidUpfront"
-            checked={paidUpfront}
-            onChange={(e) => setPaidUpfront(e.target.checked)}
-            style={{ width: 17, height: 17, accentColor: "#0E9384", marginTop: 2 }}
-          />
-          <span style={{ fontSize: 13.5, color: "#3C4a59", lineHeight: 1.55 }}>
-            <strong>{fmt(cfg.upfrontPence)} booking already paid</strong> — only tick if they have actually paid the consultation/booking fee. Otherwise the full treatment price is shown.
-          </span>
-        </label>
-
-        <div style={{ height: 1, background: "#EEF2F6", margin: "24px 0" }} />
-        <SentByPicker />
-
-        <NewPatientActions />
-        <div style={{ fontSize: 12, color: "#9AA6B4", marginTop: 12, lineHeight: 1.6 }}>
-          “Save draft” stores the proposal under <strong>Patients → Draft</strong> so you can finish later. “Create &amp; send” emails the secure link and sends WhatsApp if a phone number is provided.
-        </div>
-      </div>
-
-      {/* live preview */}
-      <div className="card" style={{ padding: 24, position: "sticky", top: 0 }}>
-        <div style={{ fontSize: 12, fontWeight: 700, letterSpacing: ".08em", textTransform: "uppercase", color: "#0E9384" }}>Live proposal preview</div>
-        <div style={{ fontSize: 22, fontWeight: 800, marginTop: 12, letterSpacing: "-.01em" }}>{(firstName || "New") + " " + (lastName || "patient")}</div>
-        <div style={{ fontSize: 13, color: "#8A96A5" }}>{email || "Email will appear here"}</div>
-
-        <div style={{ marginTop: 20, border: "1px solid #EEF2F6", borderRadius: 14, overflow: "hidden" }}>
-          <div style={{ display: "flex", justifyContent: "space-between", padding: "14px 16px", borderBottom: "1px solid #F1F4F8" }}>
-            <span style={{ fontSize: 13, color: "#7A8696" }}>Aligners</span>
-            <span style={{ fontSize: 14, fontWeight: 800 }}>{alignerCount}</span>
-          </div>
-          <div style={{ display: "flex", justifyContent: "space-between", padding: "14px 16px", borderBottom: "1px solid #F1F4F8" }}>
-            <span style={{ fontSize: 13, color: "#7A8696" }}>Est. treatment</span>
-            <span style={{ fontSize: 14, fontWeight: 800 }}>≈ {estMonths(alignerCount)} months</span>
-          </div>
-          <div style={{ display: "flex", justifyContent: "space-between", padding: "14px 16px", borderBottom: "1px solid #F1F4F8" }}>
-            <span style={{ fontSize: 13, color: "#7A8696" }}>Package</span>
-            <span style={{ fontSize: 14, fontWeight: 800 }}>Invisalign {pkg}</span>
-          </div>
-          <div style={{ display: "flex", justifyContent: "space-between", padding: "14px 16px", borderBottom: "1px solid #F1F4F8" }}>
-            <span style={{ fontSize: 13, color: "#7A8696" }}>Treatment total</span>
-            <span style={{ fontSize: 14, fontWeight: 800 }}>{fmt(price)}</span>
-          </div>
-          {paidUpfront && (
-            <div style={{ display: "flex", justifyContent: "space-between", padding: "14px 16px", borderBottom: "1px solid #F1F4F8" }}>
-              <span style={{ fontSize: 13, color: "#7A8696" }}>Booking already paid</span>
-              <span style={{ fontSize: 14, fontWeight: 800, color: "#B4530A" }}>− {fmt(cfg.upfrontPence)}</span>
-            </div>
-          )}
-          <div style={{ display: "flex", justifyContent: "space-between", padding: "14px 16px", background: paidUpfront ? "#F0FBF8" : "#fff" }}>
-            <span style={{ fontSize: 13, color: paidUpfront ? "#0B7A6E" : "#7A8696", fontWeight: paidUpfront ? 600 : 400 }}>{paidUpfront ? "Amount to pay" : "Total"}</span>
-            <span style={{ fontSize: 17, fontWeight: 800, color: paidUpfront ? "#0B7A6E" : "#16202E" }}>{fmt(net)}</span>
-          </div>
-        </div>
-        <div style={{ marginTop: 14, padding: "14px 16px", borderRadius: 12, background: "#FBFCFD", border: "1px solid #EEF2F6", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-          <span style={{ fontSize: 13, color: "#5C6a79", fontWeight: 600 }}>Complimentary value included</span>
-          <span style={{ fontSize: 15, fontWeight: 800, color: "#0B7A6E" }}>£875</span>
-        </div>
         <div style={{ fontSize: 12, color: "#9AA6B4", marginTop: 14, lineHeight: 1.6 }}>
-          {paidUpfront
-            ? `Booking credit of ${fmt(cfg.upfrontPence)} is deducted — patient pays ${fmt(net)}.`
-            : "No booking credit applied — patient sees the full treatment price until you tick the box above."}
+          Aligners, package, video link, booking credit, <strong>Save draft</strong> and <strong>Send proposal</strong> are on the proposal screen.
         </div>
       </div>
     </form>

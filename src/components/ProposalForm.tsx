@@ -1,13 +1,12 @@
 "use client";
-// Edit an existing patient — mirrors the New-patient form, pre-filled, plus the
-// booking-credit toggle. Draft proposals can be saved and resumed, or saved and sent.
+// Full proposal builder — save draft, send, and live pricing preview.
 import { useEffect, useState } from "react";
 import { useFormStatus } from "react-dom";
 import { updatePatient } from "@/app/admin/actions";
 import { estMonths, fmt, priceForPence, type PricingConfig } from "@/lib/pricing";
 import SentByPicker from "@/components/SentByPicker";
 
-export type EditPatientInitial = {
+export type ProposalPatient = {
   id: string;
   firstName: string;
   lastName: string;
@@ -22,7 +21,7 @@ export type EditPatientInitial = {
   status: string;
 };
 
-function EditPatientActions({ isDraft, patientId }: { isDraft: boolean; patientId: string }) {
+function ProposalActions({ isDraft, patientId }: { isDraft: boolean; patientId: string }) {
   const { pending } = useFormStatus();
   const [intent, setIntent] = useState<"draft" | "send" | "save" | null>(null);
 
@@ -38,10 +37,10 @@ function EditPatientActions({ isDraft, patientId }: { isDraft: boolean; patientI
     return (
       <div style={{ display: "flex", gap: 12, marginTop: 26 }}>
         <a className="btn btn-outline" href={`/admin/patients/${patientId}`} style={{ flex: 1, textAlign: "center", textDecoration: "none" }}>
-          Cancel
+          Back to patient
         </a>
         <button type="submit" className="btn btn-teal" name="intent" value="save" disabled={pending} style={{ flex: 1.3 }}>
-          {pending ? "Saving…" : "Save changes"}
+          {pending ? "Saving…" : "Save proposal changes"}
         </button>
       </div>
     );
@@ -52,7 +51,7 @@ function EditPatientActions({ isDraft, patientId }: { isDraft: boolean; patientI
       <div style={{ height: 1, background: "#EEF2F6", margin: "24px 0" }} />
       <SentByPicker />
       <div style={{ display: "flex", gap: 12, marginTop: 26, flexWrap: "wrap" }}>
-        <a className="btn btn-outline" href={`/admin/patients`} style={{ flex: "1 1 120px", textAlign: "center", textDecoration: "none" }}>
+        <a className="btn btn-outline" href="/admin/patients" style={{ flex: "1 1 120px", textAlign: "center", textDecoration: "none" }}>
           Back to list
         </a>
         <button
@@ -93,18 +92,19 @@ function EditPatientActions({ isDraft, patientId }: { isDraft: boolean; patientI
         </button>
       </div>
       <div style={{ fontSize: 12, color: "#9AA6B4", marginTop: 12, lineHeight: 1.6 }}>
-        Save draft keeps this as a draft in your patient list — open it anytime from <strong>Patients → Draft</strong> to finish and send.
+        <strong>Save draft</strong> stores your progress — resume anytime from <strong>Patients → Draft</strong>.{" "}
+        <strong>Save &amp; send</strong> emails the patient and sends WhatsApp when a phone number is set.
       </div>
     </>
   );
 }
 
-export default function EditPatientForm({
+export default function ProposalForm({
   patient,
   cfg,
   owners,
 }: {
-  patient: EditPatientInitial;
+  patient: ProposalPatient;
   cfg: PricingConfig;
   owners?: Array<{ id: string; name: string }>;
 }) {
@@ -129,13 +129,20 @@ export default function EditPatientForm({
     if (first || em) {
       e.preventDefault();
       setErrs({ first, email: em });
-      return;
     }
   };
 
   const pkgBtn = (active: boolean): React.CSSProperties => ({
-    flex: 1, padding: 12, borderRadius: 11, fontSize: 13.5, fontWeight: 700, cursor: "pointer",
-    display: "flex", flexDirection: "column", gap: 2, alignItems: "flex-start",
+    flex: 1,
+    padding: 12,
+    borderRadius: 11,
+    fontSize: 13.5,
+    fontWeight: 700,
+    cursor: "pointer",
+    display: "flex",
+    flexDirection: "column",
+    gap: 2,
+    alignItems: "flex-start",
     background: active ? "#0E9384" : "#fff",
     color: active ? "#fff" : "#3C4a59",
     border: active ? "1.5px solid #0E9384" : "1.5px solid #E1E7EE",
@@ -145,15 +152,15 @@ export default function EditPatientForm({
     <form action={updatePatient} onSubmit={validate} className="ds-view" style={{ display: "grid", gridTemplateColumns: "1.3fr 1fr", gap: 18, alignItems: "start" }}>
       <input type="hidden" name="patientId" value={patient.id} />
       <div className="card" style={{ padding: 26 }}>
-        <div style={{ fontSize: 16, fontWeight: 800 }}>{isDraft ? "Draft proposal" : "Edit patient details"}</div>
+        <div style={{ fontSize: 16, fontWeight: 800 }}>Proposal</div>
         <div style={{ fontSize: 13, color: "#7A8696", marginTop: 2 }}>
           {isDraft
-            ? "Save your progress as a draft and return later, or send when the proposal is ready."
-            : "Changes are saved immediately — the proposal updates for the patient too."}
+            ? "Build the treatment plan, save as a draft, or send when ready."
+            : "Update the proposal — changes apply on the patient pay link immediately."}
         </div>
         {isDraft && (
           <div style={{ marginTop: 14, padding: "12px 14px", borderRadius: 11, background: "#FBF3E2", border: "1px solid #F0DCA8", fontSize: 13, color: "#8A5A12", lineHeight: 1.5 }}>
-            This proposal is still a <strong>draft</strong> — the patient has not been emailed yet.
+            Draft — not sent to the patient yet. Use the buttons below when you are ready.
           </div>
         )}
 
@@ -200,7 +207,6 @@ export default function EditPatientForm({
           </div>
         </div>
 
-        {/* £250 upfront toggle */}
         <label style={{ display: "flex", gap: 12, alignItems: "flex-start", marginTop: 20, padding: "14px 16px", borderRadius: 12, border: "1.5px solid " + (paidUpfront ? "#0E9384" : "#E1E7EE"), background: paidUpfront ? "#F0FBF8" : "#fff", cursor: "pointer" }}>
           <input type="checkbox" name="paidUpfront" checked={paidUpfront} onChange={(e) => setPaidUpfront(e.target.checked)} style={{ width: 18, height: 18, accentColor: "#0E9384", marginTop: 1 }} />
           <span>
@@ -218,9 +224,6 @@ export default function EditPatientForm({
                 <option key={o.id} value={o.id}>{o.name}</option>
               ))}
             </select>
-            <div style={{ fontSize: 12, color: "#8A96A5", marginTop: 4 }}>
-              The assigned admin sees this patient in their own dashboard, list and reports.
-            </div>
           </div>
         )}
 
@@ -233,12 +236,11 @@ export default function EditPatientForm({
           <textarea className="input" name="notes" value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Anything the coordinator should know…" rows={3} style={{ resize: "vertical" }} />
         </div>
 
-        <EditPatientActions isDraft={isDraft} patientId={patient.id} />
+        <ProposalActions isDraft={isDraft} patientId={patient.id} />
       </div>
 
-      {/* summary */}
       <div className="card" style={{ padding: 24, position: "sticky", top: 0 }}>
-        <div style={{ fontSize: 12, fontWeight: 700, letterSpacing: ".08em", textTransform: "uppercase", color: "#0E9384" }}>Pricing summary</div>
+        <div style={{ fontSize: 12, fontWeight: 700, letterSpacing: ".08em", textTransform: "uppercase", color: "#0E9384" }}>Live proposal preview</div>
         <div style={{ fontSize: 22, fontWeight: 800, marginTop: 12 }}>{(firstName || "New") + " " + (lastName || "patient")}</div>
         <div style={{ fontSize: 13, color: "#8A96A5" }}>{email || "Email will appear here"}</div>
 
@@ -248,12 +250,16 @@ export default function EditPatientForm({
             <span style={{ fontSize: 14, fontWeight: 800 }}>{alignerCount} · ≈{estMonths(alignerCount)} mo</span>
           </div>
           <div style={{ display: "flex", justifyContent: "space-between", padding: "14px 16px", borderBottom: "1px solid #F1F4F8" }}>
+            <span style={{ fontSize: 13, color: "#7A8696" }}>Package</span>
+            <span style={{ fontSize: 14, fontWeight: 800 }}>Invisalign {pkg}</span>
+          </div>
+          <div style={{ display: "flex", justifyContent: "space-between", padding: "14px 16px", borderBottom: "1px solid #F1F4F8" }}>
             <span style={{ fontSize: 13, color: "#7A8696" }}>Treatment total</span>
             <span style={{ fontSize: 14, fontWeight: 800 }}>{fmt(price)}</span>
           </div>
           {paidUpfront && (
             <div style={{ display: "flex", justifyContent: "space-between", padding: "14px 16px", borderBottom: "1px solid #F1F4F8" }}>
-              <span style={{ fontSize: 13, color: "#7A8696" }}>Less {fmt(cfg.upfrontPence)} upfront</span>
+              <span style={{ fontSize: 13, color: "#7A8696" }}>Less booking paid</span>
               <span style={{ fontSize: 14, fontWeight: 800, color: "#B4530A" }}>− {fmt(cfg.upfrontPence)}</span>
             </div>
           )}
@@ -261,9 +267,6 @@ export default function EditPatientForm({
             <span style={{ fontSize: 13, color: "#0B7A6E", fontWeight: 600 }}>Balance remaining</span>
             <span style={{ fontSize: 17, fontWeight: 800, color: "#0B7A6E" }}>{fmt(net)}</span>
           </div>
-        </div>
-        <div style={{ fontSize: 12, color: "#9AA6B4", marginTop: 14, lineHeight: 1.6 }}>
-          Pay-in-full also applies a {cfg.discountPct}% discount on the balance at checkout.
         </div>
       </div>
     </form>

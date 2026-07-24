@@ -583,16 +583,10 @@ async function requireOwnedPatient(id: string) {
 export async function createPatient(formData: FormData) {
   const admin = await requireAdmin();
   const cfg = await getPricing();
-  const send = formData.get("intent") === "send";
   const firstName = String(formData.get("firstName") || "").trim();
   const lastName = String(formData.get("lastName") || "").trim();
   const email = String(formData.get("email") || "").trim().toLowerCase();
   const phone = String(formData.get("phone") || "").trim();
-  const alignerCount = Math.min(40, Math.max(1, parseInt(String(formData.get("alignerCount") || "14"), 10) || 14));
-  const pkg = formData.get("pkg") === "Express" ? "Express" : "Go";
-  const videoUrl = String(formData.get("videoUrl") || "").trim();
-  const notes = String(formData.get("notes") || "").trim();
-  const paidUpfront = formData.get("paidUpfront") === "on";
 
   if (!firstName || !/.+@.+\..+/.test(email)) redirect("/admin/patients/new?error=1");
 
@@ -608,42 +602,27 @@ export async function createPatient(formData: FormData) {
         )
       );
     }
-    // Same email — update saved draft or resend on the existing record.
-    const draftData = {
-      firstName,
-      lastName,
-      email,
-      phone,
-      alignerCount,
-      pkg,
-      videoUrl,
-      notes,
-      pricePence: priceForPence(alignerCount, cfg),
-      upfrontPaidPence: paidUpfront ? cfg.upfrontPence : 0,
-      activities: {
-        create: { text: send ? "Proposal updated before send" : "Draft proposal saved" },
+    // Same email — refresh contact details only; proposal fields stay as-is.
+    await db.patient.update({
+      where: { id: existing.id },
+      data: {
+        firstName,
+        lastName,
+        email,
+        phone,
+        activities: { create: { text: "Contact details updated — opening proposal" } },
       },
-    };
-    await db.patient.update({ where: { id: existing.id }, data: draftData });
-    if (send) {
-      await deliverProposal(existing.id, pickCoordinator(formData));
-      redirect(
-        toastUrl(
-          `/admin/patients/${existing.id}`,
-          `Proposal sent to ${firstName}`,
-          "✉"
-        )
-      );
-    }
+    });
     redirect(
       toastUrl(
-        `/admin/patients/${existing.id}/edit`,
-        `Draft saved for ${firstName} — continue anytime`,
+        `/admin/patients/${existing.id}/proposal`,
+        `Opening proposal for ${firstName}`,
         "✓"
       )
     );
   }
 
+  const alignerCount = 14;
   const patient = await db.patient.create({
     data: {
       firstName,
@@ -651,23 +630,19 @@ export async function createPatient(formData: FormData) {
       email,
       phone,
       alignerCount,
-      pkg,
-      videoUrl,
-      notes,
+      pkg: "Go",
+      videoUrl: "",
+      notes: "",
       status: "draft",
       pricePence: priceForPence(alignerCount, cfg),
       discountPct: cfg.discountPct,
-      upfrontPaidPence: paidUpfront ? cfg.upfrontPence : 0,
+      upfrontPaidPence: 0,
       ownerId: admin.id,
       activities: { create: { text: "Draft proposal created" } },
     },
   });
 
-  if (send) {
-    await deliverProposal(patient.id, pickCoordinator(formData));
-    redirect(toastUrl(`/admin/patients/${patient.id}`, `Patient created & proposal sent to ${firstName}`, "✉"));
-  }
-  redirect(toastUrl(`/admin/patients/${patient.id}/edit`, `Draft saved for ${firstName} — finish and send when ready`, "✓"));
+  redirect(toastUrl(`/admin/patients/${patient.id}/proposal`, `Build the proposal for ${firstName}`, "✓"));
 }
 
 // Edit an existing patient — allowed at any status (even after paid/done).
@@ -691,11 +666,11 @@ export async function updatePatient(formData: FormData) {
   const paidUpfront = formData.get("paidUpfront") === "on";
 
   if (!firstName || !/.+@.+\..+/.test(email)) {
-    redirect(toastUrl(`/admin/patients/${id}/edit`, "A first name and valid email are required", "!", "#E0A429"));
+    redirect(toastUrl(`/admin/patients/${id}/proposal`, "A first name and valid email are required", "!", "#E0A429"));
   }
   const clash = await db.patient.findFirst({ where: { email, NOT: { id } } });
   if (clash) {
-    redirect(toastUrl(`/admin/patients/${id}/edit`, "Another patient already uses that email", "!", "#E0A429"));
+    redirect(toastUrl(`/admin/patients/${id}/proposal`, "Another patient already uses that email", "!", "#E0A429"));
   }
 
   await db.patient.update({
@@ -730,7 +705,7 @@ export async function updatePatient(formData: FormData) {
     redirect(toastUrl(`/admin/patients/${id}`, `Proposal sent to ${firstName}`, "✉"));
   }
   if (intent === "draft") {
-    redirect(toastUrl(`/admin/patients/${id}/edit`, "Draft saved — pick up where you left off", "✓"));
+    redirect(toastUrl(`/admin/patients/${id}/proposal`, "Draft saved — pick up where you left off", "✓"));
   }
   redirect(toastUrl(`/admin/patients/${id}`, "Patient details updated", "✓"));
 }

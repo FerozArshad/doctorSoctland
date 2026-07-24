@@ -153,15 +153,9 @@ export default async function PatientProfile({ params }: { params: { id: string 
               </div>
             </div>
             <div style={{ display: "flex", gap: 10, flexWrap: "wrap", justifyContent: "flex-end" }}>
-              {c.status === "draft" ? (
-                <Link href={`/admin/patients/${c.id}/edit`} className="btn btn-teal" style={{ padding: "11px 18px", fontSize: 13.5, textDecoration: "none" }}>
-                  Continue draft
-                </Link>
-              ) : (
-                <Link href={`/admin/patients/${c.id}/edit`} className="btn btn-outline" style={{ padding: "11px 16px", fontSize: 13.5, textDecoration: "none" }}>
-                  Edit
-                </Link>
-              )}
+              <Link href={`/admin/patients/${c.id}/proposal`} className={c.status === "draft" ? "btn btn-teal" : "btn btn-outline"} style={{ padding: "11px 18px", fontSize: 13.5, textDecoration: "none" }}>
+                {c.status === "draft" ? "Continue proposal" : "Edit proposal"}
+              </Link>
               <form action={sendProposal}>
                 <input type="hidden" name="patientId" value={c.id} />
                 <FormSubmitButton

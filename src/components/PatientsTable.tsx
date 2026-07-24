@@ -133,7 +133,7 @@ export default function PatientsTable({ rows }: { rows: PatientRow[] }) {
           <div
             key={r.id}
             className="row-hover"
-            onClick={() => router.push(r.status === "draft" ? `/admin/patients/${r.id}/edit` : `/admin/patients/${r.id}`)}
+            onClick={() => router.push(r.status === "draft" ? `/admin/patients/${r.id}/proposal` : `/admin/patients/${r.id}`)}
             style={{ display: "grid", gridTemplateColumns: grid, padding: "14px 20px", alignItems: "center", borderBottom: "1px solid #F1F4F8", cursor: "pointer" }}
           >
             <div style={{ display: "flex", alignItems: "center", gap: 12, minWidth: 0 }}>

@@ -265,19 +265,47 @@ export function normalisePhone(phone: string): string | null {
   return null;
 }
 
+/** All dashboard admin logins + practice inbox — used for admin alert emails. */
+async function adminNotifyEmails(...extra: (string | null | undefined)[]): Promise<string[]> {
+  const recipients = new Set<string>();
+  const add = (email?: string | null) => {
+    const e = (email || "").trim().toLowerCase();
+    if (/.+@.+\..+/.test(e)) recipients.add(e);
+  };
+  add(process.env.ADMIN_NOTIFY_EMAIL);
+  for (const e of extra) add(e);
+  const admins = await db.admin.findMany({ select: { email: true } });
+  for (const a of admins) add(a.email);
+  return Array.from(recipients);
+}
+
+async function sendAdminEmails(subject: string, html: string, extra?: (string | null | undefined)[]) {
+  const recipients = await adminNotifyEmails(...(extra || []));
+  if (recipients.length === 0) {
+    log.warn("admin.notify.skip", { reason: "no_recipients" });
+    return;
+  }
+  await Promise.all(
+    recipients.map(async (to) => {
+      try {
+        const result = await sendEmail(to, subject, html);
+        log.info("admin.notify.email", { to, via: result.via ?? (result.simulated ? "simulated" : "unknown") });
+      } catch (e) {
+        log.error("admin.notify.email.fail", { to, error: summarizeError(e) });
+      }
+    })
+  );
+}
+
 // ── Admin alerts (email + WhatsApp to the practice) ─────────────────────
 export async function notifyAdmin(subject: string, text: string) {
-  const jobs: Promise<unknown>[] = [];
-  const email = process.env.ADMIN_NOTIFY_EMAIL;
-  if (email) {
-    jobs.push(
-      sendEmail(email, subject, brandedEmail(escapeHtml(subject), `<p style="font-size:15px;line-height:1.7;color:#3C4a59;">${escapeHtml(text)}</p>`)).catch((e) => console.error(e))
-    );
-  }
+  const jobs: Promise<unknown>[] = [
+    sendAdminEmails(subject, brandedEmail(escapeHtml(subject), `<p style="font-size:15px;line-height:1.7;color:#3C4a59;">${escapeHtml(text)}</p>`)),
+  ];
   const waCfg = await getWhatsAppConfig();
   const wa = waCfg.adminNotifyWhatsApp;
   if (wa) {
-    jobs.push(sendWhatsApp(wa, `${subject}\n${text}`).catch((e) => console.error(e)));
+    jobs.push(sendWhatsApp(wa, `${subject}\n${text}`).catch((e) => log.error("admin.notify.whatsapp.fail", { error: summarizeError(e) })));
   }
   await Promise.all(jobs);
 }
@@ -295,14 +323,6 @@ export async function notifyFinanceApplication(
     (note ? ` Message: “${note}”` : "") +
     ` View: ${link}`;
 
-  const recipients = new Set<string>();
-  if (process.env.ADMIN_NOTIFY_EMAIL) recipients.add(process.env.ADMIN_NOTIFY_EMAIL);
-  if (patient.sentByEmail && /.+@.+\..+/.test(patient.sentByEmail)) recipients.add(patient.sentByEmail);
-  if (patient.ownerId) {
-    const owner = await db.admin.findUnique({ where: { id: patient.ownerId }, select: { email: true } });
-    if (owner?.email && /.+@.+\..+/.test(owner.email)) recipients.add(owner.email);
-  }
-
   const html = brandedEmail(
     "Finance application received",
     `<p style="font-size:15px;line-height:1.7;color:#3C4a59;"><strong>${escapeHtml(name)}</strong> has applied for 0% finance.</p>
@@ -311,13 +331,13 @@ export async function notifyFinanceApplication(
      <div style="text-align:center;margin:22px 0 8px;"><a href="${link}" style="display:inline-block;background:#0E9384;color:#fff;text-decoration:none;padding:13px 26px;border-radius:11px;font-weight:800;font-size:14.5px;">Open patient record →</a></div>`
   );
 
-  const jobs: Promise<unknown>[] = Array.from(recipients).map((to) =>
-    sendEmail(to, subject, html).catch((e) => console.error("finance.notify.email.fail", to, e))
-  );
+  const jobs: Promise<unknown>[] = [
+    sendAdminEmails(subject, html, [patient.sentByEmail]),
+  ];
 
   const waCfg = await getWhatsAppConfig();
   if (waCfg.adminNotifyWhatsApp) {
-    jobs.push(sendWhatsApp(waCfg.adminNotifyWhatsApp, `${subject}\n${text}`).catch((e) => console.error(e)));
+    jobs.push(sendWhatsApp(waCfg.adminNotifyWhatsApp, `${subject}\n${text}`).catch((e) => log.error("finance.notify.whatsapp.fail", { error: summarizeError(e) })));
   }
 
   await Promise.all(jobs);

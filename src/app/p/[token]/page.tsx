@@ -337,6 +337,12 @@ export default async function ProposalPage({
                       </div>
                     )}
 
+                    {proposalDocs.length > 0 && (
+                      <div style={{ marginBottom: 12 }}>
+                        <ProposalDocuments token={c.proposalToken} docs={proposalDocs} compact />
+                      </div>
+                    )}
+
                     <PaymentOptionsForm
                       token={c.proposalToken}
                       options={payOptions}

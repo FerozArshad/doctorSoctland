@@ -769,9 +769,20 @@ const ADMIN_UPLOAD_TYPES = new Set(["image/jpeg", "image/png", "image/webp", "ap
 const ADMIN_UPLOAD_MAX_BYTES = 2 * 1024 * 1024;
 const ADMIN_UPLOAD_MAX_FILES = 5;
 
+function mimeForUpload(file: File): string | null {
+  if (file.type && ADMIN_UPLOAD_TYPES.has(file.type)) return file.type;
+  const ext = file.name.split(".").pop()?.toLowerCase();
+  if (ext === "pdf") return "application/pdf";
+  if (ext === "jpg" || ext === "jpeg") return "image/jpeg";
+  if (ext === "png") return "image/png";
+  if (ext === "webp") return "image/webp";
+  return null;
+}
+
 /** Admin uploads one or more files onto a patient record (visible on their proposal). */
 export async function adminUploadPatientFile(formData: FormData) {
   const id = String(formData.get("patientId"));
+  const returnTo = String(formData.get("returnTo") || "").trim();
   await requireOwnedPatient(id);
   const raw = [
     ...formData.getAll("files"),
@@ -779,14 +790,14 @@ export async function adminUploadPatientFile(formData: FormData) {
   ].filter((f): f is File => f instanceof File && f.size > 0);
 
   if (raw.length === 0) {
-    redirect(toastUrl(`/admin/patients/${id}`, "Choose one or more files to upload", "!", "#E0A429"));
+    redirect(toastUrl(returnTo || `/admin/patients/${id}`, "Choose one or more files to upload", "!", "#E0A429"));
   }
 
   const existing = await db.patientUpload.count({ where: { patientId: id } });
   if (existing + raw.length > ADMIN_UPLOAD_MAX_FILES) {
     redirect(
       toastUrl(
-        `/admin/patients/${id}`,
+        returnTo || `/admin/patients/${id}`,
         `Maximum ${ADMIN_UPLOAD_MAX_FILES} files (${existing} already uploaded)`,
         "!",
         "#E0A429"
@@ -796,18 +807,19 @@ export async function adminUploadPatientFile(formData: FormData) {
 
   const saved: string[] = [];
   for (const file of raw) {
-    if (!ADMIN_UPLOAD_TYPES.has(file.type)) {
-      redirect(toastUrl(`/admin/patients/${id}`, `"${file.name}" must be JPG, PNG, WebP or PDF`, "!", "#E0A429"));
+    const mimeType = mimeForUpload(file);
+    if (!mimeType) {
+      redirect(toastUrl(returnTo || `/admin/patients/${id}`, `"${file.name}" must be JPG, PNG, WebP or PDF`, "!", "#E0A429"));
     }
     if (file.size > ADMIN_UPLOAD_MAX_BYTES) {
-      redirect(toastUrl(`/admin/patients/${id}`, `"${file.name}" must be under 2 MB`, "!", "#E0A429"));
+      redirect(toastUrl(returnTo || `/admin/patients/${id}`, `"${file.name}" must be under 2 MB`, "!", "#E0A429"));
     }
     const buf = Buffer.from(await file.arrayBuffer());
     const created = await db.patientUpload.create({
       data: {
         patientId: id,
         fileName: file.name.slice(0, 180),
-        mimeType: file.type,
+        mimeType,
         sizeBytes: file.size,
         dataBase64: buf.toString("base64"),
         uploadedBy: "admin",
@@ -827,10 +839,12 @@ export async function adminUploadPatientFile(formData: FormData) {
   });
   const patient = await db.patient.findUnique({ where: { id }, select: { proposalToken: true } });
   revalidatePath(`/admin/patients/${id}`);
+  revalidatePath(`/admin/patients/${id}/proposal`);
   if (patient?.proposalToken) revalidatePath(`/p/${patient.proposalToken}`);
+  const back = returnTo && returnTo.startsWith("/admin/") ? returnTo : `/admin/patients/${id}`;
   redirect(
     toastUrl(
-      `/admin/patients/${id}`,
+      back,
       saved.length === 1 ? `Uploaded ${saved[0]}` : `Uploaded ${saved.length} files`,
       "✓"
     )

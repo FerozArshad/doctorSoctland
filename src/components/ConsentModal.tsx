@@ -204,7 +204,7 @@ export default function ConsentModal({
             if (e.target === e.currentTarget && !pending) onClose();
           }}
         >
-          <div style={{ background: "#fff", borderRadius: 18, width: "100%", maxWidth: 560, boxShadow: "0 30px 60px -20px rgba(11,24,40,.5)", overflow: "hidden" }}>
+          <div style={{ background: "#fff", borderRadius: 18, width: "100%", maxWidth: 560, maxHeight: "calc(100vh - 48px)", boxShadow: "0 30px 60px -20px rgba(11,24,40,.5)", overflow: "hidden", display: "flex", flexDirection: "column" }}>
             <div style={{ background: "#0E1A2B", padding: "18px 24px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
               <div style={{ color: "#fff", fontSize: 17, fontWeight: 800 }}>{heading}</div>
               <button type="button" onClick={onClose} disabled={pending} aria-label="Close" style={{ background: "transparent", border: "none", color: "#9FB2C8", fontSize: 22, cursor: "pointer", lineHeight: 1, opacity: pending ? 0.4 : 1 }}>
@@ -212,7 +212,7 @@ export default function ConsentModal({
               </button>
             </div>
 
-            <div style={{ padding: "22px 24px" }}>
+            <div style={{ padding: "22px 24px", overflowY: "auto", flex: 1 }}>
               <div style={{ fontSize: 14, fontWeight: 800, color: "#16202E", marginBottom: 8 }}>{CONSENT_TITLE}</div>
               <div style={{ maxHeight: 148, overflowY: "auto", border: "1px solid #E7ECF2", borderRadius: 12, padding: "12px 14px", background: "#FBFCFD" }}>
                 {CONSENT_PARAGRAPHS.map((p, i) => (

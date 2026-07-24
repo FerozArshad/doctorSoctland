@@ -4,7 +4,7 @@ import { useRef, useState } from "react";
 import { adminUploadPatientFile } from "@/app/admin/actions";
 import FormSubmitButton from "@/components/FormSubmitButton";
 
-export default function AdminFileUpload({ patientId }: { patientId: string }) {
+export default function AdminFileUpload({ patientId, returnTo }: { patientId: string; returnTo?: string }) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [names, setNames] = useState<string[]>([]);
 
@@ -14,6 +14,7 @@ export default function AdminFileUpload({ patientId }: { patientId: string }) {
       style={{ marginTop: 14, display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}
     >
       <input type="hidden" name="patientId" value={patientId} />
+      {returnTo ? <input type="hidden" name="returnTo" value={returnTo} /> : null}
       <input
         ref={inputRef}
         type="file"

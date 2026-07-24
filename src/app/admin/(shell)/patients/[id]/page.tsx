@@ -11,7 +11,7 @@ import TopBar from "@/components/TopBar";
 import MessageLog from "@/components/MessageLog";
 import FormSubmitButton from "@/components/FormSubmitButton";
 import DeletePatientButton from "@/components/DeletePatientButton";
-import AdminFileUpload from "@/components/AdminFileUpload";
+import AdminPatientFiles from "@/components/AdminPatientFiles";
 import { isMessageActivity } from "@/lib/messages";
 import { publicActivityText } from "@/lib/activity-display";
 import { patientTemplateText } from "@/lib/patient-templates";
@@ -264,44 +264,11 @@ export default async function PatientProfile({ params }: { params: { id: string 
                 </div>
               </div>
 
-              {/* files — above treatment plan */}
-              <div className="card" style={{ padding: 24 }}>
-                <div style={{ fontSize: 15, fontWeight: 800, marginBottom: 4 }}>Files &amp; documents</div>
-                <div style={{ fontSize: 12.5, color: "#7A8696", marginBottom: 14 }}>
-                  Upload up to 5 files for this patient (consent forms, photos, PDFs). They appear at the top of the patient&apos;s proposal — patients can view but not upload.
-                  {c.uploads.length > 0 && (
-                    <>
-                      {" "}
-                      <Link href={`/p/${c.proposalToken}?preview=admin`} style={{ color: "#0E9384", fontWeight: 700 }}>
-                        Preview proposal →
-                      </Link>
-                    </>
-                  )}
-                </div>
-                <AdminFileUpload patientId={c.id} />
-                {c.uploads.length === 0 ? (
-                  <div style={{ marginTop: 14, fontSize: 13.5, color: "#9AA6B4" }}>No files yet.</div>
-                ) : (
-                  <div style={{ display: "flex", flexDirection: "column", gap: 10, marginTop: 14 }}>
-                    {c.uploads.map((u) => (
-                      <a
-                        key={u.id}
-                        href={`/api/admin/patients/${c.id}/files/${u.id}`}
-                        download={u.fileName}
-                        style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, padding: "12px 14px", borderRadius: 11, border: "1px solid #EEF2F6", background: "#FBFCFD", textDecoration: "none", color: "inherit" }}
-                      >
-                        <div style={{ minWidth: 0 }}>
-                          <div style={{ fontSize: 13.5, fontWeight: 700, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>📎 {u.fileName}</div>
-                          <div style={{ fontSize: 12, color: "#9AA6B4", marginTop: 2 }}>
-                            {Math.round(u.sizeBytes / 1024)} KB · {u.uploadedBy === "admin" ? "Admin" : "Patient"} · {u.createdAt.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}
-                          </div>
-                        </div>
-                        <span style={{ fontSize: 12.5, fontWeight: 700, color: "#0E9384", flex: "none" }}>Download</span>
-                      </a>
-                    ))}
-                  </div>
-                )}
-              </div>
+              <AdminPatientFiles
+                patientId={c.id}
+                proposalToken={c.proposalToken}
+                files={c.uploads.filter((u) => u.uploadedBy === "admin")}
+              />
 
               {/* plan */}
               <div className="card" style={{ padding: 24 }}>

@@ -9,23 +9,48 @@ import { patientWhere, requireAdmin } from "@/lib/auth";
 export const dynamic = "force-dynamic";
 
 export default async function Dashboard() {
-  // Only a Super Admin sees earnings (revenue cards + revenue chart).
-  // Every figure below is scoped to the patients this admin may see.
   const me = await requireAdmin();
   const isSuper = me.isSuperAdmin;
+  const where = patientWhere(me);
 
-  const patients = await db.patient.findMany({
-    where: patientWhere(me),
-    include: { activities: { orderBy: { createdAt: "desc" } } },
-    orderBy: { createdAt: "desc" },
-  });
-  const paidPayments = await db.payment.findMany({ where: { status: "paid", patient: patientWhere(me) } });
+  const sixMonthsAgo = new Date();
+  sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
+  sixMonthsAgo.setDate(1);
+  sixMonthsAgo.setHours(0, 0, 0, 0);
 
-  // ── Stats ──
+  const [patients, paidPayments, recentActivities] = await Promise.all([
+    db.patient.findMany({
+      where,
+      select: {
+        id: true,
+        firstName: true,
+        lastName: true,
+        status: true,
+        pricePence: true,
+        upfrontPaidPence: true,
+        amountPaidPence: true,
+        createdAt: true,
+      },
+      orderBy: { createdAt: "desc" },
+    }),
+    db.payment.findMany({
+      where: { status: "paid", patient: where, paidAt: { gte: sixMonthsAgo } },
+      select: { amountPence: true, paidAt: true },
+    }),
+    db.activity.findMany({
+      where: { patient: where },
+      orderBy: { createdAt: "desc" },
+      take: 24,
+      select: {
+        text: true,
+        createdAt: true,
+        patient: { select: { id: true, firstName: true, lastName: true } },
+      },
+    }),
+  ]);
+
   const collected = patients.reduce((a, c) => a + c.amountPaidPence, 0);
   const active = patients.filter((c) => c.status !== "draft");
-  // Outstanding must be net of any booking credit — using the gross price here
-  // overstated pending revenue by the credit for every affected patient.
   const pending = active
     .filter((c) => c.status !== "paid")
     .reduce((a, c) => a + Math.max(0, netPricePence(c.pricePence, c.upfrontPaidPence) - c.amountPaidPence), 0);
@@ -33,8 +58,6 @@ export default async function Dashboard() {
   const conv = active.length ? Math.round((100 * won) / active.length) : 0;
   const overdueCount = patients.filter((c) => c.status === "overdue").length;
 
-  // Real deltas — these were previously hardcoded ("+3 this wk" / "+12%") and
-  // shown as if they were live figures.
   const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
   const newThisWeek = patients.filter((c) => c.createdAt >= weekAgo).length;
   const monthStart = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
@@ -47,7 +70,6 @@ export default async function Dashboard() {
 
   const statCards = [
     { label: "Active patients", value: String(patients.length), delta: `+${newThisWeek} this wk`, deltaColor: newThisWeek > 0 ? "#1C7C3A" : "#7A8696", deltaBg: newThisWeek > 0 ? "#E6F6EA" : "#F1F4F8", iconBg: "#EAF0FE", iconFg: "#2E6BFF", d: "M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8z" },
-    // Earnings — Super Admin only.
     ...(isSuper
       ? [
           { label: "Revenue collected", value: fmt(collected), delta: `${revDeltaPct >= 0 ? "+" : ""}${revDeltaPct}% vs last mo`, deltaColor: revDeltaPct >= 0 ? "#1C7C3A" : "#C23B34", deltaBg: revDeltaPct >= 0 ? "#E6F6EA" : "#FBE9E8", iconBg: "#E3F6F0", iconFg: "#0B7A6E", d: "M12 1v22M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" },
@@ -59,7 +81,6 @@ export default async function Dashboard() {
     { label: "Conversion rate", value: conv + "%", delta: won + "/" + active.length + " won", deltaColor: "#1D4FD8", deltaBg: "#EAF0FE", iconBg: "#F3EBFC", iconFg: "#9B51E0", d: "M23 6l-9.5 9.5-5-5L1 18M17 6h6v6" },
   ];
 
-  // ── Revenue chart: real Stripe/manual payments, last 6 months ──
   const now = new Date();
   const monthly: { month: string; v: number }[] = [];
   for (let i = 5; i >= 0; i--) {
@@ -73,27 +94,21 @@ export default async function Dashboard() {
   const max = Math.max(1, ...monthly.map((m) => m.v));
   const chartTotal = fmt(monthly.reduce((a, m) => a + m.v, 0));
 
-  // ── Pipeline ──
   const order: StatusKey[] = ["sent", "interested", "awaiting", "deposit", "paid"];
   const countFor = (k: StatusKey) =>
     patients.filter((c) => c.status === k || (k === "awaiting" && c.status === "overdue")).length;
   const pmax = Math.max(1, ...order.map(countFor));
 
-  // ── Activity feed ──
-  const feed = patients
-    .flatMap((c) =>
-      c.activities.map((a) => ({
-        ts: a.createdAt,
-        text: publicActivityText(a.text),
-        name: c.firstName + " " + c.lastName,
-        initials: initials(c.firstName, c.lastName),
-        bg: avatarBg(c.id),
-      }))
-    )
-    .sort((a, b) => b.ts.getTime() - a.ts.getTime())
+  const feed = recentActivities
+    .map((a) => ({
+      ts: a.createdAt,
+      text: publicActivityText(a.text),
+      name: `${a.patient.firstName} ${a.patient.lastName}`.trim(),
+      initials: initials(a.patient.firstName, a.patient.lastName),
+      bg: avatarBg(a.patient.id),
+    }))
     .slice(0, 6);
 
-  // ── Follow-ups ──
   const followUps = patients
     .filter((c) => ["sent", "interested", "awaiting", "overdue"].includes(c.status))
     .slice(0, 4);
@@ -103,7 +118,6 @@ export default async function Dashboard() {
       <TopBar title="Dashboard" sub="Practice overview & activity" />
       <div className="ds-scroll" style={{ flex: 1, overflow: "auto", padding: 28 }}>
         <div className="ds-view">
-          {/* stat cards */}
           <div className="ds-stats" style={{ display: "grid", gridTemplateColumns: `repeat(${statCards.length},1fr)`, gap: 18 }}>
             {statCards.map((s) => (
               <div key={s.label} className="card" style={{ padding: 20, boxShadow: "0 1px 2px rgba(16,32,54,.03)" }}>
@@ -119,7 +133,6 @@ export default async function Dashboard() {
             ))}
           </div>
 
-          {/* chart (Super Admin only) + pipeline */}
           <div className="ds-split" style={{ display: "grid", gridTemplateColumns: isSuper ? "1.6fr 1fr" : "1fr", gap: 18, marginTop: 18 }}>
             {isSuper && (
               <div className="card" style={{ padding: 22 }}>
@@ -163,7 +176,6 @@ export default async function Dashboard() {
             </div>
           </div>
 
-          {/* activity + follow-ups */}
           <div className="ds-split" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 18, marginTop: 18 }}>
             <div className="card" style={{ padding: 22 }}>
               <div style={{ fontSize: 15, fontWeight: 800, marginBottom: 16 }}>Recent activity</div>

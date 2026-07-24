@@ -33,9 +33,19 @@ export default async function PatientProfile({ params }: { params: { id: string 
   const c = await db.patient.findUnique({
     where: { id: params.id },
     include: {
-      activities: { orderBy: { createdAt: "desc" } },
+      activities: { orderBy: { createdAt: "desc" }, take: 80 },
       instalments: { orderBy: { number: "asc" } },
-      uploads: { orderBy: { createdAt: "desc" } },
+      uploads: {
+        orderBy: { createdAt: "desc" },
+        select: {
+          id: true,
+          fileName: true,
+          mimeType: true,
+          sizeBytes: true,
+          uploadedBy: true,
+          createdAt: true,
+        },
+      },
     },
   });
   if (!c) notFound();
@@ -274,7 +284,7 @@ export default async function PatientProfile({ params }: { params: { id: string 
                     {c.uploads.map((u) => (
                       <a
                         key={u.id}
-                        href={`data:${u.mimeType};base64,${u.dataBase64}`}
+                        href={`/api/admin/patients/${c.id}/files/${u.id}`}
                         download={u.fileName}
                         style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, padding: "12px 14px", borderRadius: 11, border: "1px solid #EEF2F6", background: "#FBFCFD", textDecoration: "none", color: "inherit" }}
                       >

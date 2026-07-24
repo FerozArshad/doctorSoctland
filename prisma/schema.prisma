@@ -143,6 +143,10 @@ model Patient {
   payments              Payment[]
   instalments           Instalment[]
   uploads               PatientUpload[]
+
+  @@index([ownerId])
+  @@index([sentByEmail])
+  @@index([status])
 }
 
 /// Files attached to a patient proposal (by patient or admin). Stored as
@@ -185,6 +189,7 @@ model Payment {
   createdAt             DateTime  @default(now())
 
   @@index([patientId])
+  @@index([status, paidAt])
 }
 
 model Instalment {

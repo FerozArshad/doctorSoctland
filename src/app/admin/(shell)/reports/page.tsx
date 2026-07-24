@@ -54,32 +54,33 @@ export default async function ReportsPage({
     ? {}
     : { OR: [{ ownerId: me.id }, { sentByEmail: me.email }] };
 
-  const patients = await db.patient.findMany({
-    where: baseWhere,
-    select: {
-      id: true,
-      firstName: true,
-      lastName: true,
-      email: true,
-      pricePence: true,
-      upfrontPaidPence: true,
-      proposalSentAt: true,
-      sentByEmail: true,
-      sentByName: true,
-      ownerId: true,
-    },
-  });
-
-  const payments = await db.payment.findMany({
-    where: { status: "paid", patient: baseWhere },
-    select: {
-      patientId: true,
-      amountPence: true,
-      paidAt: true,
-      type: true,
-      patient: { select: { firstName: true, lastName: true, email: true, sentByEmail: true } },
-    },
-  });
+  const [patients, payments] = await Promise.all([
+    db.patient.findMany({
+      where: baseWhere,
+      select: {
+        id: true,
+        firstName: true,
+        lastName: true,
+        email: true,
+        pricePence: true,
+        upfrontPaidPence: true,
+        proposalSentAt: true,
+        sentByEmail: true,
+        sentByName: true,
+        ownerId: true,
+      },
+    }),
+    db.payment.findMany({
+      where: { status: "paid", patient: baseWhere, paidAt: { gte: start, lt: end } },
+      select: {
+        patientId: true,
+        amountPence: true,
+        paidAt: true,
+        type: true,
+        patient: { select: { firstName: true, lastName: true, email: true, sentByEmail: true } },
+      },
+    }),
+  ]);
 
   const inMonth = (d: Date | null | undefined) => !!d && d >= start && d < end;
 

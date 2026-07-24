@@ -4,60 +4,77 @@ import { createContext, useCallback, useContext, useEffect, useState } from "rea
 import type { MessageNotifications, NotificationItem } from "@/lib/messages";
 import { dismissNotification, markNotificationRead } from "@/app/admin/notification-actions";
 
-type Ctx = MessageNotifications & {
-  markRead: (key: string) => void;
-  remove: (key: string) => void;
-};
-
-const MessageNotificationsContext = createContext<Ctx>({
+const EMPTY: MessageNotifications = {
   items: [],
   recentSent: [],
   upcoming: [],
   alertCount: 0,
+};
+
+type Ctx = MessageNotifications & {
+  markRead: (key: string) => void;
+  remove: (key: string) => void;
+  refresh: () => void;
+  loading: boolean;
+};
+
+const MessageNotificationsContext = createContext<Ctx>({
+  ...EMPTY,
   markRead: () => {},
   remove: () => {},
+  refresh: () => {},
+  loading: true,
 });
 
 function applyRead(items: NotificationItem[], key: string) {
   return items.map((i) => (i.key === key ? { ...i, unread: false } : i));
 }
 
-export function MessageNotificationsProvider({
-  data,
-  children,
-}: {
-  data: MessageNotifications;
-  children: React.ReactNode;
-}) {
-  const [items, setItems] = useState(data.items);
-  const [alertCount, setAlertCount] = useState(data.alertCount);
+export function MessageNotificationsProvider({ children }: { children: React.ReactNode }) {
+  const [data, setData] = useState<MessageNotifications>(EMPTY);
+  const [loading, setLoading] = useState(true);
+
+  const refresh = useCallback(() => {
+    fetch("/api/admin/notifications", { cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : EMPTY))
+      .then((json: MessageNotifications) => setData(json))
+      .catch(() => setData(EMPTY))
+      .finally(() => setLoading(false));
+  }, []);
 
   useEffect(() => {
-    setItems(data.items);
-    setAlertCount(data.alertCount);
-  }, [data]);
+    refresh();
+  }, [refresh]);
 
   const markRead = useCallback((key: string) => {
-    setItems((prev) => applyRead(prev, key));
-    setAlertCount((c) => Math.max(0, c - 1));
+    setData((prev) => ({
+      ...prev,
+      items: applyRead(prev.items, key),
+      alertCount: Math.max(0, prev.alertCount - 1),
+    }));
     void markNotificationRead(key);
   }, []);
 
   const remove = useCallback((key: string) => {
-    setItems((prev) => prev.filter((i) => i.key !== key));
-    setAlertCount((c) => Math.max(0, c - 1));
+    setData((prev) => ({
+      ...prev,
+      items: prev.items.filter((i) => i.key !== key),
+      alertCount: Math.max(0, prev.alertCount - 1),
+    }));
     void dismissNotification(key);
   }, []);
 
   return (
     <MessageNotificationsContext.Provider
       value={{
-        items,
+        items: data.items,
         recentSent: data.recentSent,
         upcoming: data.upcoming,
-        alertCount,
+        alertCount: data.alertCount,
+        loading,
         markRead,
         remove,
+        refresh,
       }}
     >
       {children}

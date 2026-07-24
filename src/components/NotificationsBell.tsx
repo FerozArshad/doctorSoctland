@@ -13,12 +13,13 @@ export default function NotificationsBell() {
 
   useEffect(() => {
     if (!open) return;
+    data.refresh();
     const close = (e: MouseEvent) => {
       if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
     };
     document.addEventListener("mousedown", close);
     return () => document.removeEventListener("mousedown", close);
-  }, [open]);
+  }, [open, data.refresh]);
 
   const instalments = data.items.filter((i) => i.kind === "instalment");
   const upcoming = data.items.filter((i) => i.kind === "upcoming");

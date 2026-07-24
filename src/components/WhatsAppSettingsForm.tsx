@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import FormSubmitButton from "@/components/FormSubmitButton";
 import { saveWhatsAppSettings, testWhatsAppConnection, registerWhatsAppPhone } from "@/app/admin/actions";
 
@@ -37,12 +38,37 @@ function maskSecret(value: string) {
 export default function WhatsAppSettingsForm({
   cfg,
   appUrl,
-  health,
 }: {
   cfg: Cfg;
   appUrl: string;
-  health: Health | null;
 }) {
+  const [health, setHealth] = useState<Health | null>(null);
+  const [healthLoading, setHealthLoading] = useState(!!(cfg.token && cfg.phoneNumberId));
+
+  useEffect(() => {
+    if (!cfg.token || !cfg.phoneNumberId) {
+      setHealth(null);
+      setHealthLoading(false);
+      return;
+    }
+    let cancelled = false;
+    setHealthLoading(true);
+    fetch("/api/admin/whatsapp/health", { cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((json) => {
+        if (!cancelled) setHealth(json);
+      })
+      .catch(() => {
+        if (!cancelled) setHealth(null);
+      })
+      .finally(() => {
+        if (!cancelled) setHealthLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [cfg.token, cfg.phoneNumberId]);
+
   const connected = !!(cfg.token && cfg.phoneNumberId);
   const blocked = !!(health && !health.ok);
 
@@ -73,6 +99,12 @@ export default function WhatsAppSettingsForm({
           {cfg.phoneNumberId ? ` · Phone Number ID ${cfg.phoneNumberId}` : ""}
           {cfg.token ? ` · Token ${maskSecret(cfg.token)}` : ""}
         </div>
+
+        {healthLoading && connected && (
+          <div style={{ marginTop: 14, padding: "12px 14px", borderRadius: 11, background: "#F4F6F9", fontSize: 13, color: "#7A8696" }}>
+            Checking Meta health…
+          </div>
+        )}
 
         {health && (
           <div

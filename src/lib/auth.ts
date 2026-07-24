@@ -1,6 +1,7 @@
 import { SignJWT, jwtVerify } from "jose";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
+import { cache } from "react";
 import type { Admin } from "@prisma/client";
 import { db } from "./db";
 
@@ -57,11 +58,11 @@ export function clearAdminSession() {
   cookies().delete(ADMIN_COOKIE);
 }
 
-export async function getAdmin() {
+export const getAdmin = cache(async () => {
   const id = await verify(cookies().get(ADMIN_COOKIE)?.value, "admin");
   if (!id) return null;
   return db.admin.findUnique({ where: { id } });
-}
+});
 
 export async function requireAdmin() {
   const admin = await getAdmin();

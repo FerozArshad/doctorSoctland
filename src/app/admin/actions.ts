@@ -2,27 +2,32 @@
 
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
-import bcrypt from "bcryptjs";
 import { db } from "@/lib/db";
 import { canAccessPatient, clearAdminSession, createAdminSession, requireAdmin } from "@/lib/auth";
 import { fmt, fullPricePence, netPricePence, priceForPence } from "@/lib/pricing";
 import { getPricing } from "@/lib/pricing-settings";
 import { COORDINATORS, coordinatorFor, fromHeader, FALLBACK_COORDINATOR, type Coordinator } from "@/lib/coordinators";
-import { brandedEmail, financeLinkEmailHtml, proposalEmailHtml, sendEmail, sendProposalWhatsApp, sendWhatsApp, escapeHtml, adminWelcomeEmailHtml, notifyAdmin } from "@/lib/notify";
+import { brandedEmail, financeLinkEmailHtml, proposalEmailHtml, sendEmail, sendProposalWhatsApp, sendWhatsApp, escapeHtml, adminWelcomeEmailHtml, adminPasswordResetEmailHtml, notifyAdmin } from "@/lib/notify";
 import { firstNameOf } from "@/lib/status";
 import { log, summarizeError } from "@/lib/log";
 import { patientTemplateText, patientTemplateTitle, type PatientTemplateId } from "@/lib/patient-templates";
 import { getWhatsAppConfig, getWhatsAppHealth } from "@/lib/whatsapp-settings";
 import { FOLLOW_UPS_COMPLETE_TOUCH } from "@/lib/follow-ups";
+import {
+  generateSecureAdminPassword,
+  hashAdminPassword,
+  validateAdminPassword,
+  verifyAdminPassword,
+} from "@/lib/admin-password";
 
-const ADMIN_LOGIN_DUMMY = "$2a$10$jIXu5fFVbg3ikfyxoWTwL.sLkQyG8lo/95eoTH8DTmJLzZCI7uUs2";
+const ADMIN_LOGIN_DUMMY = "$2a$12$jIXu5fFVbg3ikfyxoWTwL.sLkQyG8lo/95eoTH8DTmJLzZCI7uUs2";
 
 async function adminPasswordMatches(password: string, hash: string | null | undefined) {
-  try {
-    return await bcrypt.compare(password || " ", hash || ADMIN_LOGIN_DUMMY);
-  } catch {
-    return false;
-  }
+  return verifyAdminPassword(password, hash || ADMIN_LOGIN_DUMMY);
+}
+
+function adminLoginUrl() {
+  return `${(process.env.APP_URL || "http://localhost:3000").replace(/\/$/, "")}/admin/login`;
 }
 
 function toastUrl(base: string, msg: string, icon = "✓", bg = "#0E9384") {
@@ -69,6 +74,10 @@ export async function changeAdminPassword(formData: FormData) {
   if (next.length < 8) {
     redirect(toastUrl("/admin/settings", "New password must be at least 8 characters", "!", "#E0A429"));
   }
+  const policyErr = validateAdminPassword(next);
+  if (policyErr) {
+    redirect(toastUrl("/admin/settings", policyErr, "!", "#E0A429"));
+  }
   if (next !== confirm) {
     redirect(toastUrl("/admin/settings", "New password and confirmation do not match", "!", "#E0A429"));
   }
@@ -78,7 +87,7 @@ export async function changeAdminPassword(formData: FormData) {
 
   await db.admin.update({
     where: { id: me.id },
-    data: { passwordHash: await bcrypt.hash(next, 12) },
+    data: { passwordHash: await hashAdminPassword(next) },
   });
   log.info("admin.password.changed", { adminId: me.id });
   redirect(toastUrl("/admin/settings", "Password updated — use it next time you sign in", "✓"));
@@ -296,7 +305,6 @@ export async function createAdminAccount(formData: FormData) {
   if (!me.isSuperAdmin) redirect("/admin");
   const name = String(formData.get("name") || "").trim();
   const email = String(formData.get("email") || "").trim().toLowerCase();
-  const password = String(formData.get("password") || "");
   const role = String(formData.get("role") || "").trim() || "Treatment Coordinator";
   // Super Admin cannot mint more Super Admins — team members are Admin only.
   const isSuperAdmin = false;
@@ -304,8 +312,11 @@ export async function createAdminAccount(formData: FormData) {
   if (!name || !/.+@.+\..+/.test(email)) {
     redirect(toastUrl("/admin/team", "A name and a valid email are required", "!", "#E0A429"));
   }
-  if (password.length < 8) {
-    redirect(toastUrl("/admin/team", "Password must be at least 8 characters", "!", "#E0A429"));
+  const manualPassword = String(formData.get("password") || "");
+  const password = manualPassword || generateSecureAdminPassword();
+  const policyErr = validateAdminPassword(password);
+  if (policyErr) {
+    redirect(toastUrl("/admin/team", policyErr, "!", "#E0A429"));
   }
   const existing = await db.admin.findUnique({ where: { email } });
   if (existing) {
@@ -320,10 +331,10 @@ export async function createAdminAccount(formData: FormData) {
   }
 
   await db.admin.create({
-    data: { name, email, role, isSuperAdmin, passwordHash: await bcrypt.hash(password, 10) },
+    data: { name, email, role, isSuperAdmin, passwordHash: await hashAdminPassword(password) },
   });
 
-  const loginUrl = `${(process.env.APP_URL || "http://localhost:3000").replace(/\/$/, "")}/admin/login`;
+  const loginUrl = adminLoginUrl();
   try {
     await sendEmail(email, "Your Dental Scotland admin login", adminWelcomeEmailHtml(name, email, password, loginUrl));
   } catch (e) {
@@ -336,39 +347,116 @@ export async function createAdminAccount(formData: FormData) {
   redirect(toastUrl("/admin/team", `${name} created — login details emailed to ${email}`, "✉"));
 }
 
-/** Super Admin — resend login credentials to an existing admin. */
-export async function resendAdminInvite(formData: FormData) {
+/** Super Admin — edit another admin's profile (name, email, role). */
+export async function updateAdminBySuperAdmin(formData: FormData) {
   const me = await requireAdmin();
   if (!me.isSuperAdmin) redirect("/admin");
 
   const adminId = String(formData.get("adminId") || "").trim();
-  const password = String(formData.get("password") || "");
-  if (!adminId || password.length < 8) {
-    redirect(toastUrl("/admin/team", "Password must be at least 8 characters", "!", "#E0A429"));
+  const name = String(formData.get("name") || "").trim();
+  const email = String(formData.get("email") || "").trim().toLowerCase();
+  const role = String(formData.get("role") || "").trim() || "Treatment Coordinator";
+
+  if (!adminId) redirect(toastUrl("/admin/team", "Admin not found", "!", "#E0A429"));
+  if (adminId === me.id) {
+    redirect(toastUrl("/admin/team", "Edit your own profile in Settings", "!", "#E0A429"));
+  }
+  if (!name || name.length < 2) {
+    redirect(toastUrl("/admin/team", "Enter the admin's full name", "!", "#E0A429"));
+  }
+  if (!/.+@.+\..+/.test(email)) {
+    redirect(toastUrl("/admin/team", "Enter a valid email address", "!", "#E0A429"));
   }
 
   const target = await db.admin.findUnique({ where: { id: adminId } });
   if (!target) redirect(toastUrl("/admin/team", "Admin not found", "!", "#E0A429"));
 
+  if (email !== target.email) {
+    const clash = await db.admin.findUnique({ where: { email } });
+    if (clash) {
+      redirect(toastUrl("/admin/team", "That email is already used by another admin", "!", "#E0A429"));
+    }
+  }
+
+  await db.$transaction([
+    db.admin.update({
+      where: { id: adminId },
+      data: { name, email, role },
+    }),
+    ...(email !== target.email
+      ? [
+          db.patient.updateMany({
+            where: { sentByEmail: target.email },
+            data: { sentByEmail: email },
+          }),
+        ]
+      : []),
+  ]);
+
+  log.info("admin.profile.updated.by_super", { adminId, by: me.id });
+  revalidatePath("/admin/team");
+  redirect(toastUrl("/admin/team", `${name}'s profile updated`, "✓"));
+}
+
+/**
+ * Super Admin — reset an admin password and email new login details.
+ * Auto-generates a secure password when none is supplied. Rate-limited.
+ */
+export async function resetAdminPasswordAndEmail(formData: FormData) {
+  const me = await requireAdmin();
+  if (!me.isSuperAdmin) redirect("/admin");
+
+  const { rateLimit } = await import("@/lib/ratelimit");
+  if (!rateLimit(`admin-reset:by:${me.id}`, 10, 60 * 60 * 1000)) {
+    redirect(toastUrl("/admin/team", "Too many password resets — wait an hour", "!", "#E0A429"));
+  }
+
+  const adminId = String(formData.get("adminId") || "").trim();
+  if (!adminId) redirect(toastUrl("/admin/team", "Admin not found", "!", "#E0A429"));
+  if (adminId === me.id) {
+    redirect(toastUrl("/admin/team", "Reset your own password in Settings", "!", "#E0A429"));
+  }
+
+  if (!rateLimit(`admin-reset:target:${adminId}`, 5, 60 * 60 * 1000)) {
+    redirect(toastUrl("/admin/team", "This admin was reset recently — wait before trying again", "!", "#E0A429"));
+  }
+
+  const target = await db.admin.findUnique({ where: { id: adminId } });
+  if (!target) redirect(toastUrl("/admin/team", "Admin not found", "!", "#E0A429"));
+
+  const manual = String(formData.get("password") || "").trim();
+  const password = manual || generateSecureAdminPassword();
+  const policyErr = validateAdminPassword(password);
+  if (policyErr) {
+    redirect(toastUrl("/admin/team", policyErr, "!", "#E0A429"));
+  }
+
   await db.admin.update({
     where: { id: adminId },
-    data: { passwordHash: await bcrypt.hash(password, 10) },
+    data: { passwordHash: await hashAdminPassword(password) },
   });
 
-  const loginUrl = `${(process.env.APP_URL || "http://localhost:3000").replace(/\/$/, "")}/admin/login`;
+  const loginUrl = adminLoginUrl();
   try {
     await sendEmail(
       target.email,
-      "Your Dental Scotland admin login",
-      adminWelcomeEmailHtml(target.name, target.email, password, loginUrl)
+      "Your Dental Scotland admin password has been reset",
+      adminPasswordResetEmailHtml(target.name, target.email, password, loginUrl)
     );
   } catch (e) {
-    console.error("admin.invite.resend.fail", e);
-    redirect(toastUrl("/admin/team", "Password updated but email failed to send", "!", "#E0A429"));
+    console.error("admin.password.reset.email.fail", e);
+    log.error("admin.password.reset.email.fail", { adminId, by: me.id, ...summarizeError(e) });
+    redirect(toastUrl("/admin/team", "Password updated but email failed to send — try again", "!", "#E0A429"));
   }
 
+  log.info("admin.password.reset", { adminId, by: me.id, autoGenerated: !manual });
   revalidatePath("/admin/team");
-  redirect(toastUrl("/admin/team", `Login details emailed to ${target.email}`, "✉"));
+  redirect(toastUrl("/admin/team", `New login details emailed to ${target.email}`, "✉"));
+}
+
+/** @deprecated use resetAdminPasswordAndEmail */
+export async function resendAdminInvite(formData: FormData) {
+  return resetAdminPasswordAndEmail(formData);
 }
 
 /** Super Admin only — remove another Admin/Super Admin. Cannot remove yourself or the last Super Admin. */

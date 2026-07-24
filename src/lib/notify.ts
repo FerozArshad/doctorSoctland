@@ -329,6 +329,22 @@ export function adminWelcomeEmailHtml(name: string, email: string, password: str
   );
 }
 
+/** Password reset email when a Super Admin resets an existing admin login. */
+export function adminPasswordResetEmailHtml(name: string, email: string, password: string, loginUrl: string) {
+  return brandedEmail(
+    "Your admin password has been reset",
+    `<p style="font-size:15px;line-height:1.7;color:#3C4a59;">Hi ${escapeHtml(name)},</p>
+     <p style="font-size:15px;line-height:1.7;color:#3C4a59;">A Super Admin has reset your Dental Scotland dashboard password. Use the details below to sign in — this replaces any previous password.</p>
+     <table style="width:100%;border:1px solid #E7ECF2;border-radius:14px;border-collapse:separate;border-spacing:0;overflow:hidden;margin:18px 0;">
+       <tr><td style="padding:12px 16px;border-bottom:1px solid #F1F4F8;font-size:13px;color:#7A8696;">Login URL</td><td style="padding:12px 16px;border-bottom:1px solid #F1F4F8;font-size:14px;font-weight:700;text-align:right;"><a href="${loginUrl}" style="color:#0E9384;">${escapeHtml(loginUrl)}</a></td></tr>
+       <tr><td style="padding:12px 16px;border-bottom:1px solid #F1F4F8;font-size:13px;color:#7A8696;">Email</td><td style="padding:12px 16px;border-bottom:1px solid #F1F4F8;font-size:14px;font-weight:700;text-align:right;">${escapeHtml(email)}</td></tr>
+       <tr><td style="padding:12px 16px;font-size:13px;color:#7A8696;">New temporary password</td><td style="padding:12px 16px;font-size:14px;font-weight:800;text-align:right;font-family:ui-monospace,monospace;">${escapeHtml(password)}</td></tr>
+     </table>
+     <p style="font-size:13px;line-height:1.7;color:#7A8696;">For security, change this password in <strong>Settings</strong> after you sign in. Do not share this email.</p>
+     <div style="text-align:center;margin:22px 0 8px;"><a href="${loginUrl}" style="display:inline-block;background:#0E9384;color:#fff;text-decoration:none;padding:13px 26px;border-radius:11px;font-weight:800;font-size:14.5px;">Sign in with new password →</a></div>`
+  );
+}
+
 // ── Templates ───────────────────────────────────────────────────────────
 export function proposalLink(p: Patient) {
   return `${appUrl()}/p/${p.proposalToken}`;

@@ -11,6 +11,11 @@ import { getWhatsAppConfig, getWhatsAppHealth } from "./whatsapp-settings";
 
 const appUrl = () => process.env.APP_URL || "http://localhost:3000";
 
+/** True when outbound email can actually be sent (Gmail OAuth or Resend). */
+export function emailConfigured(): boolean {
+  return gmailConfigured() || !!process.env.RESEND_API_KEY;
+}
+
 // Escape user-supplied text before interpolating it into email HTML.
 export function escapeHtml(s: string): string {
   return s.replace(/[&<>"']/g, (c) =>
@@ -33,6 +38,11 @@ export async function sendEmail(to: string, subject: string, html: string, fromO
 
   const key = process.env.RESEND_API_KEY;
   if (!key) {
+    const msg =
+      "Email is not configured on this server. Add Gmail (GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, GMAIL_REFRESH_TOKEN) or RESEND_API_KEY in Vercel environment variables.";
+    if (process.env.NODE_ENV === "production") {
+      throw new Error(msg);
+    }
     console.log(`[email:simulated] to=${to} subject="${subject}" (connect Gmail or set RESEND_API_KEY to send for real)`);
     return { simulated: true };
   }

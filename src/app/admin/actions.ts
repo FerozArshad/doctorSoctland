@@ -336,7 +336,18 @@ export async function createAdminAccount(formData: FormData) {
 
   const loginUrl = adminLoginUrl();
   try {
-    await sendEmail(email, "Your Dental Scotland admin login", adminWelcomeEmailHtml(name, email, password, loginUrl));
+    const result = await sendEmail(email, "Your Dental Scotland admin login", adminWelcomeEmailHtml(name, email, password, loginUrl));
+    if (result.simulated) {
+      revalidatePath("/admin/team");
+      redirect(
+        toastUrl(
+          "/admin/team",
+          `${name} created but email is not configured on this server — add Gmail in Vercel`,
+          "!",
+          "#E0A429"
+        )
+      );
+    }
   } catch (e) {
     console.error("admin.welcome.email.fail", e);
     revalidatePath("/admin/team");
@@ -438,11 +449,21 @@ export async function resetAdminPasswordAndEmail(formData: FormData) {
 
   const loginUrl = adminLoginUrl();
   try {
-    await sendEmail(
+    const result = await sendEmail(
       target.email,
       "Your Dental Scotland admin password has been reset",
       adminPasswordResetEmailHtml(target.name, target.email, password, loginUrl)
     );
+    if (result.simulated) {
+      redirect(
+        toastUrl(
+          "/admin/team",
+          "Password updated but email is not configured on this server — add Gmail in Vercel",
+          "!",
+          "#E0A429"
+        )
+      );
+    }
   } catch (e) {
     console.error("admin.password.reset.email.fail", e);
     log.error("admin.password.reset.email.fail", { adminId, by: me.id, ...summarizeError(e) });

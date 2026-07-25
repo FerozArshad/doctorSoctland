@@ -3,9 +3,10 @@
 import { adminLogin } from "@/app/admin/actions";
 import FormSubmitButton from "@/components/FormSubmitButton";
 
-export default function AdminLoginForm() {
+export default function AdminLoginForm({ next }: { next?: string }) {
   return (
     <form action={adminLogin} style={{ marginTop: 20 }}>
+      {next ? <input type="hidden" name="next" value={next} /> : null}
       <label className="label">Email</label>
       <input className="input" name="email" type="email" required placeholder="you@email.com" autoComplete="username" />
       <div style={{ marginTop: 14 }}>

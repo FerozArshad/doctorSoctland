@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { Suspense } from "react";
 import { db } from "@/lib/db";
 import { getAdmin, getPatientSession } from "@/lib/auth";
@@ -20,6 +20,15 @@ import Toast from "@/components/Toast";
 
 export const dynamic = "force-dynamic";
 
+function queryString(searchParams: Record<string, string | undefined>) {
+  const q = new URLSearchParams();
+  for (const [key, value] of Object.entries(searchParams)) {
+    if (value) q.set(key, value);
+  }
+  const s = q.toString();
+  return s ? `?${s}` : "";
+}
+
 export default async function ProposalPage({
   params,
   searchParams,
@@ -37,9 +46,25 @@ export default async function ProposalPage({
       },
     },
   });
-  if (!c) notFound();
 
-  const admin = searchParams.preview === "admin" ? await getAdmin() : null;
+  if (!c) {
+    // Common mistake: using the patient record ID from /admin/patients/[id] in the URL.
+    const byId = await db.patient.findUnique({
+      where: { id: params.token },
+      select: { proposalToken: true },
+    });
+    if (byId?.proposalToken) {
+      redirect(`/p/${byId.proposalToken}${queryString(searchParams)}`);
+    }
+    notFound();
+  }
+
+  const wantsPreview = searchParams.preview === "admin";
+  const admin = wantsPreview ? await getAdmin() : null;
+  if (wantsPreview && !admin) {
+    redirect(`/admin/login?next=${encodeURIComponent(`/p/${c.proposalToken}?preview=admin`)}`);
+  }
+
   const session = await getPatientSession();
   const loggedIn = session?.id === c.id;
 

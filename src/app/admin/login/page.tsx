@@ -3,7 +3,8 @@ import AdminLoginForm from "@/components/AdminLoginForm";
 
 export const dynamic = "force-dynamic";
 
-export default function AdminLogin({ searchParams }: { searchParams: { error?: string } }) {
+export default function AdminLogin({ searchParams }: { searchParams: { error?: string; next?: string } }) {
+  const next = searchParams.next?.startsWith("/") ? searchParams.next : undefined;
   return (
     <div style={{ minHeight: "100vh", background: "linear-gradient(165deg,#06101C 0%,#0B1828 55%,#0F2035 100%)", display: "grid", placeItems: "center", padding: 20 }}>
       <div className="ds-view" style={{ width: "100%", maxWidth: 420 }}>
@@ -22,7 +23,7 @@ export default function AdminLogin({ searchParams }: { searchParams: { error?: s
               Incorrect email or password — please try again.
             </div>
           ) : null}
-          <AdminLoginForm />
+          <AdminLoginForm next={next} />
         </div>
         <div style={{ textAlign: "center", color: "#4E6178", fontSize: 12.5, marginTop: 18 }}>
           Dental Scotland · It&apos;s time to smile ·{" "}

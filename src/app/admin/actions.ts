@@ -40,15 +40,21 @@ function toastUrl(base: string, msg: string, icon = "✓", bg = "#0E9384") {
 export async function adminLogin(formData: FormData) {
   const email = String(formData.get("email") || "").trim().toLowerCase();
   const password = String(formData.get("password") || "");
+  const nextRaw = String(formData.get("next") || "").trim();
+  const next =
+    nextRaw.startsWith("/") && !nextRaw.startsWith("//") && (nextRaw.startsWith("/p/") || nextRaw.startsWith("/admin"))
+      ? nextRaw
+      : "/admin";
   const { rateLimit } = await import("@/lib/ratelimit");
   if (!rateLimit(`alogin:${email}`, 10, 15 * 60 * 1000)) redirect("/admin/login?error=locked");
   const admin = await db.admin.findUnique({ where: { email } });
   const ok = await adminPasswordMatches(password, admin?.passwordHash);
   if (!admin || !ok) {
-    redirect("/admin/login?error=1");
+    const q = nextRaw !== "/admin" ? `?error=1&next=${encodeURIComponent(nextRaw)}` : "?error=1";
+    redirect(`/admin/login${q}`);
   }
   await createAdminSession(admin.id);
-  redirect("/admin");
+  redirect(next);
 }
 
 export async function adminLogout() {

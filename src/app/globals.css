@@ -184,7 +184,7 @@ a { color: inherit; transition: color .15s var(--ease), opacity .15s var(--ease)
 @media (max-width: 900px) {
   .ds-proposal-split {
     grid-template-columns: 1fr !important;
-    grid-template-areas: "data" "pay" "video" !important;
+    grid-template-areas: "data" "pay" !important;
   }
   .ds-proposal-why { grid-template-columns: 1fr 1fr !important; }
 }

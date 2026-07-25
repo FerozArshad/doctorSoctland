@@ -59,20 +59,40 @@ function DocumentPreview({ url, doc }: { url: string; doc: ProposalDoc }) {
 
   if (isPdf) {
     return (
-      <object
-        data={`${url}#toolbar=1&navpanes=0`}
-        type="application/pdf"
-        aria-label={doc.fileName}
-        style={{ width: "100%", height: "min(72dvh, 640px)", display: "block", background: "#fff" }}
-      >
-        <embed src={url} type="application/pdf" style={{ width: "100%", height: "min(72dvh, 640px)", display: "block" }} />
-        <div style={{ padding: 24, textAlign: "center" }}>
-          <p style={{ fontSize: 14, color: "#7A8696", margin: "0 0 12px" }}>PDF preview not supported in this browser.</p>
-          <a href={url} target="_blank" rel="noreferrer" style={{ color: "#0E9384", fontWeight: 700, fontSize: 14, textDecoration: "none" }}>
-            Open PDF in new tab
-          </a>
-        </div>
-      </object>
+      <div style={{ position: "relative", width: "100%", height: "min(72dvh, 640px)", background: "#fff" }}>
+        {!ready && !error && (
+          <div style={{ position: "absolute", inset: 0, display: "grid", placeItems: "center", color: "#7A8696", fontSize: 14, zIndex: 1, background: "#F4F6F9" }}>
+            <span style={{ display: "inline-flex", alignItems: "center", gap: 10 }}>
+              <span className="ds-spinner ds-spinner-dark" aria-hidden="true" />
+              Opening document…
+            </span>
+          </div>
+        )}
+        {error ? (
+          <div style={{ padding: 24, textAlign: "center" }}>
+            <p style={{ fontSize: 14, color: "#7A8696", margin: "0 0 12px" }}>{error}</p>
+            <a href={url} target="_blank" rel="noreferrer" style={{ color: "#0E9384", fontWeight: 700, fontSize: 14, textDecoration: "none" }}>
+              Open PDF in new tab
+            </a>
+          </div>
+        ) : (
+          <iframe
+            src={`${url}#toolbar=1&navpanes=0`}
+            title={doc.fileName}
+            loading="eager"
+            onLoad={() => setReady(true)}
+            onError={() => setError("Could not load PDF.")}
+            style={{
+              width: "100%",
+              height: "100%",
+              border: "none",
+              display: "block",
+              opacity: ready ? 1 : 0,
+              transition: "opacity .12s ease",
+            }}
+          />
+        )}
+      </div>
     );
   }
 
@@ -231,15 +251,26 @@ export default function ProposalDocuments({
         return;
       }
       if (doc.mimeType === "application/pdf") {
-        void fetch(url, { credentials: "include", cache: "force-cache" }).catch(() => {
+        void fetch(url, { credentials: "include", cache: "force-cache", priority: "high" as RequestPriority }).catch(() => {
           prefetched.current.delete(url);
         });
+        // Warm browser PDF cache for instant modal open.
+        const link = document.createElement("link");
+        link.rel = "prefetch";
+        link.as = "fetch";
+        link.href = url;
+        document.head.appendChild(link);
       }
     },
     [urlFor]
   );
 
   useEffect(() => setMounted(true), []);
+
+  // Preload all shared files as soon as the proposal loads.
+  useEffect(() => {
+    docs.forEach((d) => prefetch(d));
+  }, [docs, prefetch]);
 
   if (docs.length === 0) return null;
 
@@ -272,8 +303,6 @@ export default function ProposalDocuments({
                 prefetch(d);
                 setActive(d);
               }}
-              onMouseEnter={() => prefetch(d)}
-              onFocus={() => prefetch(d)}
               style={{
                 display: "flex",
                 alignItems: "center",

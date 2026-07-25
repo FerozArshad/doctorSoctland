@@ -197,21 +197,19 @@ export default async function ProposalPage({
                   Payment cancelled — no charge was made. You can try again whenever you&apos;re ready.
                 </div>
               )}
-              <p style={{ fontSize: 14, lineHeight: 1.6, color: "#3C4a59", margin: "10px 0 0", maxWidth: 680 }}>
-                Hi {c.firstName} — review your plan on the left, then choose how to pay on the right. You&apos;ll agree &amp; e-sign before anything is charged.
+              <p style={{ fontSize: 14, lineHeight: 1.65, color: "#3C4a59", margin: "10px 0 0", maxWidth: 680 }}>
+                Hi {c.firstName}, thank you for attending your Invisalign assessment with Dental Scotland. Your personalised ClinCheck treatment plan is now complete — view it, watch your smile transformation video, and choose how you&apos;d like to pay.
               </p>
             </div>
 
-            <ProposalDocuments token={c.proposalToken} docs={proposalDocs} />
-
-            {/* Desktop: plan left | payment right | video full-width under both
-                Mobile: plan → payment → video (clear reading order) */}
+            {/* Desktop: plan left | payment (+ video) right
+                Mobile: plan → payment with video first */}
             <div
               className="ds-proposal-split"
               style={{
                 display: "grid",
                 gridTemplateColumns: "1fr 1fr",
-                gridTemplateAreas: `"data pay" "video video"`,
+                gridTemplateAreas: `"data pay"`,
                 gap: 14,
                 alignItems: "stretch",
               }}
@@ -283,6 +281,16 @@ export default async function ProposalPage({
                   flexDirection: "column",
                 }}
               >
+                {c.videoUrl?.trim() && (
+                  <div className="ds-proposal-video" style={{ marginBottom: 14 }}>
+                    <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 10, marginBottom: 8, flexWrap: "wrap" }}>
+                      <h2 style={{ fontSize: 15, fontWeight: 800, margin: 0, color: "#0E1A2B" }}>Watch your future smile</h2>
+                      <span style={{ fontSize: 11.5, color: "#7A8696", fontWeight: 600 }}>Full ClinCheck preview</span>
+                    </div>
+                    <VideoBlock url={c.videoUrl} />
+                  </div>
+                )}
+
                 <h2 style={{ fontSize: 15, fontWeight: 800, margin: 0, color: "#0E1A2B" }}>
                   {financeApplied && !paid && !depositPaid ? "Finance application" : "How would you like to pay?"}
                 </h2>
@@ -390,14 +398,6 @@ export default async function ProposalPage({
                     />
                   </>
                 )}
-              </section>
-
-              <section className="ds-proposal-video" style={{ gridArea: "video" }}>
-                <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 10, marginBottom: 8, flexWrap: "wrap" }}>
-                  <h2 style={{ fontSize: 15, fontWeight: 800, margin: 0, color: "#0E1A2B" }}>Watch your future smile</h2>
-                  <span style={{ fontSize: 11.5, color: "#7A8696", fontWeight: 600 }}>Full ClinCheck preview</span>
-                </div>
-                <VideoBlock url={c.videoUrl} />
               </section>
             </div>
 

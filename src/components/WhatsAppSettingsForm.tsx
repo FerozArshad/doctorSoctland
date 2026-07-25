@@ -24,6 +24,8 @@ type Health = {
   displayPhone: string;
   verifiedName: string;
   wabaId: string;
+  wabaReviewStatus?: string;
+  appLinked?: boolean;
   blockers: Array<{ entity: string; code: number; description: string; solution: string }>;
   summary: string;
 };
@@ -135,6 +137,17 @@ export default function WhatsAppSettingsForm({
               <div style={{ marginTop: 6, opacity: 0.9 }}>
                 Number: {health.verifiedName || "WhatsApp"} · {health.displayPhone}
                 {health.wabaId ? ` · WABA ${health.wabaId}` : ""}
+              </div>
+            ) : null}
+            {health.wabaReviewStatus || health.appLinked !== undefined ? (
+              <div style={{ marginTop: 6, opacity: 0.9 }}>
+                {health.wabaReviewStatus ? <>WABA review: <strong>{health.wabaReviewStatus}</strong></> : null}
+                {health.appLinked !== undefined ? (
+                  <>
+                    {health.wabaReviewStatus ? " · " : ""}
+                    Meta app linked: <strong>{health.appLinked ? "Yes" : "No — link app in Business Settings"}</strong>
+                  </>
+                ) : null}
               </div>
             ) : null}
             {blocked && health.blockers.length > 0 && (

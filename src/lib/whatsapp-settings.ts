@@ -97,6 +97,8 @@ export type WhatsAppHealth = {
   displayPhone: string;
   verifiedName: string;
   wabaId: string;
+  wabaReviewStatus?: string;
+  appLinked?: boolean;
   blockers: WhatsAppHealthBlocker[];
   summary: string;
 };
@@ -182,6 +184,29 @@ export async function getWhatsAppHealth(): Promise<WhatsAppHealth | null> {
     // Prefer entity messaging blockers over the overall flag (SIP calling can mark overall BLOCKED).
     const ok = messagingBlockers.length === 0 && canSendMessage !== "ERROR";
 
+    let wabaReviewStatus: string | undefined;
+    let appLinked: boolean | undefined;
+    if (wabaId) {
+      try {
+        const [wabaRes, appsRes] = await Promise.all([
+          fetch(
+            `https://graph.facebook.com/v21.0/${encodeURIComponent(wabaId)}?fields=account_review_status,name`,
+            { headers: { Authorization: `Bearer ${c.token.trim()}` }, cache: "no-store" }
+          ),
+          fetch(`https://graph.facebook.com/v21.0/${encodeURIComponent(wabaId)}/subscribed_apps`, {
+            headers: { Authorization: `Bearer ${c.token.trim()}` },
+            cache: "no-store",
+          }),
+        ]);
+        const wabaJson = (await wabaRes.json()) as { account_review_status?: string; name?: string };
+        const appsJson = (await appsRes.json()) as { data?: unknown[] };
+        if (wabaRes.ok) wabaReviewStatus = wabaJson.account_review_status;
+        if (appsRes.ok) appLinked = (appsJson.data?.length || 0) > 0;
+      } catch {
+        // Optional diagnostics — ignore failures.
+      }
+    }
+
     const top = messagingBlockers[0];
     const summary = !ok && top
       ? `WhatsApp blocked (${top.entity} ${top.code || "—"}) — ${top.description}`
@@ -195,6 +220,8 @@ export async function getWhatsAppHealth(): Promise<WhatsAppHealth | null> {
       displayPhone: json.display_phone_number || "",
       verifiedName: json.verified_name || "",
       wabaId,
+      wabaReviewStatus,
+      appLinked,
       blockers: messagingBlockers,
       summary,
     };

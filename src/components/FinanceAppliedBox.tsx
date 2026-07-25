@@ -1,7 +1,9 @@
+import { switchToCardPayment } from "@/app/p/actions";
+import FormSubmitButton from "@/components/FormSubmitButton";
 import { patientTemplateText, patientTemplateTitle } from "@/lib/patient-templates";
 
 /** Inline confirmation after finance application — replaces payment options (no popup). */
-export default function FinanceAppliedBox({ firstName }: { firstName: string }) {
+export default function FinanceAppliedBox({ firstName, token }: { firstName: string; token: string }) {
   const title = patientTemplateTitle("finance_received");
   const body = patientTemplateText("finance_received", firstName);
 
@@ -39,6 +41,13 @@ export default function FinanceAppliedBox({ firstName }: { firstName: string }) 
         <p style={{ margin: "12px 0 0", fontSize: 12.5, color: "#7A8696", lineHeight: 1.5 }}>
           Our team has been notified and will email your secure finance link shortly. You can close this page — we&apos;ll be in touch.
         </p>
+        <form action={switchToCardPayment} style={{ marginTop: 14, paddingTop: 14, borderTop: "1px solid #E8EEF2" }}>
+          <input type="hidden" name="token" value={token} />
+          <p style={{ margin: 0, fontSize: 13, lineHeight: 1.55, color: "#5C6a79" }}>
+            Has your finance been declined or want to pay with a 5% additional discount?{" "}
+            <FormSubmitButton variant="link" label="Click here" pendingLabel="One moment…" />
+          </p>
+        </form>
       </div>
     </div>
   );

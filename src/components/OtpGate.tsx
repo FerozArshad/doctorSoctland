@@ -122,6 +122,10 @@ export default function OtpGate({
         </div>
         <div style={{ textAlign: "center", color: "#7A8696", fontSize: 12.5, marginTop: 18 }}>
           Dental Scotland · It&apos;s time to smile · dentalscotland.com
+          <br />
+          <a href="/privacy-policy" style={{ color: "#7A8696", fontWeight: 600, textDecoration: "none" }}>
+            Privacy policy
+          </a>
         </div>
       </div>
       <Suspense>

@@ -33,7 +33,7 @@ export default function PatientLoginPage({ searchParams }: { searchParams: { err
               <FormSubmitButton label="Log in →" pendingLabel="Signing in…" style={{ width: "100%", marginTop: 22 }} />
             </form>
             <div style={{ fontSize: 12.5, color: "#9AA6B4", marginTop: 18, lineHeight: 1.6, textAlign: "center" }}>
-              First time here? Open the secure proposal link from your email or WhatsApp — you&apos;ll be invited to create your password there.
+              First time here? Open the secure proposal link from your email or WhatsApp.
             </div>
           </div>
         </div>
@@ -41,6 +41,10 @@ export default function PatientLoginPage({ searchParams }: { searchParams: { err
           Dental Scotland · It&apos;s time to smile ·{" "}
           <a href="https://dentalscotland.com/" style={{ color: "#1EA8D8", fontWeight: 700, textDecoration: "none" }}>
             dentalscotland.com
+          </a>
+          <br />
+          <a href="/privacy-policy" style={{ color: "#7A8696", fontWeight: 600, textDecoration: "none" }}>
+            Privacy policy
           </a>
         </div>
       </div>

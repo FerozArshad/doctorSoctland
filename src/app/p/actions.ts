@@ -603,6 +603,28 @@ export async function bookCall(formData: FormData) {
   redirect(toastUrl(`/p/${token}`, "Call requested — we'll be in touch shortly", "📞", "#2E6BFF"));
 }
 
+/** Patient opts out of finance to pay by card/deposit instead (keeps finance audit trail). */
+export async function switchToCardPayment(formData: FormData) {
+  const token = String(formData.get("token") || "");
+  const patient = await requireVerified(token);
+  if (patient.status === "paid" || patient.status === "deposit") {
+    redirect(`/p/${token}`);
+  }
+  await db.patient.update({
+    where: { id: patient.id },
+    data: {
+      paymentPreference: null,
+      activities: { create: { text: "Chose to pay another way (card/deposit) instead of finance" } },
+    },
+  });
+  void notifyAdmin(
+    `💳 ${patient.firstName} ${patient.lastName} wants to pay another way`,
+    `${patient.firstName} opted to pay by card instead of finance (5% discount). View: ${appUrl()}/admin/patients/${patient.id}`
+  );
+  revalidatePath(`/p/${token}`);
+  redirect(`/p/${token}#payment`);
+}
+
 export async function chooseFinance(formData: FormData) {
   const token = String(formData.get("token"));
   const patient = await requireVerified(token);

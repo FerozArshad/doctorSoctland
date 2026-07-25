@@ -8,7 +8,6 @@ import { getPricing } from "@/lib/pricing-settings";
 import { COMP_ITEMS, COMP_TOTAL, WHY_US } from "@/lib/content";
 import { followUpBookingUrl, coordinatorFor } from "@/lib/coordinators";
 import BrandLogo from "@/components/BrandLogo";
-import CreateAccountCard from "@/components/CreateAccountCard";
 import PaymentOptionsForm, { PayOption } from "@/components/PaymentOptionsForm";
 import ProposalDocuments from "@/components/ProposalDocuments";
 import FinanceAppliedBox from "@/components/FinanceAppliedBox";
@@ -97,9 +96,8 @@ export default async function ProposalPage({
   const paid = c.status === "paid";
   const depositPaid = c.status === "deposit";
   const financeApplied =
-    c.financeStatus === "applied" ||
-    c.financeStatus === "accepted" ||
-    (c.paymentPreference === "finance" && !!c.consentSignedAt);
+    c.paymentPreference === "finance" &&
+    (c.financeStatus === "applied" || c.financeStatus === "accepted");
   const applicant = {
     firstName: c.firstName,
     lastName: c.lastName,
@@ -261,6 +259,7 @@ export default async function ProposalPage({
               </section>
 
               <section
+                id="payment"
                 className="ds-proposal-pay"
                 style={{
                   gridArea: "pay",
@@ -293,7 +292,7 @@ export default async function ProposalPage({
                     </div>
                   </div>
                 ) : financeApplied ? (
-                  <FinanceAppliedBox firstName={c.firstName} />
+                  <FinanceAppliedBox firstName={c.firstName} token={c.proposalToken} />
                 ) : (
                   <>
                     {!paid && !depositPaid && (
@@ -402,19 +401,16 @@ export default async function ProposalPage({
               </div>
             </div>
 
-            {!admin && !c.passwordHash && <CreateAccountCard token={c.proposalToken} email={c.email} />}
-            {!admin && c.passwordHash && !loggedIn && (
-              <div style={{ marginTop: 16, padding: "11px 14px", borderRadius: 11, background: "#F6F9FA", border: "1px solid #EEF2F6", fontSize: 13, color: "#5C6a79" }}>
-                You have a patient account — <Link href="/login" style={{ color: "#0E9384", fontWeight: 700 }}>log in</Link> any time to return here.
-              </div>
-            )}
-
             <div style={{ marginTop: 18, textAlign: "center", color: "#9AA6B4", fontSize: 11.5, lineHeight: 1.65 }}>
               Dental Scotland · It&apos;s time to smile ·{" "}
               <a href="https://dentalscotland.com/" style={{ color: "#1EA8D8", fontWeight: 700, textDecoration: "none" }}>
                 dentalscotland.com
               </a>
-              <br />Valid 30 days. Payments secured by Stripe.
+              <br />
+              <Link href="/privacy-policy" style={{ color: "#7A8696", fontWeight: 600, textDecoration: "none" }}>
+                Privacy policy
+              </Link>
+              {" · "}Valid 30 days. Payments secured by Stripe.
             </div>
           </div>
         </div>

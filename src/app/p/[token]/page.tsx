@@ -96,6 +96,8 @@ export default async function ProposalPage({
   const paid = c.status === "paid";
   const depositPaid = c.status === "deposit";
   const financeApplied =
+    !paid &&
+    !depositPaid &&
     c.paymentPreference === "finance" &&
     (c.financeStatus === "applied" || c.financeStatus === "accepted");
   const applicant = {

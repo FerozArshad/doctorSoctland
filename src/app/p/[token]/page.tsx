@@ -202,28 +202,28 @@ export default async function ProposalPage({
               </p>
             </div>
 
-            {/* Desktop: plan | video (top), included | payment (bottom)
-                Mobile: plan → video → included → payment */}
+            {/* Desktop: plan + included + video (left) | payment (right)
+                Mobile: plan → included → video → payment */}
             <div className="ds-proposal-split">
-              <div className="ds-proposal-plan" style={{ display: "flex", flexDirection: "column" }}>
-                <div style={{ border: "1px solid #E7ECF2", borderRadius: 14, overflow: "hidden", height: "100%", display: "flex", flexDirection: "column" }}>
+              <section className="ds-proposal-data" style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                <div style={{ border: "1px solid #E7ECF2", borderRadius: 14, overflow: "hidden" }}>
                   <div style={{ background: "#0E1A2B", padding: "10px 14px", fontWeight: 700, fontSize: 11, letterSpacing: ".06em", textTransform: "uppercase", color: "#C5D4E6" }}>
                     Your Invisalign plan
                   </div>
-                  <div className="ds-proposal-metrics" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", flex: 1 }}>
-                    <div style={{ padding: "12px 12px", borderRight: "1px solid #EEF2F6", borderBottom: "1px solid #EEF2F6", display: "flex", flexDirection: "column", justifyContent: "center" }}>
+                  <div className="ds-proposal-metrics" style={{ display: "grid", gridTemplateColumns: "1fr 1fr" }}>
+                    <div style={{ padding: "12px 12px", borderRight: "1px solid #EEF2F6", borderBottom: "1px solid #EEF2F6" }}>
                       <div style={{ fontSize: 11, color: "#7A8696", fontWeight: 600 }}>Aligners</div>
                       <div style={{ fontSize: 20, fontWeight: 800, marginTop: 2 }}>{c.alignerCount}</div>
                     </div>
-                    <div style={{ padding: "12px 12px", borderBottom: "1px solid #EEF2F6", display: "flex", flexDirection: "column", justifyContent: "center" }}>
+                    <div style={{ padding: "12px 12px", borderBottom: "1px solid #EEF2F6" }}>
                       <div style={{ fontSize: 11, color: "#7A8696", fontWeight: 600 }}>Duration</div>
                       <div style={{ fontSize: 20, fontWeight: 800, marginTop: 2 }}>≈ {estMonths(c.alignerCount)} mo</div>
                     </div>
-                    <div style={{ padding: "12px 12px", borderRight: "1px solid #EEF2F6", display: "flex", flexDirection: "column", justifyContent: "center" }}>
+                    <div style={{ padding: "12px 12px", borderRight: "1px solid #EEF2F6" }}>
                       <div style={{ fontSize: 11, color: "#7A8696", fontWeight: 600 }}>Package</div>
                       <div style={{ fontSize: 16, fontWeight: 800, marginTop: 3 }}>Invisalign {c.pkg}</div>
                     </div>
-                    <div style={{ padding: "12px 12px", background: "#F0FBF8", display: "flex", flexDirection: "column", justifyContent: "center" }}>
+                    <div style={{ padding: "12px 12px", background: "#F0FBF8" }}>
                       <div style={{ fontSize: 11, color: "#0B7A6E", fontWeight: 600 }}>
                         {c.upfrontPaidPence > 0 ? "Amount to pay" : "Total"}
                       </div>
@@ -236,25 +236,13 @@ export default async function ProposalPage({
                     </div>
                   </div>
                 </div>
-              </div>
 
-              <div className="ds-proposal-video-slot">
-                <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 10, marginBottom: 10, flexWrap: "wrap" }}>
-                  <h2 style={{ fontSize: 15, fontWeight: 800, margin: 0, color: "#0E1A2B" }}>Watch your future smile</h2>
-                  {c.videoUrl?.trim() ? (
-                    <span style={{ fontSize: 11.5, color: "#0B7A6E", fontWeight: 700 }}>ClinCheck preview</span>
-                  ) : null}
-                </div>
-                <VideoBlock url={c.videoUrl || ""} />
-              </div>
-
-              <div className="ds-proposal-included" style={{ display: "flex", flexDirection: "column" }}>
-                <div style={{ border: "1px solid #E7ECF2", borderRadius: 14, padding: "12px 11px 10px", background: "#fff", height: "100%", display: "flex", flexDirection: "column" }}>
+                <div style={{ border: "1px solid #E7ECF2", borderRadius: 14, padding: "12px 11px 10px", background: "#fff" }}>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8, gap: 8 }}>
                     <div style={{ fontSize: 13, fontWeight: 800 }}>Included free</div>
                     <span style={{ fontSize: 12, fontWeight: 800, color: "#0B7A6E" }}>{COMP_TOTAL}</span>
                   </div>
-                  <div style={{ display: "flex", flexDirection: "column", gap: 3, flex: 1, justifyContent: "space-evenly" }}>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
                     {COMP_ITEMS.map((item) => (
                       <div key={item.label} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "7px 8px", borderRadius: 8, background: "#F6F9FA", gap: 8 }}>
                         <div style={{ display: "flex", alignItems: "center", gap: 7, minWidth: 0 }}>
@@ -269,7 +257,17 @@ export default async function ProposalPage({
                     Treatment time is an estimate and may vary by about 1 month.
                   </p>
                 </div>
-              </div>
+
+                <div style={{ border: "1px solid #E7ECF2", borderRadius: 14, padding: "12px 11px 11px", background: "#fff" }}>
+                  <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 10, marginBottom: 10, flexWrap: "wrap" }}>
+                    <h2 style={{ fontSize: 15, fontWeight: 800, margin: 0, color: "#0E1A2B" }}>Watch your future smile</h2>
+                    {c.videoUrl?.trim() ? (
+                      <span style={{ fontSize: 11.5, color: "#0B7A6E", fontWeight: 700 }}>ClinCheck preview</span>
+                    ) : null}
+                  </div>
+                  <VideoBlock url={c.videoUrl || ""} />
+                </div>
+              </section>
 
               <section
                 id="payment"

@@ -184,25 +184,13 @@ a { color: inherit; transition: color .15s var(--ease), opacity .15s var(--ease)
 .ds-proposal-split {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  grid-template-areas:
-    "plan video"
-    "included pay";
   gap: 14px;
   align-items: stretch;
 }
-.ds-proposal-plan { grid-area: plan; min-height: 0; }
-.ds-proposal-video-slot { grid-area: video; min-height: 0; }
-.ds-proposal-included { grid-area: included; min-height: 0; }
-.ds-proposal-pay { grid-area: pay; min-height: 0; }
 
 @media (max-width: 900px) {
   .ds-proposal-split {
     grid-template-columns: 1fr !important;
-    grid-template-areas:
-      "plan"
-      "video"
-      "included"
-      "pay" !important;
   }
   .ds-proposal-why { grid-template-columns: 1fr 1fr !important; }
 }

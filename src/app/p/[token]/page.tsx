@@ -281,15 +281,13 @@ export default async function ProposalPage({
                   flexDirection: "column",
                 }}
               >
-                {c.videoUrl?.trim() && (
-                  <div className="ds-proposal-video" style={{ marginBottom: 14 }}>
-                    <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 10, marginBottom: 8, flexWrap: "wrap" }}>
-                      <h2 style={{ fontSize: 15, fontWeight: 800, margin: 0, color: "#0E1A2B" }}>Watch your future smile</h2>
-                      <span style={{ fontSize: 11.5, color: "#7A8696", fontWeight: 600 }}>Full ClinCheck preview</span>
-                    </div>
-                    <VideoBlock url={c.videoUrl} />
+                <div className="ds-proposal-video" style={{ marginBottom: 14 }}>
+                  <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 10, marginBottom: 8, flexWrap: "wrap" }}>
+                    <h2 style={{ fontSize: 15, fontWeight: 800, margin: 0, color: "#0E1A2B" }}>Watch your future smile</h2>
+                    <span style={{ fontSize: 11.5, color: "#7A8696", fontWeight: 600 }}>Full ClinCheck preview</span>
                   </div>
-                )}
+                  <VideoBlock url={c.videoUrl || ""} />
+                </div>
 
                 <h2 style={{ fontSize: 15, fontWeight: 800, margin: 0, color: "#0E1A2B" }}>
                   {financeApplied && !paid && !depositPaid ? "Finance application" : "How would you like to pay?"}
@@ -319,6 +317,7 @@ export default async function ProposalPage({
                       <FollowUpCallCard
                         token={c.proposalToken}
                         coordinatorName={co.name}
+                        coordinatorKey={co.key}
                         bookingUrl={followUpBooking}
                         compact
                       />

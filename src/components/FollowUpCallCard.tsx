@@ -1,6 +1,7 @@
 "use client";
 
 import { logFollowUpCall } from "@/app/p/actions";
+import { coordinatorFirstName, type Coordinator } from "@/lib/coordinators";
 
 /** Patient-facing follow-up consult booking — coordinator-specific LeadConnector link. */
 export default function FollowUpCallCard({
@@ -8,13 +9,21 @@ export default function FollowUpCallCard({
   coordinatorName,
   bookingUrl,
   compact = false,
+  coordinatorKey,
 }: {
   token: string;
   coordinatorName: string;
   bookingUrl: string;
   compact?: boolean;
+  /** Optional — improves first-name display when name is "Dental Scotland" etc. */
+  coordinatorKey?: string;
 }) {
-  const first = coordinatorName.split(" ")[0] || "your coordinator";
+  const first = coordinatorFirstName({
+    key: coordinatorKey || "other",
+    name: coordinatorName,
+    email: "",
+    title: "",
+  });
 
   return (
     <section

@@ -71,6 +71,16 @@ export function coordinatorFor(sentByName: string, sentByEmail: string): Coordin
   };
 }
 
+/** First name for patient-facing copy (follow-up card, etc.). */
+export function coordinatorFirstName(c: Coordinator): string {
+  if (c.key === "millie") return "Millie";
+  if (c.key === "rochelle") return "Rochelle";
+  if (c.key === "michelle") return "Michelle";
+  const first = (c.name || "").split(" ")[0];
+  if (!first || first.toLowerCase() === "dental" || c.key === "practice") return "our team";
+  return first;
+}
+
 /** Virtual follow-up consult link for whoever sent the proposal. */
 export function followUpBookingUrl(c: Coordinator | { key?: string; bookingUrl?: string } | null | undefined): string {
   if (c?.bookingUrl) return c.bookingUrl;

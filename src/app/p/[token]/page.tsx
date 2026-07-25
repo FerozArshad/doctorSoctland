@@ -281,13 +281,17 @@ export default async function ProposalPage({
                   flexDirection: "column",
                 }}
               >
-                <div className="ds-proposal-video" style={{ marginBottom: 14 }}>
-                  <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 10, marginBottom: 8, flexWrap: "wrap" }}>
+                <div className="ds-proposal-video" style={{ marginBottom: 16 }}>
+                  <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 10, marginBottom: 10, flexWrap: "wrap" }}>
                     <h2 style={{ fontSize: 15, fontWeight: 800, margin: 0, color: "#0E1A2B" }}>Watch your future smile</h2>
-                    <span style={{ fontSize: 11.5, color: "#7A8696", fontWeight: 600 }}>Full ClinCheck preview</span>
+                    {c.videoUrl?.trim() ? (
+                      <span style={{ fontSize: 11.5, color: "#0B7A6E", fontWeight: 700 }}>ClinCheck preview</span>
+                    ) : null}
                   </div>
                   <VideoBlock url={c.videoUrl || ""} />
                 </div>
+
+                <div style={{ height: 1, background: "#D7E3E9", margin: "4px 0 14px" }} />
 
                 <h2 style={{ fontSize: 15, fontWeight: 800, margin: 0, color: "#0E1A2B" }}>
                   {financeApplied && !paid && !depositPaid ? "Finance application" : "How would you like to pay?"}
@@ -313,16 +317,6 @@ export default async function ProposalPage({
                   <FinanceAppliedBox firstName={c.firstName} token={c.proposalToken} />
                 ) : (
                   <>
-                    {!paid && !depositPaid && (
-                      <FollowUpCallCard
-                        token={c.proposalToken}
-                        coordinatorName={co.name}
-                        coordinatorKey={co.key}
-                        bookingUrl={followUpBooking}
-                        compact
-                      />
-                    )}
-
                     {c.upfrontPaidPence > 0 && (
                       <div
                         style={{
@@ -395,6 +389,18 @@ export default async function ProposalPage({
                       financeRedirectUrl={financeRedirectUrl}
                       docs={proposalDocs}
                     />
+
+                    {!paid && !depositPaid && (
+                      <div style={{ marginTop: 12 }}>
+                        <FollowUpCallCard
+                          token={c.proposalToken}
+                          coordinatorName={co.name}
+                          coordinatorKey={co.key}
+                          bookingUrl={followUpBooking}
+                          compact
+                        />
+                      </div>
+                    )}
                   </>
                 )}
               </section>

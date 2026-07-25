@@ -1,13 +1,28 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import BrandLogo from "@/components/BrandLogo";
 import { BRAND } from "@/lib/brand";
 
-export const metadata = {
+const APP_URL = (process.env.APP_URL || "https://dashboard.dentalscotland.com").replace(/\/$/, "");
+const CONTACT_EMAIL = "concierge@dentalscotland.com";
+
+export const metadata: Metadata = {
   title: `Privacy Policy — ${BRAND.name}`,
-  description: `How ${BRAND.name} collects, uses and protects your personal information in line with UK data protection law.`,
+  description: `Official privacy policy for ${BRAND.name}. Explains what personal data we collect, how we use it, how we use WhatsApp and Meta services, and how you can request deletion of your data under UK GDPR.`,
+  metadataBase: new URL(APP_URL),
+  alternates: { canonical: "/privacy-policy" },
+  openGraph: {
+    title: `Privacy Policy — ${BRAND.name}`,
+    description: `How ${BRAND.name} collects, uses, stores and deletes personal information in line with UK data protection law.`,
+    url: "/privacy-policy",
+    siteName: BRAND.name,
+    locale: "en_GB",
+    type: "website",
+  },
+  robots: { index: true, follow: true },
 };
 
-const CONTACT_EMAIL = "concierge@dentalscotland.com";
+export const dynamic = "force-static";
 
 type Block = { type: "p"; text: string } | { type: "ul"; items: string[] };
 
@@ -22,15 +37,15 @@ const sections: Section[] = [
     blocks: [
       {
         type: "p",
+        text: `This is the official privacy policy for ${BRAND.name}. It applies to our website, patient portal at ${APP_URL}, treatment proposal pages, payment services, email communications, and WhatsApp messaging.`,
+      },
+      {
+        type: "p",
         text: `${BRAND.name} (“we”, “us”, “our”) is committed to protecting your privacy and handling your personal data responsibly.`,
       },
       {
         type: "p",
-        text: "This privacy policy explains how we collect, use, store and share personal information when you visit our website, use our patient portal and treatment proposal pages, communicate with us, or receive dental and orthodontic care.",
-      },
-      {
-        type: "p",
-        text: "We process personal data in accordance with the UK General Data Protection Regulation (UK GDPR), the Data Protection Act 2018, and guidance from the Information Commissioner’s Office (ICO).",
+        text: "We process personal data in accordance with the UK General Data Protection Regulation (UK GDPR), the Data Protection Act 2018, the Privacy and Electronic Communications Regulations (PECR), and guidance from the Information Commissioner’s Office (ICO).",
       },
     ],
   },
@@ -43,7 +58,7 @@ const sections: Section[] = [
       },
       {
         type: "p",
-        text: `If you have questions about this policy or how we handle your data, contact us at ${CONTACT_EMAIL} or via ${BRAND.url}.`,
+        text: `Data protection enquiries: ${CONTACT_EMAIL}\nWebsite: ${BRAND.url}\nPatient portal: ${APP_URL}`,
       },
     ],
   },
@@ -54,13 +69,13 @@ const sections: Section[] = [
       {
         type: "ul",
         items: [
-          "Identity and contact details — name, email address, telephone number, date of birth and address.",
+          "Identity and contact details — name, email address, telephone number (including WhatsApp number), date of birth and address.",
           "Treatment and clinical information — dental history, orthodontic assessments, treatment plans, ClinCheck records, notes, photographs, scans and correspondence relating to your care.",
           "Consent and documentation — informed consent records, e-signatures, terms acceptance and documents you upload or we share with you.",
           "Payment and finance information — payment preferences, transaction status, deposit and instalment records. Card payments are processed by Stripe; we do not store your full card number.",
-          "Communications — emails, WhatsApp messages, appointment reminders, follow-up messages and records of enquiries.",
+          "Communications — emails, WhatsApp messages, one-time verification codes, appointment reminders, follow-up messages and records of enquiries.",
+          "Messaging metadata — message delivery status, timestamps and limited profile information provided by messaging platforms when you contact us or we message you.",
           "Technical and usage data — IP address, browser type, device information and essential session cookies when you use our secure patient portal.",
-          "Staff and administrative records — where relevant to providing your care or managing our relationship with you.",
         ],
       },
     ],
@@ -88,15 +103,16 @@ const sections: Section[] = [
           "Complete forms on our website or patient portal.",
           "Attend consultations, assessments or treatment.",
           "Open secure proposal links sent by email or WhatsApp.",
+          "Request a one-time login or verification code by email or WhatsApp.",
           "Make payments or apply for finance through our services.",
-          "Contact us by phone, email or messaging.",
-          "Interact with third-party services we use to support your care, such as payment providers.",
+          "Contact us by phone, email or WhatsApp.",
+          "Interact with third-party services we use to support your care, such as payment or messaging providers.",
         ],
       },
     ],
   },
   {
-    title: "6. Lawful bases for processing",
+    title: "6. Lawful bases and purposes for processing",
     blocks: [
       {
         type: "p",
@@ -113,6 +129,10 @@ const sections: Section[] = [
           "Substantial public interest / health and social care — for processing special category health data necessary for the provision of health treatment and maintenance of clinical records.",
         ],
       },
+      {
+        type: "p",
+        text: "Purposes for which we process your data include providing dental care, sending treatment proposals and payment options, verifying your identity, processing payments, sending service-related messages (including via WhatsApp), maintaining records, and meeting legal obligations.",
+      },
     ],
   },
   {
@@ -124,6 +144,7 @@ const sections: Section[] = [
         items: [
           "Provide dental and orthodontic assessments, treatment plans and ongoing care.",
           "Send secure treatment proposals, videos, documents and payment options.",
+          "Send one-time verification codes to unlock your secure proposal link.",
           "Process card payments, deposits and instalments.",
           "Support finance applications and communicate about payment choices.",
           "Send appointment reminders, follow-up messages and service updates relating to your care.",
@@ -136,20 +157,42 @@ const sections: Section[] = [
     ],
   },
   {
-    title: "8. Marketing",
+    title: "8. WhatsApp and Meta services",
     blocks: [
       {
         type: "p",
-        text: "We may send you information about our services where you have asked us to, or where we have another lawful basis to do so.",
+        text: "We use the WhatsApp Business Platform (provided by Meta Platforms Technologies Ltd) to send service-related messages, such as treatment proposal links, appointment reminders, follow-up messages, and one-time verification codes, where you have provided your mobile number and chosen to receive messages by WhatsApp.",
       },
       {
         type: "p",
-        text: "You can opt out of marketing communications at any time by using the unsubscribe link in an email or by contacting us. Opting out of marketing will not affect messages we need to send about your treatment or account.",
+        text: "When we use WhatsApp, we may process your phone number, message content, delivery and read receipts, and limited profile information made available by the platform. Meta acts as an independent data controller for its own processing. Meta’s privacy policy is available at https://www.whatsapp.com/legal/privacy-policy.",
+      },
+      {
+        type: "ul",
+        items: [
+          "We do not use WhatsApp to send unsolicited marketing without a lawful basis.",
+          "We do not sell your WhatsApp data to third parties.",
+          "You can stop WhatsApp messages from us by replying STOP, contacting us at " + CONTACT_EMAIL + ", or blocking our number in WhatsApp.",
+          "Our use of WhatsApp is limited to communicating about your treatment, proposals, payments and account access.",
+        ],
       },
     ],
   },
   {
-    title: "9. Who we share your data with",
+    title: "9. Marketing",
+    blocks: [
+      {
+        type: "p",
+        text: "We may send you information about our services where you have asked us to, or where we have another lawful basis to do so, in line with PECR and UK GDPR.",
+      },
+      {
+        type: "p",
+        text: "You can opt out of marketing communications at any time by using the unsubscribe link in an email, replying STOP to a WhatsApp message, or contacting us. Opting out of marketing will not affect messages we need to send about your treatment or account.",
+      },
+    ],
+  },
+  {
+    title: "10. Who we share your data with",
     blocks: [
       {
         type: "p",
@@ -160,29 +203,30 @@ const sections: Section[] = [
         items: [
           "Payment processors (such as Stripe) to take secure card payments.",
           "Finance providers, where you choose to apply for finance.",
+          "Meta / WhatsApp to deliver messages you have requested or agreed to receive.",
           "Email, messaging and hosting providers that help us operate our systems.",
-          "IT support and software providers acting under contract.",
+          "IT support and software providers acting under contract as data processors.",
           "Professional advisers such as insurers, accountants or lawyers where required.",
           "Regulators, courts or law enforcement where we are legally required to do so.",
         ],
       },
       {
         type: "p",
-        text: "Where we use service providers, we require them to protect your data and only process it on our instructions.",
+        text: "Where we use service providers, we require them to protect your data and only process it on our instructions under appropriate contractual safeguards.",
       },
     ],
   },
   {
-    title: "10. International transfers",
+    title: "11. International transfers",
     blocks: [
       {
         type: "p",
-        text: "Some of our service providers may process data outside the UK. Where this happens, we ensure appropriate safeguards are in place, such as UK adequacy regulations, standard contractual clauses, or equivalent protections required by UK data protection law.",
+        text: "Some of our service providers (including Meta, Stripe and cloud hosting providers) may process data outside the UK. Where this happens, we ensure appropriate safeguards are in place, such as UK adequacy regulations, the UK International Data Transfer Agreement, standard contractual clauses, or equivalent protections required by UK data protection law.",
       },
     ],
   },
   {
-    title: "11. How long we keep your data",
+    title: "12. How long we keep your data",
     blocks: [
       {
         type: "p",
@@ -194,7 +238,7 @@ const sections: Section[] = [
       },
       {
         type: "p",
-        text: "Payment, consent and correspondence records are kept for as long as needed to manage your care, resolve disputes, and meet legal and accounting obligations.",
+        text: "Payment, consent, messaging and correspondence records are kept for as long as needed to manage your care, resolve disputes, and meet legal and accounting obligations.",
       },
       {
         type: "p",
@@ -203,15 +247,43 @@ const sections: Section[] = [
     ],
   },
   {
-    title: "12. Your rights under UK data protection law",
+    title: "13. How to request deletion of your data",
     blocks: [
-      { type: "p", text: "Subject to certain conditions, you have the right to:" },
+      {
+        type: "p",
+        text: "You have the right to ask us to delete your personal data in certain circumstances under UK GDPR (the “right to erasure”).",
+      },
+      {
+        type: "p",
+        text: "To request deletion of your data, email us at " + CONTACT_EMAIL + " with the subject line “Data deletion request” and include:",
+      },
+      {
+        type: "ul",
+        items: [
+          "Your full name.",
+          "The email address and/or phone number we hold for you.",
+          "A brief description of what you would like deleted (for example: portal account, messaging records, or all personal data we hold).",
+        ],
+      },
+      {
+        type: "p",
+        text: "We will verify your identity before processing the request and respond within one month, as required by law. We may need to retain certain information where we have a legal obligation or legitimate reason to do so (for example, clinical records we are required to keep, or payment records for tax purposes).",
+      },
+      {
+        type: "p",
+        text: "Deleting data from our systems does not automatically delete messages already delivered via WhatsApp on your device or records held independently by Meta. You may also contact Meta directly regarding data held on their platforms.",
+      },
+    ],
+  },
+  {
+    title: "14. Your other rights under UK data protection law",
+    blocks: [
+      { type: "p", text: "Subject to certain conditions, you also have the right to:" },
       {
         type: "ul",
         items: [
           "Access — request a copy of the personal data we hold about you.",
           "Rectification — ask us to correct inaccurate or incomplete data.",
-          "Erasure — ask us to delete your data in certain circumstances.",
           "Restriction — ask us to limit how we use your data in certain circumstances.",
           "Object — object to processing based on legitimate interests or for direct marketing.",
           "Data portability — receive certain data in a structured, commonly used format, or ask us to transfer it to another controller where technically feasible.",
@@ -220,16 +292,16 @@ const sections: Section[] = [
       },
       {
         type: "p",
-        text: `To exercise any of these rights, email us at ${CONTACT_EMAIL}. We may need to verify your identity before responding. We aim to respond within one month, as required by law.`,
+        text: `To exercise any of these rights, email ${CONTACT_EMAIL}. We aim to respond within one month.`,
       },
       {
         type: "p",
-        text: "You also have the right to lodge a complaint with the Information Commissioner’s Office (ICO), the UK supervisory authority for data protection: ico.org.uk or 0303 123 1113.",
+        text: "You also have the right to lodge a complaint with the Information Commissioner’s Office (ICO), the UK supervisory authority for data protection: https://ico.org.uk or 0303 123 1113.",
       },
     ],
   },
   {
-    title: "13. Security",
+    title: "15. Security",
     blocks: [
       {
         type: "p",
@@ -237,12 +309,12 @@ const sections: Section[] = [
       },
       {
         type: "p",
-        text: "No method of transmission or storage is completely secure. If you believe your account or data has been compromised, please contact us promptly.",
+        text: "No method of transmission or storage is completely secure. If you believe your account or data has been compromised, please contact us promptly at " + CONTACT_EMAIL + ".",
       },
     ],
   },
   {
-    title: "14. Cookies",
+    title: "16. Cookies",
     blocks: [
       {
         type: "p",
@@ -255,7 +327,7 @@ const sections: Section[] = [
     ],
   },
   {
-    title: "15. Children",
+    title: "17. Children",
     blocks: [
       {
         type: "p",
@@ -264,7 +336,7 @@ const sections: Section[] = [
     ],
   },
   {
-    title: "16. Automated decision-making",
+    title: "18. Automated decision-making",
     blocks: [
       {
         type: "p",
@@ -273,7 +345,7 @@ const sections: Section[] = [
     ],
   },
   {
-    title: "17. Changes to this policy",
+    title: "19. Changes to this policy",
     blocks: [
       {
         type: "p",
@@ -286,15 +358,15 @@ const sections: Section[] = [
     ],
   },
   {
-    title: "18. Contact us",
+    title: "20. Contact us",
     blocks: [
       {
         type: "p",
-        text: "If you have any questions about this privacy policy or wish to exercise your data protection rights, please contact:",
+        text: "If you have any questions about this privacy policy, our use of WhatsApp or Meta services, or wish to exercise your data protection rights, please contact:",
       },
       {
         type: "p",
-        text: `${BRAND.name}\nEmail: ${CONTACT_EMAIL}\nWebsite: ${BRAND.url}`,
+        text: `${BRAND.name}\nEmail: ${CONTACT_EMAIL}\nWebsite: ${BRAND.url}\nPatient portal: ${APP_URL}`,
       },
     ],
   },
@@ -316,7 +388,7 @@ export default function PrivacyPolicyPage() {
         <div style={{ background: "#fff", borderRadius: 16, padding: "28px 28px 32px", boxShadow: "0 20px 50px -30px rgba(11,24,40,.25)" }}>
           <h1 style={{ margin: 0, fontSize: 26, fontWeight: 800, letterSpacing: "-.02em", color: "#0E1A2B" }}>Privacy policy</h1>
           <p style={{ margin: "8px 0 24px", fontSize: 13.5, color: "#7A8696", lineHeight: 1.6 }}>
-            Last updated: 25 July 2026
+            Last updated: 25 July 2026 · Public policy for {APP_URL.replace("https://", "")}
           </p>
           {sections.map((s) => (
             <section key={s.title} style={{ marginBottom: 24 }}>

@@ -13,10 +13,10 @@ import {
   instalmentReminderEmailHtml,
   instalmentReminderWhatsApp,
   notifyAdmin,
-  receiptEmailHtml,
   sendEmail,
   sendWhatsApp,
 } from "@/lib/notify";
+import { issuePaymentReceipt } from "@/lib/payment-receipt";
 import { bearerMatches } from "@/lib/secure";
 import { log, summarizeError } from "@/lib/log";
 
@@ -144,20 +144,21 @@ export async function GET(req: NextRequest) {
       const fullTarget = netPricePence(p.pricePence, p.upfrontPaidPence);
       const done = inst.number === 3 || newPaid >= fullTarget;
 
+      const paymentRecord = await db.payment.create({
+        data: {
+          patientId: p.id,
+          amountPence: inst.amountPence,
+          type: "instalment",
+          status: "paid",
+          paidAt: new Date(),
+          stripePaymentIntentId: pi.id,
+        },
+      });
+
       await db.$transaction([
         db.instalment.update({
           where: { id: inst.id },
           data: { status: "paid", paidAt: new Date(), stripePaymentIntentId: pi.id },
-        }),
-        db.payment.create({
-          data: {
-            patientId: p.id,
-            amountPence: inst.amountPence,
-            type: "instalment",
-            status: "paid",
-            paidAt: new Date(),
-            stripePaymentIntentId: pi.id,
-          },
         }),
         db.patient.update({
           where: { id: p.id },
@@ -169,11 +170,7 @@ export async function GET(req: NextRequest) {
         }),
       ]);
 
-      await sendEmail(
-        p.email,
-        `Instalment ${inst.number}/3 received — Dental Scotland`,
-        receiptEmailHtml(p, inst.amountPence, `instalment ${inst.number} of 3`)
-      ).catch(console.error);
+      await issuePaymentReceipt(paymentRecord.id).catch((e) => log.error("payment.receipt.fail", summarizeError(e)));
       results.push({ instalment: inst.id, ok: true });
       log.info("instalment.charge.ok", { instalmentId: inst.id, number: inst.number, patientId: p.id });
     } catch (e: unknown) {

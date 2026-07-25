@@ -6,7 +6,9 @@ import { db } from "@/lib/db";
 import { stripe } from "@/lib/stripe";
 import { fmt, fullPricePence, instalmentPence, netPricePence } from "@/lib/pricing";
 import { getPricing } from "@/lib/pricing-settings";
-import { notifyAdmin, receiptEmailHtml, depositScheduleEmailHtml, sendEmail } from "@/lib/notify";
+import { notifyAdmin, depositScheduleEmailHtml, sendEmail } from "@/lib/notify";
+import { issuePaymentReceipt } from "@/lib/payment-receipt";
+import { log, summarizeError } from "@/lib/log";
 import { FOLLOW_UPS_COMPLETE_TOUCH } from "@/lib/follow-ups";
 
 export const runtime = "nodejs";
@@ -51,7 +53,7 @@ async function handleCheckoutPaid(
   const existing = await db.payment.findUnique({ where: { stripeSessionId: session.id } });
   if (existing?.status === "paid") return;
 
-  await db.payment.upsert({
+  const paymentRecord = await db.payment.upsert({
     where: { stripeSessionId: session.id },
     update: { status: "paid", paidAt: new Date(), stripePaymentIntentId: piId },
     create: {
@@ -75,7 +77,7 @@ async function handleCheckoutPaid(
         activities: { create: { text: `Paid in full via secure link — ${fmt(amount)}` } },
       },
     });
-    await sendEmail(patient.email, "Payment received — Dental Scotland", receiptEmailHtml(patient, amount, "paid in full")).catch(console.error);
+    await issuePaymentReceipt(paymentRecord.id).catch((e) => log.error("payment.receipt.fail", summarizeError(e)));
     await notifyAdmin(`💚 ${patient.firstName} ${patient.lastName} paid in full`, `${fmt(amount)} received via Stripe. Their aligners can be ordered now.`);
     return;
   }
@@ -129,6 +131,7 @@ async function handleCheckoutPaid(
     "Deposit received — your instalment plan is set — Dental Scotland",
     depositScheduleEmailHtml(patient, amount, per, dueDates)
   ).catch(console.error);
+  await issuePaymentReceipt(paymentRecord.id).catch((e) => log.error("payment.receipt.fail", summarizeError(e)));
   await notifyAdmin(
     `💚 ${patient.firstName} ${patient.lastName} paid the ${fmt(amount)} deposit`,
     `3 instalments of ${fmt(per)} scheduled monthly on their saved card.`

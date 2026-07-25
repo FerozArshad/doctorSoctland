@@ -14,6 +14,7 @@ import { log, summarizeError } from "@/lib/log";
 import { patientTemplateText, patientTemplateTitle, type PatientTemplateId } from "@/lib/patient-templates";
 import { getWhatsAppConfig, getWhatsAppHealth } from "@/lib/whatsapp-settings";
 import { FOLLOW_UPS_COMPLETE_TOUCH } from "@/lib/follow-ups";
+import { issuePaymentReceipt, resendPaymentReceipt } from "@/lib/payment-receipt";
 import {
   generateSecureAdminPassword,
   hashAdminPassword,
@@ -1078,16 +1079,22 @@ export async function recordDeposit(formData: FormData) {
   const dep = cfg.depositPence;
   const id = String(formData.get("patientId"));
   await requireOwnedPatient(id);
-  await db.patient.update({
-    where: { id },
-    data: {
-      status: "deposit",
-      amountPaidPence: dep,
-      sequenceTouch: FOLLOW_UPS_COMPLETE_TOUCH,
-      activities: { create: { text: `${fmt(dep)} deposit recorded` } },
-      payments: { create: { amountPence: dep, type: "manual", status: "paid", paidAt: new Date() } },
-    },
+  const payment = await db.$transaction(async (tx) => {
+    const paymentRecord = await tx.payment.create({
+      data: { patientId: id, amountPence: dep, type: "manual", status: "paid", paidAt: new Date() },
+    });
+    await tx.patient.update({
+      where: { id },
+      data: {
+        status: "deposit",
+        amountPaidPence: dep,
+        sequenceTouch: FOLLOW_UPS_COMPLETE_TOUCH,
+        activities: { create: { text: `${fmt(dep)} deposit recorded` } },
+      },
+    });
+    return paymentRecord;
   });
+  await issuePaymentReceipt(payment.id).catch((e) => log.error("payment.receipt.fail", summarizeError(e)));
   redirect(toastUrl(`/admin/patients/${id}`, `${fmt(dep)} deposit recorded`));
 }
 
@@ -1095,17 +1102,41 @@ export async function markPaid(formData: FormData) {
   const id = String(formData.get("patientId"));
   const { patient } = await requireOwnedPatient(id);
   const full = fullPricePence(netPricePence(patient.pricePence, patient.upfrontPaidPence), patient.discountPct);
-  await db.patient.update({
-    where: { id },
-    data: {
-      status: "paid",
-      amountPaidPence: full,
-      sequenceTouch: FOLLOW_UPS_COMPLETE_TOUCH,
-      activities: { create: { text: `Marked paid in full — ${fmt(full)}` } },
-      payments: { create: { amountPence: full - patient.amountPaidPence, type: "manual", status: "paid", paidAt: new Date() } },
-    },
+  const delta = full - patient.amountPaidPence;
+  const payment = await db.$transaction(async (tx) => {
+    const paymentRecord = await tx.payment.create({
+      data: { patientId: id, amountPence: delta, type: "manual", status: "paid", paidAt: new Date() },
+    });
+    await tx.patient.update({
+      where: { id },
+      data: {
+        status: "paid",
+        amountPaidPence: full,
+        sequenceTouch: FOLLOW_UPS_COMPLETE_TOUCH,
+        activities: { create: { text: `Marked paid in full — ${fmt(full)}` } },
+      },
+    });
+    return paymentRecord;
   });
+  await issuePaymentReceipt(payment.id).catch((e) => log.error("payment.receipt.fail", summarizeError(e)));
   redirect(toastUrl(`/admin/patients/${id}`, "Marked paid in full"));
+}
+
+export async function resendReceipt(formData: FormData) {
+  const id = String(formData.get("patientId"));
+  const receiptId = String(formData.get("receiptId"));
+  const { patient } = await requireOwnedPatient(id);
+  const receipt = await db.paymentReceipt.findFirst({ where: { id: receiptId, patientId: patient.id } });
+  if (!receipt) redirect(toastUrl(`/admin/patients/${id}`, "Receipt not found", "!", "#E0A429"));
+  const result = await resendPaymentReceipt(receiptId);
+  redirect(
+    toastUrl(
+      `/admin/patients/${id}`,
+      result.ok ? `Receipt ${receipt.receiptNumber} resent to ${patient.email}` : result.error || "Could not resend receipt",
+      result.ok ? "✓" : "!",
+      result.ok ? "#0E9384" : "#E0A429"
+    )
+  );
 }
 
 /** Super Admin only — permanently remove a patient and related records. */

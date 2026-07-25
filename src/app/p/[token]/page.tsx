@@ -15,6 +15,7 @@ import FollowUpCallCard from "@/components/FollowUpCallCard";
 import ProposalHashScroll from "@/components/ProposalHashScroll";
 import OtpGate from "@/components/OtpGate";
 import VideoBlock from "@/components/VideoBlock";
+import PatientReceiptsList from "@/components/PatientReceiptsList";
 import Toast from "@/components/Toast";
 
 export const dynamic = "force-dynamic";
@@ -116,6 +117,15 @@ export default async function ProposalPage({
     mimeType: u.mimeType,
     sizeBytes: u.sizeBytes,
   }));
+
+  const paymentReceipts =
+    (loggedIn || admin) && c.amountPaidPence > 0
+      ? await db.paymentReceipt.findMany({
+          where: { patientId: c.id },
+          orderBy: { createdAt: "desc" },
+          include: { payment: { select: { paidAt: true, type: true } } },
+        })
+      : [];
 
   const payOptions: PayOption[] = [
     {
@@ -402,6 +412,8 @@ export default async function ProposalPage({
                 ))}
               </div>
             </div>
+
+            {paymentReceipts.length > 0 && <PatientReceiptsList receipts={paymentReceipts} />}
 
             <div style={{ marginTop: 18, textAlign: "center", color: "#9AA6B4", fontSize: 11.5, lineHeight: 1.65 }}>
               Dental Scotland · It&apos;s time to smile ·{" "}

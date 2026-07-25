@@ -185,6 +185,7 @@ model Patient {
   payments              Payment[]
   instalments           Instalment[]
   uploads               PatientUpload[]
+  paymentReceipts       PaymentReceipt[]
 
   @@index([ownerId])
   @@index([sentByEmail])
@@ -229,9 +230,31 @@ model Payment {
   stripePaymentIntentId String?
   paidAt                DateTime?
   createdAt             DateTime  @default(now())
+  receipt               PaymentReceipt?
 
   @@index([patientId])
   @@index([status, paidAt])
+}
+
+/// Stored payment receipt — generated only after gateway confirms success.
+model PaymentReceipt {
+  id                      String    @id @default(cuid())
+  receiptNumber           String    @unique
+  patientId               String
+  patient                 Patient   @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  paymentId               String    @unique
+  payment                 Payment   @relation(fields: [paymentId], references: [id], onDelete: Cascade)
+  amountPence             Int
+  paymentMethod           String    @default("Card")
+  transactionId           String    @default("")
+  serviceDescription      String
+  outstandingBalancePence Int       @default(0)
+  htmlBody                String
+  emailSentAt             DateTime?
+  emailLogId              String    @default("")
+  createdAt               DateTime  @default(now())
+
+  @@index([patientId, createdAt])
 }
 
 model Instalment {

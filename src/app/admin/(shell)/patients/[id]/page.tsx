@@ -12,6 +12,7 @@ import MessageLog from "@/components/MessageLog";
 import FormSubmitButton from "@/components/FormSubmitButton";
 import DeletePatientButton from "@/components/DeletePatientButton";
 import AdminPatientFiles from "@/components/AdminPatientFiles";
+import PaymentReceiptsSection from "@/components/PaymentReceiptsSection";
 import { isMessageActivity } from "@/lib/messages";
 import { publicActivityText } from "@/lib/activity-display";
 import { patientTemplateText } from "@/lib/patient-templates";
@@ -35,6 +36,10 @@ export default async function PatientProfile({ params }: { params: { id: string 
     include: {
       activities: { orderBy: { createdAt: "desc" }, take: 80 },
       instalments: { orderBy: { number: "asc" } },
+      paymentReceipts: {
+        orderBy: { createdAt: "desc" },
+        include: { payment: { select: { type: true, paidAt: true } } },
+      },
       uploads: {
         orderBy: { createdAt: "desc" },
         select: {
@@ -361,6 +366,8 @@ export default async function PatientProfile({ params }: { params: { id: string 
                     ))}
                   </div>
                 )}
+
+                <PaymentReceiptsSection patientId={c.id} receipts={c.paymentReceipts} />
 
                 <div style={{ marginTop: 14, display: "flex", gap: 10 }}>
                   <form action={recordDeposit} style={{ flex: 1, display: "flex" }}>

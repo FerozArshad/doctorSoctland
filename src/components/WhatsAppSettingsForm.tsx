@@ -71,6 +71,7 @@ export default function WhatsAppSettingsForm({
 
   const connected = !!(cfg.token && cfg.phoneNumberId);
   const blocked = !!(health && !health.ok);
+  const published = !!(health?.verifiedName && health?.displayPhone);
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 18, maxWidth: 720 }}>
@@ -91,9 +92,19 @@ export default function WhatsAppSettingsForm({
               padding: "6px 11px",
             }}
           >
-            {blocked ? "Blocked by Meta" : connected ? "Connected" : "Not connected"}
+            {blocked ? "Messaging blocked" : connected ? "Ready to send" : "Not connected"}
           </span>
         </div>
+        {published && (
+          <div style={{ marginTop: 10, padding: "10px 12px", borderRadius: 10, background: "#F4FCFA", border: "1px solid #CFEDE5", fontSize: 13, lineHeight: 1.5, color: "#0B7A6E" }}>
+            <strong>Published on WhatsApp:</strong> {health?.verifiedName} · {health?.displayPhone}
+            {blocked && (
+              <span style={{ display: "block", marginTop: 6, color: "#8A5A12" }}>
+                Display name is approved, but Meta still blocks outbound messages until the business account (WABA) is fully active — see blockers below.
+              </span>
+            )}
+          </div>
+        )}
         <div style={{ marginTop: 12, fontSize: 12.5, color: "#8A96A5" }}>
           Active source: <strong>{cfg.source}</strong>
           {cfg.phoneNumberId ? ` · Phone Number ID ${cfg.phoneNumberId}` : ""}

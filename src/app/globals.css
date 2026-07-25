@@ -133,7 +133,50 @@ a { color: inherit; transition: color .15s var(--ease), opacity .15s var(--ease)
 /* ── Responsive ───────────────────────────────────────────────────────────
    Inline styles beat class selectors — mobile overrides need !important. */
 
+/* Consent / finance modal — mobile sheet + sticky footer */
+.ds-consent-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  background: rgba(11, 24, 40, 0.62);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+}
+.ds-consent-sheet {
+  background: #fff;
+  border-radius: 18px;
+  width: 100%;
+  max-width: 520px;
+  max-height: min(92dvh, 760px);
+  box-shadow: 0 30px 60px -20px rgba(11, 24, 40, 0.5);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+.ds-consent-scroll {
+  flex: 1;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 18px 20px 12px;
+}
+.ds-consent-footer {
+  flex: none;
+  border-top: 1px solid #eef2f6;
+  padding: 14px 20px 18px;
+  background: #fff;
+}
 @media (max-width: 640px) {
+  .ds-consent-overlay {
+    align-items: flex-end;
+    padding: 0;
+  }
+  .ds-consent-sheet {
+    max-width: none;
+    max-height: 94dvh;
+    border-radius: 18px 18px 0 0;
+  }
   .ds-grid-2 { grid-template-columns: 1fr !important; }
 }
 

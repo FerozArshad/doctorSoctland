@@ -205,10 +205,13 @@ export default function ProposalDocuments({
   token,
   docs,
   compact = false,
+  embedded = false,
 }: {
   token: string;
   docs: ProposalDoc[];
   compact?: boolean;
+  /** Inside consent modal — minimal chrome */
+  embedded?: boolean;
 }) {
   const [active, setActive] = useState<ProposalDoc | null>(null);
   const [mounted, setMounted] = useState(false);
@@ -242,16 +245,25 @@ export default function ProposalDocuments({
 
   return (
     <>
-      <section style={{ marginTop: compact ? 14 : 18 }}>
-        <h2 style={{ fontSize: compact ? 13.5 : 15, fontWeight: 800, margin: "0 0 6px", color: "#0E1A2B" }}>
-          {compact ? "Attached documents" : "Documents from the practice"}
-        </h2>
-        <p style={{ fontSize: compact ? 11.5 : 12.5, color: "#6B7785", margin: "0 0 10px", lineHeight: 1.45 }}>
-          {compact
-            ? "Review these before signing — view only."
-            : "Tap a file to open it. These were shared by Dental Scotland for you to review."}
-        </p>
-        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+      <section style={{ marginTop: embedded ? 12 : compact ? 14 : 18 }}>
+        {!embedded && (
+          <>
+            <h2 style={{ fontSize: compact ? 13.5 : 15, fontWeight: 800, margin: "0 0 6px", color: "#0E1A2B" }}>
+              {compact ? "Attached documents" : "Documents from the practice"}
+            </h2>
+            <p style={{ fontSize: compact ? 11.5 : 12.5, color: "#6B7785", margin: "0 0 10px", lineHeight: 1.45 }}>
+              {compact
+                ? "Review these before signing — view only."
+                : "Tap a file to open it. These were shared by Dental Scotland for you to review."}
+            </p>
+          </>
+        )}
+        {embedded && (
+          <div style={{ fontSize: 12.5, fontWeight: 800, color: "#16202E", marginBottom: 8 }}>
+            Attached documents ({docs.length})
+          </div>
+        )}
+        <div style={{ display: "flex", flexDirection: "column", gap: embedded ? 6 : 8 }}>
           {docs.map((d) => (
             <button
               key={d.id}
@@ -267,7 +279,7 @@ export default function ProposalDocuments({
                 alignItems: "center",
                 justifyContent: "space-between",
                 gap: 12,
-                padding: "12px 14px",
+                padding: embedded ? "10px 12px" : "12px 14px",
                 borderRadius: 12,
                 border: "1px solid #E1E7EE",
                 background: "#fff",

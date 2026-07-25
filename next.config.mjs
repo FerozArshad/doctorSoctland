@@ -18,6 +18,11 @@ const nextConfig = {
           { key: "Permissions-Policy", value: "camera=(), microphone=(), geolocation=()" },
         ],
       },
+      // Patient document previews embed PDFs in a same-origin modal — allow framing file bytes only.
+      {
+        source: "/api/p/:token/files/:uploadId",
+        headers: [{ key: "X-Frame-Options", value: "SAMEORIGIN" }],
+      },
     ];
   },
 };

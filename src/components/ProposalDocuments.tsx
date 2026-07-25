@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 export type ProposalDoc = {
   id: string;
@@ -8,6 +8,120 @@ export type ProposalDoc = {
   mimeType: string;
   sizeBytes: number;
 };
+
+function DocumentPreview({ url, doc }: { url: string; doc: ProposalDoc }) {
+  const [blobUrl, setBlobUrl] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const isImage = doc.mimeType.startsWith("image/");
+  const isPdf = doc.mimeType === "application/pdf";
+
+  useEffect(() => {
+    if (isImage) {
+      setLoading(false);
+      return;
+    }
+
+    let cancelled = false;
+    let objectUrl: string | null = null;
+    setLoading(true);
+    setError(null);
+    setBlobUrl(null);
+
+    fetch(url, { credentials: "include", cache: "no-store" })
+      .then(async (res) => {
+        if (!res.ok) throw new Error(res.status === 403 ? "Please sign in again to view this file." : `Could not load file (${res.status})`);
+        const blob = await res.blob();
+        if (!blob.size) throw new Error("File is empty.");
+        return blob;
+      })
+      .then((blob) => {
+        if (cancelled) return;
+        const typed = isPdf ? new Blob([blob], { type: "application/pdf" }) : blob;
+        objectUrl = URL.createObjectURL(typed);
+        setBlobUrl(objectUrl);
+      })
+      .catch((e) => {
+        if (!cancelled) setError(e instanceof Error ? e.message : "Could not load preview");
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+    };
+  }, [url, isImage, isPdf]);
+
+  if (isImage) {
+    return (
+      // eslint-disable-next-line @next/next/no-img-element
+      <img
+        src={url}
+        alt={doc.fileName}
+        style={{ maxWidth: "100%", maxHeight: "78vh", objectFit: "contain", display: "block", margin: "0 auto" }}
+      />
+    );
+  }
+
+  if (loading) {
+    return (
+      <div style={{ padding: 40, textAlign: "center", color: "#7A8696", fontSize: 14 }}>
+        Loading document…
+      </div>
+    );
+  }
+
+  if (error || !blobUrl) {
+    return (
+      <div style={{ padding: 32, textAlign: "center", maxWidth: 360 }}>
+        <p style={{ fontSize: 14, color: "#7A8696", lineHeight: 1.6, margin: "0 0 16px" }}>
+          {error || "Preview unavailable in this browser."}
+        </p>
+        <a
+          href={url}
+          target="_blank"
+          rel="noreferrer"
+          style={{
+            display: "inline-block",
+            background: "#0E9384",
+            color: "#fff",
+            padding: "12px 20px",
+            borderRadius: 10,
+            fontWeight: 700,
+            fontSize: 14,
+            textDecoration: "none",
+          }}
+        >
+          Open PDF in new tab
+        </a>
+      </div>
+    );
+  }
+
+  return (
+    <object
+      data={`${blobUrl}#toolbar=1&navpanes=0`}
+      type="application/pdf"
+      aria-label={doc.fileName}
+      style={{ width: "100%", height: "78vh", display: "block", background: "#fff" }}
+    >
+      <embed
+        src={blobUrl}
+        type="application/pdf"
+        style={{ width: "100%", height: "78vh", display: "block" }}
+      />
+      <p style={{ padding: 24, textAlign: "center", fontSize: 14, color: "#7A8696" }}>
+        PDF preview not supported.{" "}
+        <a href={url} target="_blank" rel="noreferrer" style={{ color: "#0E9384", fontWeight: 700 }}>
+          Open in new tab
+        </a>
+      </p>
+    </object>
+  );
+}
 
 export default function ProposalDocuments({
   token,
@@ -122,21 +236,8 @@ export default function ProposalDocuments({
                 </button>
               </div>
             </div>
-            <div style={{ flex: 1, minHeight: 320, background: "#F4F6F9", display: "grid", placeItems: "center", overflow: "auto" }}>
-              {active.mimeType.startsWith("image/") ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
-                  src={urlFor(active.id)}
-                  alt={active.fileName}
-                  style={{ maxWidth: "100%", maxHeight: "78vh", objectFit: "contain" }}
-                />
-              ) : (
-                <iframe
-                  title={active.fileName}
-                  src={urlFor(active.id)}
-                  style={{ width: "100%", height: "78vh", border: "none", background: "#fff" }}
-                />
-              )}
+            <div style={{ flex: 1, minHeight: 320, background: "#F4F6F9", overflow: "auto" }}>
+              <DocumentPreview key={active.id} url={urlFor(active.id)} doc={active} />
             </div>
           </div>
         </div>

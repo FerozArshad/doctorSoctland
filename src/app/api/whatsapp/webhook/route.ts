@@ -4,14 +4,13 @@ import { db } from "@/lib/db";
 import { log } from "@/lib/log";
 import { timingSafeEqualStr } from "@/lib/secure";
 import { getWhatsAppConfig } from "@/lib/whatsapp-settings";
+import { logWhatsAppStatusEvent, type MetaStatusPayload } from "@/lib/whatsapp-delivery-log";
 
 export const dynamic = "force-dynamic";
 
 /**
  * Meta WhatsApp Cloud API webhook.
- * Configure in Meta App → WhatsApp → Configuration:
- *   Callback URL: https://dashboard.dentalscotland.com/api/whatsapp/webhook
- *   Verify token: same as saved in Admin → WhatsApp (or WHATSAPP_WEBHOOK_VERIFY_TOKEN)
+ * Callback URL: https://dashboard.dentalscotland.com/api/whatsapp/webhook
  * Subscribe to: messages (includes delivery status updates)
  */
 
@@ -30,14 +29,6 @@ export async function GET(req: NextRequest) {
   return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 }
 
-type Status = {
-  id?: string;
-  status?: string;
-  timestamp?: string;
-  recipient_id?: string;
-  errors?: Array<{ code?: number; title?: string; message?: string; error_data?: { details?: string } }>;
-};
-
 async function verifyMetaSignature(rawBody: string, signatureHeader: string | null): Promise<boolean> {
   const cfg = await getWhatsAppConfig();
   const secret = cfg.metaAppSecret || "";
@@ -52,16 +43,22 @@ async function verifyMetaSignature(rawBody: string, signatureHeader: string | nu
 
 export async function POST(req: NextRequest) {
   const rawBody = await req.text();
-  if (!(await verifyMetaSignature(rawBody, req.headers.get("x-hub-signature-256")))) {
-    log.warn("whatsapp.webhook.bad_signature");
+  const signatureOk = await verifyMetaSignature(rawBody, req.headers.get("x-hub-signature-256"));
+  if (!signatureOk) {
+    log.warn("whatsapp.webhook.bad_signature", { bodyLength: rawBody.length });
     return NextResponse.json({ error: "invalid signature" }, { status: 401 });
   }
 
   let body: {
+    object?: string;
     entry?: Array<{
+      id?: string;
       changes?: Array<{
+        field?: string;
         value?: {
-          statuses?: Status[];
+          messaging_product?: string;
+          metadata?: Record<string, unknown>;
+          statuses?: MetaStatusPayload[];
           messages?: Array<{ from?: string; type?: string; text?: { body?: string } }>;
           contacts?: Array<{ wa_id?: string; profile?: { name?: string } }>;
         };
@@ -72,8 +69,15 @@ export async function POST(req: NextRequest) {
   try {
     body = JSON.parse(rawBody);
   } catch {
+    log.warn("whatsapp.webhook.bad_json");
     return NextResponse.json({ ok: true });
   }
+
+  log.info("whatsapp.webhook.received", {
+    object: body.object || null,
+    entryCount: body.entry?.length || 0,
+    rawBody: rawBody,
+  });
 
   const jobs: Promise<unknown>[] = [];
 
@@ -91,29 +95,34 @@ export async function POST(req: NextRequest) {
   return NextResponse.json({ ok: true });
 }
 
-async function handleStatus(st: Status) {
+async function handleStatus(st: MetaStatusPayload) {
   const status = (st.status || "").toLowerCase();
   const waId = st.recipient_id || "";
   const messageId = st.id || "";
   const err = st.errors?.[0];
-  const errMsg = err?.message || err?.title || err?.error_data?.details || "";
 
   log.info("whatsapp.status", {
     status,
     waId: waId || null,
-    messageId: messageId ? messageId.slice(0, 28) + "…" : null,
-    code: err?.code || null,
-    message: errMsg ? errMsg.slice(0, 160) : null,
+    messageId: messageId || null,
+    code: err?.code ?? null,
+    title: err?.title ?? null,
+    message: err?.message ?? null,
+    errors: st.errors ?? null,
+    conversation: st.conversation ?? null,
+    pricing: st.pricing ?? null,
+    metadata: st.metadata ?? null,
+    rawPayload: st,
   });
+
+  const patient = waId ? await findPatientByWaId(waId) : null;
+  await logWhatsAppStatusEvent(st, patient?.id);
 
   if (!waId || (status !== "failed" && status !== "undeliverable" && status !== "delivered")) return;
 
-  const patient = await findPatientByWaId(waId);
-  if (!patient) {
-    log.warn("whatsapp.status.unmatched", { waId, status });
-    return;
-  }
+  if (!patient) return;
 
+  const errMsg = err?.message || err?.title || err?.error_data?.details || "";
   let text: string;
   if (status === "delivered") {
     text = "WhatsApp delivered";
@@ -126,8 +135,11 @@ async function handleStatus(st: Status) {
       code: err?.code || null,
       message: errMsg || null,
       errors: st.errors,
+      rawPayload: st,
     });
-    text = "WhatsApp not delivered";
+    text = err?.code
+      ? `WhatsApp not delivered — Meta error ${err.code}: ${errMsg}`
+      : "WhatsApp not delivered";
   }
   await db.activity.create({ data: { patientId: patient.id, text } });
 }

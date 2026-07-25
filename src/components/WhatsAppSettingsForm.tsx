@@ -27,7 +27,13 @@ type Health = {
   wabaReviewStatus?: string;
   appLinked?: boolean;
   blockers: Array<{ entity: string; code: number; description: string; solution: string }>;
+  advisories?: Array<{ entity: string; code: number; description: string; solution: string }>;
   summary: string;
+  phoneNumberId?: string;
+  configSource?: string;
+  tokenMask?: string;
+  verifiedVia?: string;
+  qualityRating?: string;
 };
 
 function maskSecret(value: string) {
@@ -109,8 +115,9 @@ export default function WhatsAppSettingsForm({
         )}
         <div style={{ marginTop: 12, fontSize: 12.5, color: "#8A96A5" }}>
           Active source: <strong>{cfg.source}</strong>
-          {cfg.phoneNumberId ? ` · Phone Number ID ${cfg.phoneNumberId}` : ""}
-          {cfg.token ? ` · Token ${maskSecret(cfg.token)}` : ""}
+          {health?.phoneNumberId ? ` · Phone Number ID ${health.phoneNumberId}` : cfg.phoneNumberId ? ` · Phone Number ID ${cfg.phoneNumberId}` : ""}
+          {health?.tokenMask ? ` · Token ${health.tokenMask}` : cfg.token ? ` · Token ${maskSecret(cfg.token)}` : ""}
+          {health?.verifiedVia ? ` · Verified via ${health.verifiedVia}` : ""}
         </div>
 
         {healthLoading && connected && (
@@ -163,6 +170,22 @@ export default function WhatsAppSettingsForm({
                   </li>
                 ))}
               </ul>
+            )}
+            {!blocked && (health.advisories?.length || 0) > 0 && (
+              <div style={{ marginTop: 10, padding: "10px 12px", borderRadius: 8, background: "rgba(255,255,255,0.55)", fontSize: 12.5 }}>
+                <strong>Meta health_status advisory</strong> (does not block sending):
+                <ul style={{ margin: "8px 0 0", paddingLeft: 18 }}>
+                  {health.advisories!.map((b) => (
+                    <li key={`adv-${b.entity}-${b.code}-${b.description}`}>
+                      <strong>
+                        {b.entity}
+                        {b.code ? ` ${b.code}` : ""}:
+                      </strong>{" "}
+                      {b.description}
+                    </li>
+                  ))}
+                </ul>
+              </div>
             )}
             {blocked && (
               <div style={{ marginTop: 10 }}>

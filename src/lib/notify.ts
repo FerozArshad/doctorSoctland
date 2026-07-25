@@ -7,7 +7,8 @@ import { db } from "./db";
 import { estMonths, fmt, fullPricePence, instalmentPence, netPricePence, PRICING_DEFAULTS, type PricingConfig } from "./pricing";
 import { gmailConfigured, sendGmail } from "./google";
 import { log, summarizeError } from "./log";
-import { getWhatsAppConfig, getWhatsAppHealth } from "./whatsapp-settings";
+import { getWhatsAppConfig, WHATSAPP_GRAPH_VERSION } from "./whatsapp-settings";
+import { logWhatsAppOutbound } from "./whatsapp-delivery-log";
 import {
   classifyEmailError,
   createEmailLog,
@@ -207,39 +208,16 @@ async function graphSend(to: string, payload: Record<string, unknown>): Promise<
   const phoneId = c.phoneNumberId.trim();
   if (!token || !phoneId) return { simulated: true };
 
-  // Meta may return HTTP 200 "accepted" even when the WABA cannot deliver.
-  // Fail early with the real health_status blocker (e.g. 141008 inactive WABA).
-  const health = await getWhatsAppHealth();
-  if (health && !health.ok) {
-    const top = health.blockers[0];
-    const detail = top
-      ? `${top.description}${top.code ? ` (code ${top.code})` : ""}${top.solution ? ` — ${top.solution}` : ""}`
-      : health.summary;
-    const error = JSON.stringify({
-      error: {
-        message: detail,
-        code: top?.code || 0,
-        error_data: { details: health.summary, waba_id: health.wabaId || null },
-      },
-    });
-    log.error("whatsapp.send.blocked", {
-      to,
-      wabaId: health.wabaId || null,
-      blockers: health.blockers,
-      via: payload.type,
-    });
-    return { simulated: false, error };
-  }
-
   // Cloud API expects digits only (no +).
   const toDigits = to.replace(/\D/g, "");
-  const res = await fetch(`https://graph.facebook.com/v21.0/${phoneId}/messages`, {
+  const requestBody = { messaging_product: "whatsapp", to: toDigits, ...payload };
+  const res = await fetch(`https://graph.facebook.com/${WHATSAPP_GRAPH_VERSION}/${phoneId}/messages`, {
     method: "POST",
     headers: {
       Authorization: `Bearer ${token}`,
       "Content-Type": "application/json",
     },
-    body: JSON.stringify({ messaging_product: "whatsapp", to: toDigits, ...payload }),
+    body: JSON.stringify(requestBody),
   });
   const raw = await res.text();
   let json: {
@@ -252,6 +230,25 @@ async function graphSend(to: string, payload: Record<string, unknown>): Promise<
   } catch {
     json = {};
   }
+
+  const templateName =
+    payload.type === "template" && typeof (payload.template as { name?: string })?.name === "string"
+      ? (payload.template as { name: string }).name
+      : "";
+
+  await logWhatsAppOutbound({
+    recipientId: toDigits,
+    phoneNumberId: phoneId,
+    payloadType: String(payload.type || "unknown"),
+    templateName,
+    requestBody,
+    responseBody: json.error ? { error: json.error, _raw: raw } : json,
+    httpStatus: res.status,
+    messageId: json.messages?.[0]?.id,
+    waId: json.contacts?.[0]?.wa_id,
+    messageStatus: json.messages?.[0]?.message_status,
+  });
+
   if (!res.ok) {
     const summary = summarizeError(raw);
     log.error("whatsapp.send", { to: toDigits, ...summary, via: payload.type });

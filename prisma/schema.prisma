@@ -89,6 +89,50 @@ model EmailLog {
   @@index([subject])
 }
 
+/// Outbound WhatsApp Cloud API send — full request/response for delivery tracing.
+model WhatsAppOutboundLog {
+  id            String   @id @default(cuid())
+  messageId     String   @default("")
+  recipientId   String
+  phoneNumberId String
+  payloadType   String
+  templateName  String   @default("")
+  requestBody   Json
+  responseBody  Json
+  httpStatus    Int
+  waId          String   @default("")
+  messageStatus String   @default("")
+  patientId     String?
+  createdAt     DateTime @default(now())
+
+  @@index([messageId])
+  @@index([recipientId, createdAt])
+  @@index([createdAt])
+}
+
+/// Inbound WhatsApp delivery status webhook — every status event, all recipients.
+model WhatsAppStatusEvent {
+  id             String    @id @default(cuid())
+  messageId      String
+  recipientId    String
+  status         String
+  eventTimestamp DateTime?
+  errorCode      Int?
+  errorTitle     String    @default("")
+  errorMessage   String    @default("")
+  errorsJson     Json      @default("[]")
+  conversation   Json?
+  pricing        Json?
+  metadata       Json?
+  rawPayload     Json
+  patientId      String?
+  createdAt      DateTime  @default(now())
+
+  @@index([messageId, status])
+  @@index([recipientId, createdAt])
+  @@index([createdAt])
+}
+
 model Admin {
   id           String          @id @default(cuid())
   email        String          @unique

@@ -1,6 +1,29 @@
 // Server-only: WhatsApp Cloud API settings (DB portal + env fallback).
 import { db } from "./db";
 
+/** Graph API version used for all WhatsApp Cloud API calls. */
+export const WHATSAPP_GRAPH_VERSION = "v21.0";
+
+function graphUrl(path: string) {
+  return `https://graph.facebook.com/${WHATSAPP_GRAPH_VERSION}/${path.replace(/^\//, "")}`;
+}
+
+function maskAuthHeader(token: string) {
+  const t = token.trim();
+  if (t.length <= 8) return "••••••••";
+  return `Bearer ${t.slice(0, 8)}…`;
+}
+
+function whatsappDebugEnabled() {
+  return process.env.WHATSAPP_DEBUG === "1" || process.env.WHATSAPP_DEBUG === "true";
+}
+
+function debugWhatsApp(event: string, fields: Record<string, unknown>) {
+  if (!whatsappDebugEnabled()) return;
+  // Full payload — bypass log sanitiser truncation when WHATSAPP_DEBUG=1.
+  console.log(JSON.stringify({ ts: new Date().toISOString(), level: "debug", event, ...fields }));
+}
+
 export type WhatsAppConfig = {
   token: string;
   phoneNumberId: string;
@@ -99,35 +122,127 @@ export type WhatsAppHealth = {
   wabaId: string;
   wabaReviewStatus?: string;
   appLinked?: boolean;
+  /** Hard failures only — credential/phone lookup or messaging API probe errors. */
   blockers: WhatsAppHealthBlocker[];
+  /** Meta health_status advisories (e.g. 141008) — informational, not used to block sends. */
+  advisories: WhatsAppHealthBlocker[];
   summary: string;
+  /** Diagnostics — which credentials the check used. */
+  phoneNumberId?: string;
+  configSource?: WhatsAppConfig["source"];
+  tokenMask?: string;
+  verifiedVia?: "phone_lookup" | "phone_lookup+messaging_probe";
+  qualityRating?: string;
 };
 
-/** Live Meta health_status — detects WABA/phone blocks that still return API "accepted". */
-export async function getWhatsAppHealth(): Promise<WhatsAppHealth | null> {
+type MetaGraphError = {
+  message?: string;
+  type?: string;
+  code?: number;
+  error_subcode?: number;
+  fbtrace_id?: string;
+};
+
+async function graphGet(token: string, path: string, label: string) {
+  const endpoint = graphUrl(path);
+  const headers = { Authorization: `Bearer ${token.trim()}` };
+  debugWhatsApp("whatsapp.graph.request", {
+    label,
+    endpoint,
+    apiVersion: WHATSAPP_GRAPH_VERSION,
+    authorization: maskAuthHeader(token),
+    method: "GET",
+  });
+  const res = await fetch(endpoint, { headers, cache: "no-store" });
+  const raw = await res.text();
+  let json: Record<string, unknown> = {};
+  try {
+    json = JSON.parse(raw) as Record<string, unknown>;
+  } catch {
+    json = { _raw: raw };
+  }
+  const err = json.error as MetaGraphError | undefined;
+  debugWhatsApp("whatsapp.graph.response", {
+    label,
+    httpStatus: res.status,
+    body: raw,
+    metaErrorCode: err?.code ?? null,
+    metaErrorSubcode: err?.error_subcode ?? null,
+    fbtrace_id: err?.fbtrace_id ?? null,
+  });
+  return { res, json, raw, err };
+}
+
+function parseHealthAdvisories(healthStatus: {
+  can_send_message?: string;
+  entities?: Array<{
+    entity_type?: string;
+    id?: string;
+    can_send_message?: string;
+    errors?: Array<{ error_code?: number; error_description?: string; possible_solution?: string }>;
+  }>;
+} | undefined): { advisories: WhatsAppHealthBlocker[]; wabaId: string; canSendMessage: string } {
+  const entities = healthStatus?.entities || [];
+  const advisories: WhatsAppHealthBlocker[] = [];
+  let wabaId = "";
+  for (const ent of entities) {
+    if (ent.entity_type === "WABA" && ent.id) wabaId = ent.id;
+    if ((ent.can_send_message || "").toUpperCase() !== "AVAILABLE") {
+      for (const err of ent.errors || []) {
+        advisories.push({
+          entity: ent.entity_type || "UNKNOWN",
+          code: err.error_code || 0,
+          description: err.error_description || "Advisory",
+          solution: err.possible_solution || "",
+        });
+      }
+      if (!(ent.errors || []).length) {
+        advisories.push({
+          entity: ent.entity_type || "UNKNOWN",
+          code: 0,
+          description: `can_send_message=${ent.can_send_message || "BLOCKED"}`,
+          solution: "",
+        });
+      }
+    }
+  }
+  return {
+    advisories,
+    wabaId,
+    canSendMessage: (healthStatus?.can_send_message || "UNKNOWN").toUpperCase(),
+  };
+}
+
+/**
+ * Verify Cloud API credentials by reading the phone number node.
+ * This is the authoritative readiness check — not Meta's health_status field,
+ * which can report 141008 even while POST /messages succeeds.
+ */
+export async function getWhatsAppHealth(opts?: { probeMessaging?: boolean }): Promise<WhatsAppHealth | null> {
   const c = await getWhatsAppConfig();
   if (!c.token || !c.phoneNumberId) return null;
 
+  const token = c.token.trim();
+  const phoneNumberId = c.phoneNumberId.trim();
+  const baseDiag = {
+    phoneNumberId,
+    configSource: c.source,
+    tokenMask: maskSecret(c.token),
+  };
+
   try {
-    const res = await fetch(
-      `https://graph.facebook.com/v21.0/${encodeURIComponent(c.phoneNumberId)}?fields=display_phone_number,verified_name,health_status`,
-      { headers: { Authorization: `Bearer ${c.token.trim()}` }, cache: "no-store" }
-    );
-    const json = (await res.json()) as {
-      error?: { message?: string };
+    const phoneFields = "id,display_phone_number,verified_name,quality_rating,health_status";
+    const phone = await graphGet(token, `${encodeURIComponent(phoneNumberId)}?fields=${phoneFields}`, "phone_lookup");
+    const phoneJson = phone.json as {
+      id?: string;
       display_phone_number?: string;
       verified_name?: string;
-      health_status?: {
-        can_send_message?: string;
-        entities?: Array<{
-          entity_type?: string;
-          id?: string;
-          can_send_message?: string;
-          errors?: Array<{ error_code?: number; error_description?: string; possible_solution?: string }>;
-        }>;
-      };
+      quality_rating?: string;
+      health_status?: Parameters<typeof parseHealthAdvisories>[0];
     };
-    if (!res.ok) {
+
+    if (!phone.res.ok) {
+      const err = phone.err;
       return {
         ok: false,
         canSendMessage: "ERROR",
@@ -137,93 +252,79 @@ export async function getWhatsAppHealth(): Promise<WhatsAppHealth | null> {
         blockers: [
           {
             entity: "API",
-            code: res.status,
-            description: json.error?.message || "Health check failed",
+            code: err?.code || phone.res.status,
+            description: err?.message || "Phone number lookup failed",
             solution: "Re-check Phone Number ID and access token in Admin → WhatsApp",
           },
         ],
-        summary: json.error?.message || "WhatsApp health check failed",
+        advisories: [],
+        summary: err?.message || "WhatsApp phone lookup failed",
+        ...baseDiag,
       };
     }
 
-    const entities = json.health_status?.entities || [];
+    const { advisories, wabaId, canSendMessage } = parseHealthAdvisories(phoneJson.health_status);
+    let verifiedVia: WhatsAppHealth["verifiedVia"] = "phone_lookup";
     const blockers: WhatsAppHealthBlocker[] = [];
-    let wabaId = "";
-    for (const ent of entities) {
-      if (ent.entity_type === "WABA" && ent.id) wabaId = ent.id;
-      if ((ent.can_send_message || "").toUpperCase() !== "AVAILABLE") {
-        for (const err of ent.errors || []) {
-          blockers.push({
-            entity: ent.entity_type || "UNKNOWN",
-            code: err.error_code || 0,
-            description: err.error_description || "Blocked",
-            solution: err.possible_solution || "",
-          });
-        }
-        if (!(ent.errors || []).length) {
-          blockers.push({
-            entity: ent.entity_type || "UNKNOWN",
-            code: 0,
-            description: `can_send_message=${ent.can_send_message || "BLOCKED"}`,
-            solution: "",
-          });
-        }
+
+    // Optional: prove messaging permissions via WABA template list (no message sent).
+    if (opts?.probeMessaging && wabaId) {
+      const templates = await graphGet(
+        token,
+        `${encodeURIComponent(wabaId)}/message_templates?limit=1`,
+        "messaging_probe"
+      );
+      if (!templates.res.ok) {
+        const err = templates.err;
+        blockers.push({
+          entity: "MESSAGING_API",
+          code: err?.code || templates.res.status,
+          description: err?.message || "Messaging API probe failed",
+          solution: "Ensure the token has whatsapp_business_messaging permission",
+        });
+      } else {
+        verifiedVia = "phone_lookup+messaging_probe";
       }
     }
 
-    // Ignore SIP/calling-only blockers — they do not stop chat messages.
-    const messagingBlockers = blockers.filter(
-      (b) =>
-        b.code !== 138024 &&
-        b.code !== 138025 &&
-        !/sip/i.test(b.description) &&
-        !/calling/i.test(b.description)
-    );
-
-    const canSendMessage = (json.health_status?.can_send_message || "UNKNOWN").toUpperCase();
-    // Prefer entity messaging blockers over the overall flag (SIP calling can mark overall BLOCKED).
-    const ok = messagingBlockers.length === 0 && canSendMessage !== "ERROR";
-
     let wabaReviewStatus: string | undefined;
     let appLinked: boolean | undefined;
-    if (wabaId) {
+    const resolvedWabaId = wabaId;
+    if (resolvedWabaId) {
       try {
         const [wabaRes, appsRes] = await Promise.all([
-          fetch(
-            `https://graph.facebook.com/v21.0/${encodeURIComponent(wabaId)}?fields=account_review_status,name`,
-            { headers: { Authorization: `Bearer ${c.token.trim()}` }, cache: "no-store" }
-          ),
-          fetch(`https://graph.facebook.com/v21.0/${encodeURIComponent(wabaId)}/subscribed_apps`, {
-            headers: { Authorization: `Bearer ${c.token.trim()}` },
-            cache: "no-store",
-          }),
+          graphGet(token, `${encodeURIComponent(resolvedWabaId)}?fields=account_review_status,name`, "waba_lookup"),
+          graphGet(token, `${encodeURIComponent(resolvedWabaId)}/subscribed_apps`, "waba_apps"),
         ]);
-        const wabaJson = (await wabaRes.json()) as { account_review_status?: string; name?: string };
-        const appsJson = (await appsRes.json()) as { data?: unknown[] };
-        if (wabaRes.ok) wabaReviewStatus = wabaJson.account_review_status;
-        if (appsRes.ok) appLinked = (appsJson.data?.length || 0) > 0;
+        const wabaJson = wabaRes.json as { account_review_status?: string; name?: string };
+        const appsJson = appsRes.json as { data?: unknown[] };
+        if (wabaRes.res.ok) wabaReviewStatus = wabaJson.account_review_status;
+        if (appsRes.res.ok) appLinked = (appsJson.data?.length || 0) > 0;
       } catch {
         // Optional diagnostics — ignore failures.
       }
     }
 
-    const top = messagingBlockers[0];
+    const ok = blockers.length === 0;
+    const top = blockers[0];
     const summary = !ok && top
-      ? `WhatsApp blocked (${top.entity} ${top.code || "—"}) — ${top.description}`
-      : ok
-        ? `WhatsApp ready · ${json.verified_name || "Connected"} · ${json.display_phone_number || c.phoneNumberId}`
-        : `WhatsApp health: ${canSendMessage}`;
+      ? `WhatsApp not ready (${top.entity} ${top.code || "—"}) — ${top.description}`
+      : `WhatsApp ready · ${phoneJson.verified_name || "Connected"} · ${phoneJson.display_phone_number || phoneNumberId}`;
 
     return {
       ok,
       canSendMessage,
-      displayPhone: json.display_phone_number || "",
-      verifiedName: json.verified_name || "",
-      wabaId,
+      displayPhone: phoneJson.display_phone_number || "",
+      verifiedName: phoneJson.verified_name || "",
+      wabaId: resolvedWabaId,
       wabaReviewStatus,
       appLinked,
-      blockers: messagingBlockers,
+      blockers,
+      advisories,
       summary,
+      qualityRating: phoneJson.quality_rating,
+      verifiedVia,
+      ...baseDiag,
     };
   } catch (e) {
     return {
@@ -240,7 +341,9 @@ export async function getWhatsAppHealth(): Promise<WhatsAppHealth | null> {
           solution: "",
         },
       ],
+      advisories: [],
       summary: e instanceof Error ? e.message : "WhatsApp health check failed",
+      ...baseDiag,
     };
   }
 }

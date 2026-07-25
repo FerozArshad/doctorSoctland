@@ -12,7 +12,7 @@ import { gmailConfigured } from "@/lib/google";
 import { firstNameOf } from "@/lib/status";
 import { log, summarizeError } from "@/lib/log";
 import { patientTemplateText, patientTemplateTitle, type PatientTemplateId } from "@/lib/patient-templates";
-import { getWhatsAppConfig, getWhatsAppHealth } from "@/lib/whatsapp-settings";
+import { getWhatsAppConfig, getWhatsAppHealth, WHATSAPP_GRAPH_VERSION } from "@/lib/whatsapp-settings";
 import { FOLLOW_UPS_COMPLETE_TOUCH } from "@/lib/follow-ups";
 import { issuePaymentReceipt, resendPaymentReceipt } from "@/lib/payment-receipt";
 import {
@@ -334,10 +334,20 @@ export async function testWhatsAppConnection() {
     redirect(toastUrl("/admin/whatsapp", "Save Phone Number ID + token first", "!", "#E0A429"));
   }
   try {
-    const health = await getWhatsAppHealth();
+    const health = await getWhatsAppHealth({ probeMessaging: true });
     if (!health) {
       redirect(toastUrl("/admin/whatsapp", "Could not load WhatsApp health", "!", "#E0A429"));
     }
+    log.info("whatsapp.test.result", {
+      ok: health.ok,
+      phoneNumberId: health.phoneNumberId,
+      configSource: health.configSource,
+      tokenMask: health.tokenMask,
+      verifiedVia: health.verifiedVia,
+      wabaId: health.wabaId || null,
+      advisories: health.advisories,
+      blockers: health.blockers,
+    });
     if (!health.ok) {
       const top = health.blockers[0];
       log.error("whatsapp.health.blocked", { blockers: health.blockers, summary: health.summary });
@@ -381,7 +391,7 @@ export async function registerWhatsAppPhone(formData: FormData) {
 
   try {
     const res = await fetch(
-      `https://graph.facebook.com/v21.0/${encodeURIComponent(cfg.phoneNumberId)}/register`,
+      `https://graph.facebook.com/${WHATSAPP_GRAPH_VERSION}/${encodeURIComponent(cfg.phoneNumberId)}/register`,
       {
         method: "POST",
         headers: {

@@ -36,7 +36,7 @@ export async function GET(
       "Content-Type": upload.mimeType,
       "Content-Length": String(bytes.length),
       "Content-Disposition": `${disposition}; filename="${upload.fileName.replace(/"/g, "")}"`,
-      "Cache-Control": "private, no-store",
+      "Cache-Control": "private, max-age=300",
       "X-Frame-Options": "SAMEORIGIN",
     },
   });

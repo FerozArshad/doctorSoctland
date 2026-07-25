@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 
 export type ProposalDoc = {
   id: string;
@@ -10,116 +11,193 @@ export type ProposalDoc = {
 };
 
 function DocumentPreview({ url, doc }: { url: string; doc: ProposalDoc }) {
-  const [blobUrl, setBlobUrl] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [ready, setReady] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const isImage = doc.mimeType.startsWith("image/");
   const isPdf = doc.mimeType === "application/pdf";
 
   useEffect(() => {
-    if (isImage) {
-      setLoading(false);
-      return;
-    }
-
-    let cancelled = false;
-    let objectUrl: string | null = null;
-    setLoading(true);
+    setReady(false);
     setError(null);
-    setBlobUrl(null);
-
-    fetch(url, { credentials: "include", cache: "no-store" })
-      .then(async (res) => {
-        if (!res.ok) throw new Error(res.status === 403 ? "Please sign in again to view this file." : `Could not load file (${res.status})`);
-        const blob = await res.blob();
-        if (!blob.size) throw new Error("File is empty.");
-        return blob;
-      })
-      .then((blob) => {
-        if (cancelled) return;
-        const typed = isPdf ? new Blob([blob], { type: "application/pdf" }) : blob;
-        objectUrl = URL.createObjectURL(typed);
-        setBlobUrl(objectUrl);
-      })
-      .catch((e) => {
-        if (!cancelled) setError(e instanceof Error ? e.message : "Could not load preview");
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
-      });
-
-    return () => {
-      cancelled = true;
-      if (objectUrl) URL.revokeObjectURL(objectUrl);
-    };
-  }, [url, isImage, isPdf]);
+  }, [url]);
 
   if (isImage) {
     return (
-      // eslint-disable-next-line @next/next/no-img-element
-      <img
-        src={url}
-        alt={doc.fileName}
-        style={{ maxWidth: "100%", maxHeight: "78vh", objectFit: "contain", display: "block", margin: "0 auto" }}
-      />
-    );
-  }
-
-  if (loading) {
-    return (
-      <div style={{ padding: 40, textAlign: "center", color: "#7A8696", fontSize: 14 }}>
-        Loading document…
+      <div style={{ position: "relative", display: "flex", alignItems: "center", justifyContent: "center", minHeight: 200, padding: 12 }}>
+        {!ready && !error && (
+          <div style={{ position: "absolute", inset: 0, display: "grid", placeItems: "center", color: "#7A8696", fontSize: 14 }}>
+            <span style={{ display: "inline-flex", alignItems: "center", gap: 10 }}>
+              <span className="ds-spinner ds-spinner-dark" aria-hidden="true" />
+              Loading image…
+            </span>
+          </div>
+        )}
+        {error ? (
+          <p style={{ fontSize: 14, color: "#7A8696", textAlign: "center", margin: 0 }}>{error}</p>
+        ) : (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={url}
+            alt={doc.fileName}
+            decoding="async"
+            onLoad={() => setReady(true)}
+            onError={() => setError("Could not load image.")}
+            style={{
+              maxWidth: "100%",
+              maxHeight: "min(72dvh, 640px)",
+              objectFit: "contain",
+              display: "block",
+              opacity: ready ? 1 : 0,
+              transition: "opacity .15s ease",
+            }}
+          />
+        )}
       </div>
     );
   }
 
-  if (error || !blobUrl) {
+  if (isPdf) {
     return (
-      <div style={{ padding: 32, textAlign: "center", maxWidth: 360 }}>
-        <p style={{ fontSize: 14, color: "#7A8696", lineHeight: 1.6, margin: "0 0 16px" }}>
-          {error || "Preview unavailable in this browser."}
-        </p>
-        <a
-          href={url}
-          target="_blank"
-          rel="noreferrer"
-          style={{
-            display: "inline-block",
-            background: "#0E9384",
-            color: "#fff",
-            padding: "12px 20px",
-            borderRadius: 10,
-            fontWeight: 700,
-            fontSize: 14,
-            textDecoration: "none",
-          }}
-        >
-          Open PDF in new tab
-        </a>
-      </div>
+      <object
+        data={`${url}#toolbar=1&navpanes=0`}
+        type="application/pdf"
+        aria-label={doc.fileName}
+        style={{ width: "100%", height: "min(72dvh, 640px)", display: "block", background: "#fff" }}
+      >
+        <embed src={url} type="application/pdf" style={{ width: "100%", height: "min(72dvh, 640px)", display: "block" }} />
+        <div style={{ padding: 24, textAlign: "center" }}>
+          <p style={{ fontSize: 14, color: "#7A8696", margin: "0 0 12px" }}>PDF preview not supported in this browser.</p>
+          <a href={url} target="_blank" rel="noreferrer" style={{ color: "#0E9384", fontWeight: 700, fontSize: 14, textDecoration: "none" }}>
+            Open PDF in new tab
+          </a>
+        </div>
+      </object>
     );
   }
 
   return (
-    <object
-      data={`${blobUrl}#toolbar=1&navpanes=0`}
-      type="application/pdf"
+    <div style={{ padding: 32, textAlign: "center" }}>
+      <p style={{ fontSize: 14, color: "#7A8696", margin: "0 0 16px" }}>Preview not available for this file type.</p>
+      <a
+        href={url}
+        target="_blank"
+        rel="noreferrer"
+        style={{
+          display: "inline-block",
+          background: "#0E9384",
+          color: "#fff",
+          padding: "12px 20px",
+          borderRadius: 10,
+          fontWeight: 700,
+          fontSize: 14,
+          textDecoration: "none",
+        }}
+      >
+        Download file
+      </a>
+    </div>
+  );
+}
+
+function DocumentViewerModal({
+  doc,
+  url,
+  onClose,
+}: {
+  doc: ProposalDoc;
+  url: string;
+  onClose: () => void;
+}) {
+  useEffect(() => {
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => {
+      document.body.style.overflow = prev;
+      window.removeEventListener("keydown", onKey);
+    };
+  }, [onClose]);
+
+  return (
+    <div
+      role="dialog"
+      aria-modal="true"
       aria-label={doc.fileName}
-      style={{ width: "100%", height: "78vh", display: "block", background: "#fff" }}
+      style={{
+        position: "fixed",
+        inset: 0,
+        zIndex: 1200,
+        background: "rgba(11,24,40,.72)",
+        display: "flex",
+        alignItems: "flex-start",
+        justifyContent: "center",
+        padding: "max(12px, env(safe-area-inset-top)) 12px max(12px, env(safe-area-inset-bottom))",
+        overflowY: "auto",
+      }}
+      onMouseDown={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
     >
-      <embed
-        src={blobUrl}
-        type="application/pdf"
-        style={{ width: "100%", height: "78vh", display: "block" }}
-      />
-      <p style={{ padding: 24, textAlign: "center", fontSize: 14, color: "#7A8696" }}>
-        PDF preview not supported.{" "}
-        <a href={url} target="_blank" rel="noreferrer" style={{ color: "#0E9384", fontWeight: 700 }}>
-          Open in new tab
-        </a>
-      </p>
-    </object>
+      <div
+        style={{
+          background: "#fff",
+          borderRadius: 16,
+          width: "100%",
+          maxWidth: 920,
+          margin: "auto",
+          maxHeight: "none",
+          overflow: "hidden",
+          display: "flex",
+          flexDirection: "column",
+          boxShadow: "0 30px 60px -20px rgba(11,24,40,.55)",
+        }}
+      >
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            gap: 12,
+            padding: "12px 14px",
+            borderBottom: "1px solid #EEF2F6",
+            flex: "none",
+            position: "sticky",
+            top: 0,
+            background: "#fff",
+            zIndex: 1,
+          }}
+        >
+          <div style={{ fontSize: 14, fontWeight: 800, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+            {doc.fileName}
+          </div>
+          <div style={{ display: "flex", gap: 4, flex: "none" }}>
+            <a
+              href={url}
+              target="_blank"
+              rel="noreferrer"
+              style={{ fontSize: 12.5, fontWeight: 700, color: "#0E9384", textDecoration: "none", padding: "6px 10px" }}
+            >
+              Open tab
+            </a>
+            <button
+              type="button"
+              onClick={onClose}
+              aria-label="Close"
+              style={{ background: "transparent", border: "none", fontSize: 22, lineHeight: 1, color: "#7A8696", cursor: "pointer", padding: "4px 8px" }}
+            >
+              ×
+            </button>
+          </div>
+        </div>
+        <div style={{ position: "relative", flex: 1, background: "#F4F6F9", overflow: "auto" }}>
+          <DocumentPreview url={url} doc={doc} />
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -133,9 +211,34 @@ export default function ProposalDocuments({
   compact?: boolean;
 }) {
   const [active, setActive] = useState<ProposalDoc | null>(null);
-  if (docs.length === 0) return null;
+  const [mounted, setMounted] = useState(false);
+  const prefetched = useRef(new Set<string>());
 
-  const urlFor = (id: string) => `/api/p/${encodeURIComponent(token)}/files/${encodeURIComponent(id)}`;
+  const urlFor = useCallback((id: string) => `/api/p/${encodeURIComponent(token)}/files/${encodeURIComponent(id)}`, [token]);
+
+  const prefetch = useCallback(
+    (doc: ProposalDoc) => {
+      const url = urlFor(doc.id);
+      if (prefetched.current.has(url)) return;
+      prefetched.current.add(url);
+      if (doc.mimeType.startsWith("image/")) {
+        const img = new Image();
+        img.decoding = "async";
+        img.src = url;
+        return;
+      }
+      if (doc.mimeType === "application/pdf") {
+        void fetch(url, { credentials: "include", cache: "force-cache" }).catch(() => {
+          prefetched.current.delete(url);
+        });
+      }
+    },
+    [urlFor]
+  );
+
+  useEffect(() => setMounted(true), []);
+
+  if (docs.length === 0) return null;
 
   return (
     <>
@@ -153,7 +256,12 @@ export default function ProposalDocuments({
             <button
               key={d.id}
               type="button"
-              onClick={() => setActive(d)}
+              onClick={() => {
+                prefetch(d);
+                setActive(d);
+              }}
+              onMouseEnter={() => prefetch(d)}
+              onFocus={() => prefetch(d)}
               style={{
                 display: "flex",
                 alignItems: "center",
@@ -182,66 +290,12 @@ export default function ProposalDocuments({
         </div>
       </section>
 
-      {active && (
-        <div
-          role="dialog"
-          aria-modal="true"
-          style={{
-            position: "fixed",
-            inset: 0,
-            zIndex: 1100,
-            background: "rgba(11,24,40,.65)",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            padding: 16,
-          }}
-          onMouseDown={(e) => {
-            if (e.target === e.currentTarget) setActive(null);
-          }}
-        >
-          <div
-            style={{
-              background: "#fff",
-              borderRadius: 16,
-              width: "100%",
-              maxWidth: 920,
-              maxHeight: "92vh",
-              overflow: "hidden",
-              display: "flex",
-              flexDirection: "column",
-              boxShadow: "0 30px 60px -20px rgba(11,24,40,.55)",
-            }}
-          >
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, padding: "14px 16px", borderBottom: "1px solid #EEF2F6" }}>
-              <div style={{ fontSize: 14, fontWeight: 800, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                {active.fileName}
-              </div>
-              <div style={{ display: "flex", gap: 8, flex: "none" }}>
-                <a
-                  href={urlFor(active.id)}
-                  target="_blank"
-                  rel="noreferrer"
-                  style={{ fontSize: 12.5, fontWeight: 700, color: "#0E9384", textDecoration: "none", padding: "6px 10px" }}
-                >
-                  Open tab
-                </a>
-                <button
-                  type="button"
-                  onClick={() => setActive(null)}
-                  aria-label="Close"
-                  style={{ background: "transparent", border: "none", fontSize: 22, lineHeight: 1, color: "#7A8696", cursor: "pointer" }}
-                >
-                  ×
-                </button>
-              </div>
-            </div>
-            <div style={{ flex: 1, minHeight: 320, background: "#F4F6F9", overflow: "auto" }}>
-              <DocumentPreview key={active.id} url={urlFor(active.id)} doc={active} />
-            </div>
-          </div>
-        </div>
-      )}
+      {active && mounted
+        ? createPortal(
+            <DocumentViewerModal doc={active} url={urlFor(active.id)} onClose={() => setActive(null)} />,
+            document.body
+          )
+        : null}
     </>
   );
 }

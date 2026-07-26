@@ -181,6 +181,14 @@ a { color: inherit; transition: color .15s var(--ease), opacity .15s var(--ease)
 }
 
 /* Patient proposal */
+.ds-proposal-page {
+  min-height: 100dvh;
+  background: linear-gradient(180deg, #E8F1F3 0%, #F4F7F9 42%, #EEF2F5 100%);
+}
+.ds-proposal-pad {
+  padding: 24px 16px 44px;
+}
+
 .ds-proposal-split {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -191,11 +199,12 @@ a { color: inherit; transition: color .15s var(--ease), opacity .15s var(--ease)
 @media (max-width: 900px) {
   .ds-proposal-split {
     grid-template-columns: 1fr !important;
+    align-items: start;
   }
   .ds-proposal-why { grid-template-columns: 1fr 1fr !important; }
 }
 @media (max-width: 640px) {
-  .ds-proposal-pad { padding: 12px 10px 32px !important; }
+  .ds-proposal-pad { padding: 12px 10px 20px !important; }
   .ds-proposal-body { padding: 16px 14px 22px !important; }
   .ds-proposal-title { font-size: 20px !important; }
   .ds-proposal-metrics { grid-template-columns: 1fr 1fr !important; }

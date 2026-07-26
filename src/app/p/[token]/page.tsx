@@ -161,7 +161,7 @@ export default async function ProposalPage({
   ];
 
   return (
-    <div style={{ minHeight: "100vh", background: "linear-gradient(180deg,#E8F1F3 0%,#F4F7F9 42%,#EEF2F5 100%)", display: "flex", flexDirection: "column" }}>
+    <div className="ds-proposal-page">
       <ProposalHashScroll />
       {admin && (
         <div style={{ background: "#0B7A6E", color: "#EAFBF7", padding: "10px 20px", display: "flex", alignItems: "center", justifyContent: "space-between", fontSize: 13, fontWeight: 600, gap: 12, flexWrap: "wrap" }}>
@@ -175,7 +175,7 @@ export default async function ProposalPage({
         </div>
       )}
 
-      <div className="ds-scroll ds-view ds-proposal-pad" style={{ flex: 1, overflow: "auto", padding: "24px 16px 44px" }}>
+      <div className="ds-view ds-proposal-pad">
         <div className="ds-proposal-shell" style={{ maxWidth: 1080, margin: "0 auto", background: "#fff", borderRadius: 20, overflow: "hidden", boxShadow: "0 24px 48px -24px rgba(11,24,40,.35)", border: "1px solid rgba(14,26,43,.06)" }}>
           <div className="ds-pad-header" style={{ background: "#0B1828", padding: "18px 24px", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
             <BrandLogo width={150} height={40} priority />

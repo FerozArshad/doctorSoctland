@@ -78,7 +78,10 @@ async function handleCheckoutPaid(
       },
     });
     await issuePaymentReceipt(paymentRecord.id).catch((e) => log.error("payment.receipt.fail", summarizeError(e)));
-    await notifyAdmin(`💚 ${patient.firstName} ${patient.lastName} paid in full`, `${fmt(amount)} received via Stripe. Their aligners can be ordered now.`);
+    await notifyAdmin(
+      `💚 ${patient.firstName} ${patient.lastName} paid in full`,
+      `${fmt(amount)} received via Stripe.${piId ? ` Transaction: ${piId}.` : ""} Their aligners can be ordered now. View: ${(process.env.APP_URL || "https://dashboard.dentalscotland.com").replace(/\/$/, "")}/admin/patients/${patientId}`
+    );
     return;
   }
 
@@ -134,6 +137,6 @@ async function handleCheckoutPaid(
   await issuePaymentReceipt(paymentRecord.id).catch((e) => log.error("payment.receipt.fail", summarizeError(e)));
   await notifyAdmin(
     `💚 ${patient.firstName} ${patient.lastName} paid the ${fmt(amount)} deposit`,
-    `3 instalments of ${fmt(per)} scheduled monthly on their saved card.`
+    `3 instalments of ${fmt(per)} scheduled monthly on their saved card.${piId ? ` Transaction: ${piId}.` : ""} View: ${(process.env.APP_URL || "https://dashboard.dentalscotland.com").replace(/\/$/, "")}/admin/patients/${patientId}`
   );
 }

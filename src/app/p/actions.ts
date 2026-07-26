@@ -430,7 +430,7 @@ export async function completePaymentConsent(
   const nextStatus =
     keep
       ? patient.status
-      : choice === "finance"
+      : choice === "finance" || choice === "full" || choice === "deposit"
         ? "awaiting"
         : choice === "interested"
           ? "interested"
@@ -492,18 +492,24 @@ export async function completePaymentConsent(
       console.error("finance.notify.fail", e);
     }
     revalidatePath(`/p/${token}`);
-  } else {
+  } else if (choice === "interested") {
     void notifyAdmin(
-      choice === "interested"
-        ? `⭐ ${name} is interested (consent signed)`
-        : `💷 ${name} chose: ${labels[choice]} (consent signed)`,
-      `${name} signed consent${dob ? `, DOB ${dob}` : ""} and selected “${labels[choice]}”. View: ${appUrl()}/admin/patients/${patient.id}` +
+      `⭐ ${name} is interested (consent signed)`,
+      `${name} signed consent${dob ? `, DOB ${dob}` : ""} and registered interest. View: ${appUrl()}/admin/patients/${patient.id}` +
         (note ? ` — Their message: “${note}”` : "")
     );
   }
 
   if (choice === "full" || choice === "deposit") {
     const openUrl = await createCheckoutUrl(token, choice);
+    void notifyAdmin(
+      `✍️ ${name} signed consent — awaiting payment`,
+      `${name} chose “${labels[choice]}” and e-signed${dob ? ` (DOB ${dob})` : ""}. ` +
+        `Payment is not confirmed yet — they must finish Stripe Checkout in the new tab. ` +
+        `You will get a separate “paid” email when Stripe confirms it. ` +
+        `View: ${appUrl()}/admin/patients/${patient.id}` +
+        (note ? ` — Their message: “${note}”` : "")
+    );
     return {
       ok: true,
       openUrl,

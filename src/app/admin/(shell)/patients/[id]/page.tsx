@@ -13,6 +13,7 @@ import FormSubmitButton from "@/components/FormSubmitButton";
 import DeletePatientButton from "@/components/DeletePatientButton";
 import AdminPatientFiles from "@/components/AdminPatientFiles";
 import PaymentReceiptsSection from "@/components/PaymentReceiptsSection";
+import PatientPaymentsSection from "@/components/PatientPaymentsSection";
 import { isMessageActivity } from "@/lib/messages";
 import { publicActivityText } from "@/lib/activity-display";
 import { patientTemplateText } from "@/lib/patient-templates";
@@ -36,6 +37,19 @@ export default async function PatientProfile({ params }: { params: { id: string 
     include: {
       activities: { orderBy: { createdAt: "desc" }, take: 80 },
       instalments: { orderBy: { number: "asc" } },
+      payments: {
+        orderBy: { createdAt: "desc" },
+        select: {
+          id: true,
+          amountPence: true,
+          type: true,
+          status: true,
+          paidAt: true,
+          createdAt: true,
+          stripeSessionId: true,
+          stripePaymentIntentId: true,
+        },
+      },
       paymentReceipts: {
         orderBy: { createdAt: "desc" },
         include: { payment: { select: { type: true, paidAt: true } } },
@@ -341,6 +355,12 @@ export default async function PatientProfile({ params }: { params: { id: string 
                     Patient&apos;s choice: {paymentPreferenceLabel(c.paymentPreference, cfg.depositPence)}
                   </div>
                 )}
+                {c.consentSignedAt && c.status === "awaiting" && (c.paymentPreference === "full" || c.paymentPreference === "deposit") && (
+                  <div style={{ marginBottom: 14, padding: "11px 14px", borderRadius: 11, background: "#FBF3E2", border: "1px solid #F0DFB8", fontSize: 13, color: "#8A5A12", lineHeight: 1.55 }}>
+                    Consent signed — <strong>awaiting Stripe payment</strong>. Status updates to Paid only after the patient completes checkout and Stripe confirms it.
+                    {c.payments.some((p) => p.status === "pending") ? " A pending checkout is on record below." : " No checkout started yet — they may have closed the payment tab."}
+                  </div>
+                )}
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 10 }}>
                   <span style={{ fontSize: 26, fontWeight: 800 }}>{fmt(c.amountPaidPence)}</span>
                   <span style={{ fontSize: 13.5, color: "#7A8696" }}>of {fmt(netOwed)} to collect</span>
@@ -366,6 +386,8 @@ export default async function PatientProfile({ params }: { params: { id: string 
                     ))}
                   </div>
                 )}
+
+                <PatientPaymentsSection payments={c.payments} />
 
                 <PaymentReceiptsSection patientId={c.id} receipts={c.paymentReceipts} />
 

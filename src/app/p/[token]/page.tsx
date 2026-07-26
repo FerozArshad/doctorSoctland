@@ -9,7 +9,6 @@ import { COMP_ITEMS, COMP_TOTAL, WHY_US } from "@/lib/content";
 import { followUpBookingUrl, coordinatorFor } from "@/lib/coordinators";
 import BrandLogo from "@/components/BrandLogo";
 import PaymentOptionsForm, { PayOption } from "@/components/PaymentOptionsForm";
-import ProposalDocuments from "@/components/ProposalDocuments";
 import FinanceAppliedBox from "@/components/FinanceAppliedBox";
 import FollowUpCallCard from "@/components/FollowUpCallCard";
 import ProposalHashScroll from "@/components/ProposalHashScroll";
@@ -365,12 +364,6 @@ export default async function ProposalPage({
                         <span style={{ fontSize: 26, fontWeight: 800, letterSpacing: "-.02em" }}>{fmt(net)}</span>
                       </div>
                     </div>
-
-                    {proposalDocs.length > 0 && (
-                      <div style={{ marginBottom: 12 }}>
-                        <ProposalDocuments token={c.proposalToken} docs={proposalDocs} compact />
-                      </div>
-                    )}
 
                     <PaymentOptionsForm
                       token={c.proposalToken}

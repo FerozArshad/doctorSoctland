@@ -3,7 +3,7 @@ import { notFound, redirect } from "next/navigation";
 import { Suspense } from "react";
 import { db } from "@/lib/db";
 import { getAdmin, getPatientSession } from "@/lib/auth";
-import { estMonths, finance36Pence, fmt, fullPricePence, instalmentPence, netPricePence } from "@/lib/pricing";
+import { estMonths, finance36Pence, fmt, fullPricePence, instalmentPence, patientBalancePence, bookingCreditPence } from "@/lib/pricing";
 import { getPricing } from "@/lib/pricing-settings";
 import { COMP_ITEMS, COMP_TOTAL, WHY_US } from "@/lib/content";
 import { followUpBookingUrl, coordinatorFor } from "@/lib/coordinators";
@@ -88,7 +88,11 @@ export default async function ProposalPage({
   }
 
   const cfg = await getPricing();
-  const net = netPricePence(c.pricePence, c.upfrontPaidPence);
+  const bookingCredit = bookingCreditPence(cfg);
+  if (c.upfrontPaidPence !== bookingCredit) {
+    await db.patient.update({ where: { id: c.id }, data: { upfrontPaidPence: bookingCredit } });
+  }
+  const net = patientBalancePence(c.pricePence, cfg);
   const full = fullPricePence(net, c.discountPct);
   const instal = instalmentPence(net, cfg.depositPence);
   const fin36 = finance36Pence(net);
@@ -223,17 +227,19 @@ export default async function ProposalPage({
                       <div style={{ fontSize: 11, color: "#7A8696", fontWeight: 600 }}>Package</div>
                       <div style={{ fontSize: 16, fontWeight: 800, marginTop: 3 }}>Invisalign {c.pkg}</div>
                     </div>
-                    <div style={{ padding: "12px 12px", background: "#F0FBF8" }}>
-                      <div style={{ fontSize: 11, color: "#0B7A6E", fontWeight: 600 }}>
-                        {c.upfrontPaidPence > 0 ? "Amount to pay" : "Total"}
-                      </div>
-                      <div style={{ fontSize: 20, fontWeight: 800, marginTop: 2, color: "#0B7A6E" }}>{fmt(net)}</div>
-                      {c.upfrontPaidPence > 0 && (
-                        <div style={{ fontSize: 10.5, color: "#5C6a79", marginTop: 3, lineHeight: 1.35 }}>
-                          {fmt(c.pricePence)} − {fmt(c.upfrontPaidPence)} booking
+                    <>
+                        <div style={{ padding: "12px 12px", background: "#F6F9FA" }}>
+                          <div style={{ fontSize: 11, color: "#7A8696", fontWeight: 600 }}>Treatment total</div>
+                          <div style={{ fontSize: 18, fontWeight: 800, marginTop: 2 }}>{fmt(c.pricePence)}</div>
+                          <div style={{ fontSize: 10.5, color: "#B4530A", marginTop: 3, fontWeight: 700 }}>
+                            − {fmt(bookingCredit)} booking paid
+                          </div>
                         </div>
-                      )}
-                    </div>
+                        <div style={{ padding: "12px 12px", background: "#F0FBF8", gridColumn: "1 / -1", borderTop: "1px solid #EEF2F6" }}>
+                          <div style={{ fontSize: 11, color: "#0B7A6E", fontWeight: 600 }}>Amount to pay</div>
+                          <div style={{ fontSize: 22, fontWeight: 800, marginTop: 2, color: "#0B7A6E" }}>{fmt(net)}</div>
+                        </div>
+                      </>
                   </div>
                 </div>
 
@@ -305,62 +311,60 @@ export default async function ProposalPage({
                   <FinanceAppliedBox firstName={c.firstName} token={c.proposalToken} />
                 ) : (
                   <>
-                    {c.upfrontPaidPence > 0 && (
-                      <div
-                        style={{
-                          border: "2px solid #0E9384",
-                          background: "linear-gradient(180deg, #E8FBF5 0%, #F4FCFA 100%)",
-                          borderRadius: 14,
-                          padding: "16px 16px 14px",
-                          marginBottom: 14,
-                          boxShadow: "0 8px 20px -12px rgba(14,147,132,.45)",
-                        }}
-                      >
-                        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
-                          <span
-                            style={{
-                              width: 28,
-                              height: 28,
-                              borderRadius: "50%",
-                              background: "#0E9384",
-                              color: "#fff",
-                              display: "grid",
-                              placeItems: "center",
-                              fontWeight: 800,
-                              fontSize: 14,
-                              flex: "none",
-                            }}
-                          >
-                            £
-                          </span>
-                          <div style={{ fontSize: 14.5, fontWeight: 800, color: "#0B7A6E", lineHeight: 1.3 }}>
-                            Booking credit included
-                          </div>
-                        </div>
-                        <div style={{ fontSize: 14, color: "#2C3847", lineHeight: 1.5, fontWeight: 600 }}>
-                          A <strong style={{ color: "#0B7A6E" }}>{fmt(c.upfrontPaidPence)}</strong> booking credit is applied to your treatment total.
-                        </div>
-                        <div style={{ fontSize: 13.5, color: "#5C6a79", marginTop: 6, lineHeight: 1.45 }}>
-                          Treatment {fmt(c.pricePence)} − {fmt(c.upfrontPaidPence)} credit
-                        </div>
-                        <div
+                    <div
+                      style={{
+                        border: "2px solid #0E9384",
+                        background: "linear-gradient(180deg, #E8FBF5 0%, #F4FCFA 100%)",
+                        borderRadius: 14,
+                        padding: "16px 16px 14px",
+                        marginBottom: 14,
+                        boxShadow: "0 8px 20px -12px rgba(14,147,132,.45)",
+                      }}
+                    >
+                      <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
+                        <span
                           style={{
-                            marginTop: 12,
-                            padding: "12px 14px",
-                            borderRadius: 11,
+                            width: 28,
+                            height: 28,
+                            borderRadius: "50%",
                             background: "#0E9384",
                             color: "#fff",
-                            display: "flex",
-                            alignItems: "baseline",
-                            justifyContent: "space-between",
-                            gap: 10,
+                            display: "grid",
+                            placeItems: "center",
+                            fontWeight: 800,
+                            fontSize: 14,
+                            flex: "none",
                           }}
                         >
-                          <span style={{ fontSize: 13, fontWeight: 700, opacity: 0.95 }}>Amount to pay</span>
-                          <span style={{ fontSize: 26, fontWeight: 800, letterSpacing: "-.02em" }}>{fmt(net)}</span>
+                          £
+                        </span>
+                        <div style={{ fontSize: 14.5, fontWeight: 800, color: "#0B7A6E", lineHeight: 1.3 }}>
+                          Booking credit included
                         </div>
                       </div>
-                    )}
+                      <div style={{ fontSize: 14, color: "#2C3847", lineHeight: 1.5, fontWeight: 600 }}>
+                        A <strong style={{ color: "#0B7A6E" }}>{fmt(bookingCredit)}</strong> booking credit is applied to your treatment total.
+                      </div>
+                      <div style={{ fontSize: 13.5, color: "#5C6a79", marginTop: 6, lineHeight: 1.45 }}>
+                        Treatment {fmt(c.pricePence)} − {fmt(bookingCredit)} credit
+                      </div>
+                      <div
+                        style={{
+                          marginTop: 12,
+                          padding: "12px 14px",
+                          borderRadius: 11,
+                          background: "#0E9384",
+                          color: "#fff",
+                          display: "flex",
+                          alignItems: "baseline",
+                          justifyContent: "space-between",
+                          gap: 10,
+                        }}
+                      >
+                        <span style={{ fontSize: 13, fontWeight: 700, opacity: 0.95 }}>Amount to pay</span>
+                        <span style={{ fontSize: 26, fontWeight: 800, letterSpacing: "-.02em" }}>{fmt(net)}</span>
+                      </div>
+                    </div>
 
                     {proposalDocs.length > 0 && (
                       <div style={{ marginBottom: 12 }}>

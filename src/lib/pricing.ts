@@ -31,6 +31,15 @@ export function netPricePence(pricePence: number, upfrontPaidPence: number): num
   return Math.max(0, pricePence - (upfrontPaidPence || 0));
 }
 
+/** Assessment booking fee — credited for every patient by default. */
+export function bookingCreditPence(cfg: PricingConfig = PRICING_DEFAULTS): number {
+  return cfg.upfrontPence;
+}
+
+export function patientBalancePence(pricePence: number, cfg: PricingConfig = PRICING_DEFAULTS): number {
+  return netPricePence(pricePence, bookingCreditPence(cfg));
+}
+
 export function priceForPence(alignerCount: number, cfg: PricingConfig = PRICING_DEFAULTS): number {
   if (alignerCount <= cfg.tier1MaxAligners) return cfg.tier1Pence;
   if (alignerCount <= cfg.tier2MaxAligners) return cfg.tier2Pence;

@@ -47,7 +47,6 @@ export default async function ProposalPage({ params }: { params: { id: string } 
               pkg: p.pkg === "Express" ? "Express" : "Go",
               videoUrl: p.videoUrl,
               notes: p.notes,
-              paidUpfront: p.upfrontPaidPence > 0,
               ownerId: p.ownerId,
               status: p.status,
             }}

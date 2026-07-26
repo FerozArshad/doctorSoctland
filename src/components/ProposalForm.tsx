@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useFormStatus } from "react-dom";
 import { updatePatient } from "@/app/admin/actions";
-import { estMonths, fmt, priceForPence, type PricingConfig } from "@/lib/pricing";
+import { estMonths, fmt, patientBalancePence, priceForPence, type PricingConfig } from "@/lib/pricing";
 import SentByPicker from "@/components/SentByPicker";
 
 export type ProposalPatient = {
@@ -16,7 +16,6 @@ export type ProposalPatient = {
   pkg: "Express" | "Go";
   videoUrl: string;
   notes: string;
-  paidUpfront: boolean;
   ownerId: string | null;
   status: string;
 };
@@ -116,12 +115,12 @@ export default function ProposalForm({
   const [pkg, setPkg] = useState<"Express" | "Go">(patient.pkg);
   const [video, setVideo] = useState(patient.videoUrl);
   const [notes, setNotes] = useState(patient.notes);
-  const [paidUpfront, setPaidUpfront] = useState(patient.paidUpfront);
   const [errs, setErrs] = useState({ first: false, email: false });
   const isDraft = patient.status === "draft";
 
   const price = priceForPence(alignerCount, cfg);
-  const net = Math.max(0, price - (paidUpfront ? cfg.upfrontPence : 0));
+  const bookingCredit = cfg.upfrontPence;
+  const net = patientBalancePence(price, cfg);
 
   const validate = (e: React.FormEvent<HTMLFormElement>) => {
     const first = !firstName.trim();
@@ -207,14 +206,6 @@ export default function ProposalForm({
           </div>
         </div>
 
-        <label style={{ display: "flex", gap: 12, alignItems: "flex-start", marginTop: 20, padding: "14px 16px", borderRadius: 12, border: "1.5px solid " + (paidUpfront ? "#0E9384" : "#E1E7EE"), background: paidUpfront ? "#F0FBF8" : "#fff", cursor: "pointer" }}>
-          <input type="checkbox" name="paidUpfront" checked={paidUpfront} onChange={(e) => setPaidUpfront(e.target.checked)} style={{ width: 18, height: 18, accentColor: "#0E9384", marginTop: 1 }} />
-          <span>
-            <span style={{ fontSize: 13.5, fontWeight: 700, color: "#16202E" }}>{fmt(cfg.upfrontPence)} booking paid upfront</span>
-            <span style={{ display: "block", fontSize: 12.5, color: "#7A8696", marginTop: 2 }}>Deducts {fmt(cfg.upfrontPence)} from the total. All payment options recalculate for the patient.</span>
-          </span>
-        </label>
-
         {owners && (
           <div style={{ marginTop: 20 }}>
             <label className="label">Belongs to admin</label>
@@ -257,12 +248,10 @@ export default function ProposalForm({
             <span style={{ fontSize: 13, color: "#7A8696" }}>Treatment total</span>
             <span style={{ fontSize: 14, fontWeight: 800 }}>{fmt(price)}</span>
           </div>
-          {paidUpfront && (
-            <div style={{ display: "flex", justifyContent: "space-between", padding: "14px 16px", borderBottom: "1px solid #F1F4F8" }}>
-              <span style={{ fontSize: 13, color: "#7A8696" }}>Less booking paid</span>
-              <span style={{ fontSize: 14, fontWeight: 800, color: "#B4530A" }}>− {fmt(cfg.upfrontPence)}</span>
-            </div>
-          )}
+          <div style={{ display: "flex", justifyContent: "space-between", padding: "14px 16px", borderBottom: "1px solid #F1F4F8" }}>
+            <span style={{ fontSize: 13, color: "#7A8696" }}>Less booking paid</span>
+            <span style={{ fontSize: 14, fontWeight: 800, color: "#B4530A" }}>− {fmt(bookingCredit)}</span>
+          </div>
           <div style={{ display: "flex", justifyContent: "space-between", padding: "14px 16px", background: "#F0FBF8" }}>
             <span style={{ fontSize: 13, color: "#0B7A6E", fontWeight: 600 }}>Balance remaining</span>
             <span style={{ fontSize: 17, fontWeight: 800, color: "#0B7A6E" }}>{fmt(net)}</span>

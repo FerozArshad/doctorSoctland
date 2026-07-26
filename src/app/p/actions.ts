@@ -8,7 +8,7 @@ import bcrypt from "bcryptjs";
 import { db } from "@/lib/db";
 import { createPatientSession, getAdmin, getPatientSession } from "@/lib/auth";
 import { rateLimit } from "@/lib/ratelimit";
-import { fmt, fullPricePence, netPricePence } from "@/lib/pricing";
+import { fmt, fullPricePence, patientBalancePence } from "@/lib/pricing";
 import { getPricing } from "@/lib/pricing-settings";
 import { brandedEmail, escapeHtml, notifyAdmin, notifyFinanceApplication, sendEmail, sendLoginCodeWhatsApp, whatsappConfigured } from "@/lib/notify";
 import { log, summarizeError } from "@/lib/log";
@@ -256,7 +256,7 @@ async function createCheckoutUrl(token: string, type: "full" | "deposit"): Promi
 
   // Charge on the net total (treatment price minus any upfront already paid).
   const cfg = await getPricing();
-  const net = netPricePence(patient.pricePence, patient.upfrontPaidPence);
+  const net = patientBalancePence(patient.pricePence, cfg);
   const full = fullPricePence(net, patient.discountPct);
   const amount = type === "full" ? full : cfg.depositPence;
   const name =

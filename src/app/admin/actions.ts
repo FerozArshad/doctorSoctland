@@ -780,7 +780,7 @@ export async function createPatient(formData: FormData) {
       status: "draft",
       pricePence: priceForPence(alignerCount, cfg),
       discountPct: cfg.discountPct,
-      upfrontPaidPence: 0,
+      upfrontPaidPence: cfg.upfrontPence,
       ownerId: admin.id,
       activities: { create: { text: "Draft proposal created" } },
     },
@@ -807,7 +807,6 @@ export async function updatePatient(formData: FormData) {
   const pkg = formData.get("pkg") === "Express" ? "Express" : "Go";
   const videoUrl = String(formData.get("videoUrl") || "").trim();
   const notes = String(formData.get("notes") || "").trim();
-  const paidUpfront = formData.get("paidUpfront") === "on";
 
   if (!firstName || !/.+@.+\..+/.test(email)) {
     redirect(toastUrl(`/admin/patients/${id}/proposal`, "A first name and valid email are required", "!", "#E0A429"));
@@ -829,7 +828,7 @@ export async function updatePatient(formData: FormData) {
       videoUrl,
       notes,
       pricePence: priceForPence(alignerCount, cfg),
-      upfrontPaidPence: paidUpfront ? cfg.upfrontPence : 0,
+      upfrontPaidPence: cfg.upfrontPence,
       ...ownerChange,
       activities: {
         create: {

@@ -16,7 +16,7 @@ import { getWhatsAppConfig, getWhatsAppHealth } from "@/lib/whatsapp-settings";
 import { FOLLOW_UPS_COMPLETE_TOUCH } from "@/lib/follow-ups";
 import { issuePaymentReceipt, resendPaymentReceipt } from "@/lib/payment-receipt";
 import { validateProposalForSend } from "@/lib/proposal-validation";
-import { syncPatientStripePayments } from "@/lib/stripe-checkout";
+import { syncPatientStripePayments, syncAllStripePayments } from "@/lib/stripe-checkout";
 import {
   generateSecureAdminPassword,
   hashAdminPassword,
@@ -1153,6 +1153,21 @@ export async function syncStripePayment(formData: FormData) {
         ? "Payment already recorded"
         : "No completed Stripe checkout found — check Stripe Dashboard";
   redirect(toastUrl(`/admin/patients/${id}`, msg, synced > 0 ? "✓" : "!", synced > 0 ? "#0E9384" : "#E0A429"));
+}
+
+/** Super Admin — pull all completed Stripe checkouts into the dashboard. */
+export async function syncAllStripeFromDashboard() {
+  const admin = await requireAdmin();
+  if (!admin.isSuperAdmin) redirect(toastUrl("/admin/patients", "Super Admin only", "!", "#E0A429"));
+
+  const result = await syncAllStripePayments({ days: 120 });
+  const msg =
+    result.synced > 0
+      ? `Synced ${result.synced} payment(s) from Stripe (${result.checked} checked)`
+      : result.errors > 0
+        ? `No payments synced — ${result.errors} session(s) could not be loaded from Stripe (check API keys match the account where patients paid)`
+        : "No new completed Stripe payments found in the last 120 days";
+  redirect(toastUrl("/admin/patients", msg, result.synced > 0 ? "✓" : "!", result.synced > 0 ? "#0E9384" : "#E0A429"));
 }
 
 export async function resendReceipt(formData: FormData) {

@@ -5,6 +5,8 @@ import { fmt, netPricePence } from "@/lib/pricing";
 import { avatarBg, initials, timeAgo } from "@/lib/status";
 import TopBar from "@/components/TopBar";
 import PatientsTable, { PatientRow } from "@/components/PatientsTable";
+import FormSubmitButton from "@/components/FormSubmitButton";
+import { syncAllStripeFromDashboard } from "@/app/admin/actions";
 
 export const dynamic = "force-dynamic";
 
@@ -35,6 +37,16 @@ export default async function PatientsPage() {
     <>
       <TopBar title="Patients" sub="Manage records & proposals" />
       <div className="ds-scroll" style={{ flex: 1, overflow: "auto", padding: 28 }}>
+        {admin.isSuperAdmin && (
+          <form action={syncAllStripeFromDashboard} style={{ marginBottom: 16 }}>
+            <FormSubmitButton
+              className="btn btn-outline"
+              style={{ padding: "10px 16px", fontSize: 13.5 }}
+              label="Sync all payments from Stripe"
+              pendingLabel="Syncing from Stripe…"
+            />
+          </form>
+        )}
         <PatientsTable rows={rows} />
       </div>
     </>

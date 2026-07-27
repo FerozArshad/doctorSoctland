@@ -148,3 +148,68 @@ export async function syncPatientStripePayments(patientId: string): Promise<{ sy
   }
   return { synced };
 }
+
+/** Bulk sync: pending DB rows + recent completed Stripe Checkout sessions with patient metadata. */
+export async function syncAllStripePayments(opts?: { days?: number }): Promise<{
+  synced: number;
+  checked: number;
+  skipped: number;
+  errors: number;
+}> {
+  const days = opts?.days ?? 90;
+  const since = Math.floor((Date.now() - days * 24 * 60 * 60 * 1000) / 1000);
+  let synced = 0;
+  let checked = 0;
+  let skipped = 0;
+  let errors = 0;
+
+  const pending = await db.payment.findMany({
+    where: { status: "pending", stripeSessionId: { not: null } },
+    select: { stripeSessionId: true, patientId: true },
+  });
+  const sessionIds = new Set<string>();
+  for (const p of pending) {
+    if (p.stripeSessionId) sessionIds.add(p.stripeSessionId);
+  }
+
+  // Also pull completed sessions from Stripe (catches paid checkouts with no pending row).
+  let startingAfter: string | undefined;
+  for (let page = 0; page < 20; page++) {
+    const list = await stripe().checkout.sessions.list({
+      limit: 100,
+      created: { gte: since },
+      ...(startingAfter ? { starting_after: startingAfter } : {}),
+    });
+    for (const s of list.data) {
+      if (s.payment_status === "paid" || s.status === "complete") {
+        if (s.metadata?.patientId) sessionIds.add(s.id);
+      }
+    }
+    if (!list.has_more || !list.data.length) break;
+    startingAfter = list.data[list.data.length - 1]?.id;
+  }
+
+  for (const sessionId of sessionIds) {
+    checked++;
+    try {
+      const result = await syncCheckoutSession(sessionId);
+      if (result.applied) synced++;
+      else skipped++;
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      if (/no such checkout\.session/i.test(msg)) {
+        await db.payment.updateMany({
+          where: { stripeSessionId: sessionId, status: "pending" },
+          data: { status: "failed" },
+        });
+        skipped++;
+      } else {
+        errors++;
+        log.error("stripe.sync.all.fail", { sessionId, ...summarizeError(e) });
+      }
+    }
+  }
+
+  log.info("stripe.sync.all.done", { synced, checked, skipped, errors });
+  return { synced, checked, skipped, errors };
+}

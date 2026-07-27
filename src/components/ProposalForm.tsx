@@ -157,6 +157,11 @@ export default function ProposalForm({
           video: vid || msg.includes("video"),
         });
         alert(check.message);
+        return;
+      }
+      if (!String(fd.get("sentByKey") || "").trim()) {
+        e.preventDefault();
+        alert("Choose who the proposal is sent from.");
       }
     }
   };

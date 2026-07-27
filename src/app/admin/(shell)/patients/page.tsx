@@ -1,6 +1,6 @@
 import { db } from "@/lib/db";
 import { patientWhere, requireAdmin } from "@/lib/auth";
-import { COORDINATORS } from "@/lib/coordinators";
+import { COORDINATORS, coordinatorKeyFor } from "@/lib/coordinators";
 import { fmt, netPricePence } from "@/lib/pricing";
 import { avatarBg, initials, timeAgo } from "@/lib/status";
 import TopBar from "@/components/TopBar";
@@ -30,7 +30,10 @@ export default async function PatientsPage() {
     status: c.status,
     financeStatus: c.financeStatus || "none",
     lastAgo: c.activities[0] ? timeAgo(c.activities[0].createdAt) : "—",
-    coord: COORDINATORS.find((x) => x.email === c.sentByEmail)?.key ?? "other",
+    coord: (() => {
+      const k = coordinatorKeyFor(c.sentByName, c.sentByEmail);
+      return k === "practice" ? "other" : k;
+    })(),
   }));
 
   return (

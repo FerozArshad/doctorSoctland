@@ -704,16 +704,18 @@ export async function saveMonthlyReport(formData: FormData) {
 }
 
 // Reads the "sent by" picker: a known coordinator key, or "other" + free text.
-function pickCoordinator(formData: FormData): Coordinator {
-  const key = String(formData.get("sentByKey") || "");
+function pickCoordinator(formData: FormData, opts?: { required?: boolean }): Coordinator | null {
+  const key = String(formData.get("sentByKey") || "").trim();
+  if (!key) return opts?.required ? null : FALLBACK_COORDINATOR;
   const known = COORDINATORS.find((c) => c.key === key);
   if (known) return known;
   if (key === "other") {
     const name = String(formData.get("sentByOtherName") || "").trim();
     const email = String(formData.get("sentByOtherEmail") || "").trim().toLowerCase();
     if (name && /.+@.+\..+/.test(email)) return { key: "other", name, email, title: "Treatment Coordinator" };
+    return opts?.required ? null : FALLBACK_COORDINATOR;
   }
-  return FALLBACK_COORDINATOR;
+  return opts?.required ? null : FALLBACK_COORDINATOR;
 }
 
 // Loads a patient the current admin is allowed to act on — a plain admin is
@@ -852,7 +854,11 @@ export async function updatePatient(formData: FormData) {
   });
 
   if (intent === "send" && patient.status === "draft") {
-    await deliverProposal(id, pickCoordinator(formData));
+    const co = pickCoordinator(formData, { required: true });
+    if (!co) {
+      redirect(toastUrl(`/admin/patients/${id}/proposal`, "Choose who the proposal is sent from", "!", "#E0A429"));
+    }
+    await deliverProposal(id, co);
     redirect(toastUrl(`/admin/patients/${id}`, `Proposal sent to ${firstName}`, "✉"));
   }
   if (intent === "draft") {
@@ -1005,6 +1011,11 @@ export async function adminUploadPatientFile(formData: FormData) {
 // Sends the proposal by email + WhatsApp and logs activity.
 // `sentBy` is the coordinator the proposal goes out from; it also starts the
 // 30-day price lock and the 7-touch follow-up sequence.
+async function ownerIdForCoordinator(co: Coordinator): Promise<{ ownerId?: string }> {
+  const admin = await db.admin.findFirst({ where: { email: co.email } });
+  return admin ? { ownerId: admin.id } : {};
+}
+
 async function deliverProposal(patientId: string, sentBy?: Coordinator) {
   const cfg = await getPricing();
   const patient = await db.patient.findUniqueOrThrow({ where: { id: patientId } });
@@ -1056,6 +1067,7 @@ async function deliverProposal(patientId: string, sentBy?: Coordinator) {
       priceLockExpired: false,
       sentByName: co.name,
       sentByEmail: co.email,
+      ...(await ownerIdForCoordinator(co)),
       activities: { create: results.map((text) => ({ text })) },
     },
   });
@@ -1078,7 +1090,10 @@ export async function sendProposal(formData: FormData) {
   if (!check.ok) {
     redirect(toastUrl(`/admin/patients/${id}`, check.message, "!", "#E0A429"));
   }
-  const co = pickCoordinator(formData);
+  const co = pickCoordinator(formData, { required: true });
+  if (!co) {
+    redirect(toastUrl(`/admin/patients/${id}`, "Choose who the proposal is sent from", "!", "#E0A429"));
+  }
   const results = await deliverProposal(id, co);
   const wa = results.find((r) => r.startsWith("WhatsApp"));
   const emailFailed = results.some((r) => r === "Email not sent");

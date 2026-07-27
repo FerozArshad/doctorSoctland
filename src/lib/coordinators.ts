@@ -52,6 +52,11 @@ export const FALLBACK_COORDINATOR: Coordinator = {
   bookingUrl: MILLIE_BOOKING,
 };
 
+/** Coordinator filter key for patient lists (matches email or first name). */
+export function coordinatorKeyFor(sentByName: string, sentByEmail: string): string {
+  return coordinatorFor(sentByName, sentByEmail).key;
+}
+
 /** Resolve the sender stored on a patient, falling back to the practice. */
 export function coordinatorFor(sentByName: string, sentByEmail: string): Coordinator {
   if (!sentByName && !sentByEmail) return FALLBACK_COORDINATOR;

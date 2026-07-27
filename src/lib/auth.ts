@@ -82,10 +82,16 @@ export async function getPatientSession() {
 
 /** Prisma `where` fragment scoping patient queries to what this admin may see. */
 export function patientWhere(admin: Admin) {
-  return admin.isSuperAdmin ? {} : { OR: [{ ownerId: admin.id }, { sentByEmail: admin.email }] };
+  if (admin.isSuperAdmin) return {};
+  // Sent patients: only the coordinator who sent the proposal. Drafts: creator (owner).
+  return {
+    OR: [{ sentByEmail: admin.email }, { ownerId: admin.id, status: "draft" }],
+  };
 }
 
 /** Whether this admin may view/act on a specific patient. */
-export function canAccessPatient(admin: Admin, p: { ownerId: string | null; sentByEmail: string }) {
-  return admin.isSuperAdmin || p.ownerId === admin.id || p.sentByEmail === admin.email;
+export function canAccessPatient(admin: Admin, p: { ownerId: string | null; sentByEmail: string; status?: string }) {
+  if (admin.isSuperAdmin) return true;
+  if (p.sentByEmail === admin.email) return true;
+  return p.status === "draft" && p.ownerId === admin.id;
 }

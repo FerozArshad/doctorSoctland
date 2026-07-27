@@ -5,7 +5,8 @@ import { estMonths, fmt, netPricePence, paymentPreferenceLabel } from "@/lib/pri
 import { getPricing } from "@/lib/pricing-settings";
 import { avatarBg, initials, statusOf, timeAgo } from "@/lib/status";
 import { COMP_ITEMS, COMP_TOTAL } from "@/lib/content";
-import { approveFinance, markPaid, recordDeposit, sendPatientTemplate, sendProposal, setFinanceStatus, syncStripePayment } from "@/app/admin/actions";
+import { approveFinance, markPaid, recordDeposit, sendPatientTemplate, setFinanceStatus, syncStripePayment } from "@/app/admin/actions";
+import ResendProposalForm from "@/components/ResendProposalForm";
 import { canAccessPatient, requireAdmin } from "@/lib/auth";
 import TopBar from "@/components/TopBar";
 import MessageLog from "@/components/MessageLog";
@@ -219,15 +220,7 @@ export default async function PatientProfile({ params }: { params: { id: string 
               <Link href={`/admin/patients/${c.id}/proposal`} className={c.status === "draft" ? "btn btn-teal" : "btn btn-outline"} style={{ padding: "11px 18px", fontSize: 13.5, textDecoration: "none" }}>
                 {c.status === "draft" ? "Continue proposal" : "Edit proposal"}
               </Link>
-              <form action={sendProposal}>
-                <input type="hidden" name="patientId" value={c.id} />
-                <FormSubmitButton
-                  className="btn btn-outline"
-                  style={{ padding: "11px 16px", fontSize: 13.5 }}
-                  label={c.status === "draft" ? "Send proposal" : "Resend proposal"}
-                  pendingLabel="Sending…"
-                />
-              </form>
+              <ResendProposalForm patientId={c.id} isDraft={c.status === "draft"} />
               <Link href={`/p/${c.proposalToken}`} className="btn btn-teal" style={{ padding: "11px 18px", fontSize: 13.5, display: "flex", alignItems: "center", gap: 8, textDecoration: "none" }}>
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M10 13a5 5 0 0 0 7 0l3-3a5 5 0 0 0-7-7l-1.5 1.5M14 11a5 5 0 0 0-7 0l-3 3a5 5 0 0 0 7 7l1.5-1.5" />

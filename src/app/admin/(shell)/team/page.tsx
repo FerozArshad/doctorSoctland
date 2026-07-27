@@ -17,7 +17,11 @@ export default async function TeamPage() {
   const admins = await db.admin.findMany({ orderBy: { createdAt: "asc" } });
   const counts = await Promise.all(
     admins.map((a) =>
-      db.patient.count({ where: { OR: [{ ownerId: a.id }, { sentByEmail: a.email }] } })
+      db.patient.count({
+        where: {
+          OR: [{ sentByEmail: a.email }, { ownerId: a.id, status: "draft" }],
+        },
+      })
     )
   );
 

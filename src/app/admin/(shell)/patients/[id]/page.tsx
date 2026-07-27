@@ -230,7 +230,7 @@ export default async function PatientProfile({ params }: { params: { id: string 
             </div>
             <div className="patient-action-bar" style={{ marginTop: 18, paddingTop: 18, borderTop: "1px solid #EEF2F6" }}>
               <Link href={`/admin/patients/${c.id}/proposal`} className={c.status === "draft" ? "btn btn-teal" : "btn btn-outline"} style={{ padding: "11px 18px", fontSize: 13.5, textDecoration: "none" }}>
-                {c.status === "draft" ? "Continue proposal" : "Edit proposal"}
+                {c.status === "draft" ? "Edit draft proposal" : "Edit proposal"}
               </Link>
               <Link href={`/admin/patients/${c.id}/proposal#choose-treatment`} className="btn btn-outline" style={{ padding: "11px 16px", fontSize: 13.5, textDecoration: "none" }}>
                 Change treatment

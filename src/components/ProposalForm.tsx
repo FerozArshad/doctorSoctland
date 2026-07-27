@@ -2,7 +2,7 @@
 // Full proposal builder — save draft, send, and live pricing preview.
 import { useEffect, useState } from "react";
 import { useFormStatus } from "react-dom";
-import { updatePatient } from "@/app/admin/actions";
+import { updatePatient, createPatient } from "@/app/admin/actions";
 import { estMonths, fmt, netPricePence, treatmentPricePence, treatmentBookingCreditPence, VENEER_PACKAGES, WHITENING_ADDON_PENCE, COMPOSITE_PRICE_PER_TOOTH_PENCE, veneerPricePence, type PricingConfig } from "@/lib/pricing";
 import { validateProposalForSend } from "@/lib/proposal-validation";
 import SentByPicker from "@/components/SentByPicker";
@@ -25,6 +25,22 @@ export type ProposalPatient = {
   status: string;
   treatmentType: string;
   includeWhitening: boolean;
+};
+
+export const NEW_PROPOSAL_PATIENT: ProposalPatient = {
+  id: "",
+  firstName: "",
+  lastName: "",
+  email: "",
+  phone: "",
+  alignerCount: 14,
+  pkg: "Go",
+  videoUrl: "",
+  notes: "",
+  ownerId: null,
+  status: "draft",
+  treatmentType: "invisalign",
+  includeWhitening: false,
 };
 
 function ProposalActions({
@@ -141,11 +157,13 @@ export default function ProposalForm({
   cfg,
   owners,
   canDelete = false,
+  isNew = false,
 }: {
   patient: ProposalPatient;
   cfg: PricingConfig;
   owners?: Array<{ id: string; name: string }>;
   canDelete?: boolean;
+  isNew?: boolean;
 }) {
   const [treatment, setTreatment] = useState<TreatmentType>(normalizeTreatmentType(patient.treatmentType));
   const [firstName, setFirstName] = useState(patient.firstName);
@@ -158,7 +176,7 @@ export default function ProposalForm({
   const [video, setVideo] = useState(patient.videoUrl);
   const [notes, setNotes] = useState(patient.notes);
   const [errs, setErrs] = useState({ first: false, last: false, email: false, phone: false, video: false });
-  const isDraft = patient.status === "draft";
+  const isDraft = isNew || patient.status === "draft";
   const copy = treatmentCopy(treatment);
   const patientName = `${firstName} ${lastName}`.trim() || "patient";
 
@@ -236,17 +254,19 @@ export default function ProposalForm({
   });
 
   return (
-    <form action={updatePatient} onSubmit={validate} className="ds-view ds-form-split">
-      <input type="hidden" name="patientId" value={patient.id} />
+    <form action={isNew ? createPatient : updatePatient} onSubmit={validate} className="ds-view ds-form-split">
+      {!isNew && <input type="hidden" name="patientId" value={patient.id} />}
       <input type="hidden" name="treatmentType" value={treatment} />
       <div className="card" style={{ padding: 26 }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
           <div>
-            <div style={{ fontSize: 16, fontWeight: 800 }}>Proposal</div>
+            <div style={{ fontSize: 16, fontWeight: 800 }}>{isNew ? "New patient proposal" : "Proposal"}</div>
             <div style={{ fontSize: 13, color: "#7A8696", marginTop: 2 }}>
-              {isDraft
-                ? "Build the treatment plan, save as a draft, or send when ready."
-                : "Update the proposal — changes apply on the patient pay link immediately."}
+              {isNew
+                ? "Contact details, treatment plan and pricing — all in one step."
+                : isDraft
+                  ? "Build the treatment plan, save as a draft, or send when ready."
+                  : "Update the proposal — changes apply on the patient pay link immediately."}
             </div>
           </div>
           <TreatmentBadge treatmentType={treatment} />
@@ -258,9 +278,11 @@ export default function ProposalForm({
         )}
 
         <div style={{ marginTop: 20 }} id="choose-treatment">
-          <div style={{ fontSize: 13, color: "#7A8696", marginBottom: 10, lineHeight: 1.5 }}>
-            <strong style={{ color: "#3C4a59" }}>Choose a different treatment</strong> — patient details are kept; only the plan and pricing below update.
-          </div>
+          {!isNew && (
+            <div style={{ fontSize: 13, color: "#7A8696", marginBottom: 10, lineHeight: 1.5 }}>
+              <strong style={{ color: "#3C4a59" }}>Change treatment</strong> — patient details stay the same; only the plan and pricing update.
+            </div>
+          )}
           <TreatmentTabs value={treatment} onChange={handleTreatmentChange} />
         </div>
 
@@ -400,7 +422,7 @@ export default function ProposalForm({
           patientId={patient.id}
           usesClinCheckVideo={copy.usesClinCheckVideo}
           usesAiSimulation={copy.usesAiSimulation}
-          canDelete={canDelete}
+          canDelete={canDelete && !isNew}
           patientName={patientName}
         />
       </div>

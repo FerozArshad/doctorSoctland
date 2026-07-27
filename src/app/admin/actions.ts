@@ -6,7 +6,7 @@ import { db } from "@/lib/db";
 import { canAccessPatient, clearAdminSession, createAdminSession, requireAdmin } from "@/lib/auth";
 import { fmt, fullPricePence, netPricePence, treatmentPricePence, treatmentBookingCreditPence } from "@/lib/pricing";
 import { getPricing } from "@/lib/pricing-settings";
-import { parseTreatmentType, treatmentCopy, treatmentLabel, defaultPlanCount, isValidVeneerTeethCount } from "@/lib/treatments";
+import { parseTreatmentType, treatmentCopy, treatmentLabel, isValidVeneerTeethCount } from "@/lib/treatments";
 import { COORDINATORS, coordinatorFor, fromHeader, FALLBACK_COORDINATOR, type Coordinator } from "@/lib/coordinators";
 import { brandedEmail, emailConfigured, financeLinkEmailHtml, proposalEmailHtml, sendEmail, sendProposalWhatsApp, sendWhatsApp, escapeHtml, adminWelcomeEmailHtml, adminPasswordResetEmailHtml, notifyAdmin } from "@/lib/notify";
 import { gmailConfigured } from "@/lib/google";
@@ -729,86 +729,8 @@ async function requireOwnedPatient(id: string) {
 }
 
 // ── Patients ────────────────────────────────────────────────────────────
-export async function createPatient(formData: FormData) {
-  const admin = await requireAdmin();
-  const cfg = await getPricing();
-  const firstName = String(formData.get("firstName") || "").trim();
-  const lastName = String(formData.get("lastName") || "").trim();
-  const email = String(formData.get("email") || "").trim().toLowerCase();
-  const phone = String(formData.get("phone") || "").trim();
-  const treatmentType = parseTreatmentType(formData.get("treatmentType"));
 
-  if (!firstName || !/.+@.+\..+/.test(email)) redirect("/admin/patients/new?error=1");
-
-  const existing = await db.patient.findUnique({ where: { email } });
-  if (existing) {
-    if (!canAccessPatient(admin, existing)) {
-      redirect(
-        toastUrl(
-          "/admin/patients/new",
-          "A patient with that email already exists (owned by another admin). Ask a Super Admin to open or reassign them.",
-          "!",
-          "#E0A429"
-        )
-      );
-    }
-    // Same email — refresh contact details only; proposal fields stay as-is.
-    await db.patient.update({
-      where: { id: existing.id },
-      data: {
-        firstName,
-        lastName,
-        email,
-        phone,
-        treatmentType,
-        upfrontPaidPence: treatmentBookingCreditPence(treatmentType, cfg),
-        activities: { create: { text: `Contact details updated — opening proposal (${treatmentLabel(treatmentType)})` } },
-      },
-    });
-    redirect(
-      toastUrl(
-        `/admin/patients/${existing.id}/proposal`,
-        `Opening proposal for ${firstName}`,
-        "✓"
-      )
-    );
-  }
-
-  const alignerCount = defaultPlanCount(treatmentType);
-  const patient = await db.patient.create({
-    data: {
-      firstName,
-      lastName,
-      email,
-      phone,
-      treatmentType,
-      alignerCount,
-      pkg: "Go",
-      videoUrl: "",
-      notes: "",
-      status: "draft",
-      pricePence: treatmentPricePence(treatmentType, alignerCount, cfg),
-      discountPct: cfg.discountPct,
-      upfrontPaidPence: treatmentBookingCreditPence(treatmentType, cfg),
-      includeWhitening: false,
-      ownerId: admin.id,
-      activities: { create: { text: `Draft proposal created — ${treatmentLabel(treatmentType)}` } },
-    },
-  });
-
-  redirect(toastUrl(`/admin/patients/${patient.id}/proposal`, `Build the proposal for ${firstName}`, "✓"));
-}
-
-// Edit an existing patient — allowed at any status (even after paid/done).
-export async function updatePatient(formData: FormData) {
-  const cfg = await getPricing();
-  const id = String(formData.get("patientId"));
-  const intent = String(formData.get("intent") || "save");
-  const { admin, patient } = await requireOwnedPatient(id);
-  // Only a Super Admin may reassign ownership (the field only renders for them).
-  const ownerRaw = formData.get("ownerId");
-  const ownerChange =
-    admin.isSuperAdmin && ownerRaw !== null ? { ownerId: String(ownerRaw) || null } : {};
+function parseProposalFormData(formData: FormData) {
   const treatmentType = parseTreatmentType(formData.get("treatmentType"));
   const firstName = String(formData.get("firstName") || "").trim();
   const lastName = String(formData.get("lastName") || "").trim();
@@ -822,12 +744,132 @@ export async function updatePatient(formData: FormData) {
   const pkg = formData.get("pkg") === "Express" ? "Express" : "Go";
   const videoUrl = String(formData.get("videoUrl") || "").trim();
   const notes = String(formData.get("notes") || "").trim();
+  return { treatmentType, firstName, lastName, email, phone, alignerCount, includeWhitening, pkg, videoUrl, notes };
+}
+
+function proposalPatientData(
+  fields: ReturnType<typeof parseProposalFormData>,
+  cfg: Awaited<ReturnType<typeof getPricing>>
+) {
+  return {
+    firstName: fields.firstName,
+    lastName: fields.lastName,
+    email: fields.email,
+    phone: fields.phone,
+    alignerCount: fields.alignerCount,
+    pkg: fields.pkg,
+    videoUrl: fields.videoUrl,
+    notes: fields.notes,
+    treatmentType: fields.treatmentType,
+    includeWhitening: fields.includeWhitening,
+    pricePence: treatmentPricePence(fields.treatmentType, fields.alignerCount, cfg, {
+      includeWhitening: fields.includeWhitening,
+    }),
+    upfrontPaidPence: treatmentBookingCreditPence(fields.treatmentType, cfg),
+  };
+}
+
+export async function createPatient(formData: FormData) {
+  const admin = await requireAdmin();
+  const cfg = await getPricing();
+  const intent = String(formData.get("intent") || "draft");
+  const fields = parseProposalFormData(formData);
+  const { firstName, email, treatmentType } = fields;
+
+  if (!firstName || !/.+@.+\..+/.test(email)) {
+    redirect(toastUrl("/admin/patients/new", "A first name and valid email are required", "!", "#E0A429"));
+  }
+  if (intent === "send") {
+    const check = validateProposalForSend({ ...fields, treatmentType });
+    if (!check.ok) {
+      redirect(toastUrl("/admin/patients/new", check.message, "!", "#E0A429"));
+    }
+  }
+
+  const existing = await db.patient.findUnique({ where: { email } });
+  if (existing) {
+    if (!canAccessPatient(admin, existing)) {
+      redirect(
+        toastUrl(
+          "/admin/patients/new",
+          "A patient with that email already exists (owned by another admin). Ask a Super Admin to open or reassign them.",
+          "!",
+          "#E0A429"
+        )
+      );
+    }
+    const ownerRaw = formData.get("ownerId");
+    const ownerChange =
+      admin.isSuperAdmin && ownerRaw !== null ? { ownerId: String(ownerRaw) || null } : {};
+    await db.patient.update({
+      where: { id: existing.id },
+      data: {
+        ...proposalPatientData(fields, cfg),
+        ...ownerChange,
+        activities: {
+          create: {
+            text:
+              intent === "send" && existing.status === "draft"
+                ? "Draft completed — proposal sent"
+                : "Proposal updated from new patient form",
+          },
+        },
+      },
+    });
+    if (intent === "send" && existing.status === "draft") {
+      const co = pickCoordinator(formData, { required: true });
+      if (!co) {
+        redirect(toastUrl("/admin/patients/new", "Choose who the proposal is sent from", "!", "#E0A429"));
+      }
+      await deliverProposal(existing.id, co);
+      redirect(toastUrl(`/admin/patients/${existing.id}`, `Proposal sent to ${firstName}`, "✉"));
+    }
+    redirect(toastUrl(`/admin/patients/${existing.id}`, `Opening proposal for ${firstName}`, "✓"));
+  }
+
+  const ownerRaw = formData.get("ownerId");
+  const ownerId =
+    admin.isSuperAdmin && ownerRaw ? String(ownerRaw) || admin.id : admin.id;
+
+  const patient = await db.patient.create({
+    data: {
+      ...proposalPatientData(fields, cfg),
+      discountPct: cfg.discountPct,
+      status: "draft",
+      ownerId,
+      activities: { create: { text: `Draft proposal created — ${treatmentLabel(treatmentType)}` } },
+    },
+  });
+
+  if (intent === "send") {
+    const co = pickCoordinator(formData, { required: true });
+    if (!co) {
+      redirect(toastUrl("/admin/patients/new", "Choose who the proposal is sent from", "!", "#E0A429"));
+    }
+    await deliverProposal(patient.id, co);
+    redirect(toastUrl(`/admin/patients/${patient.id}`, `Proposal sent to ${firstName}`, "✉"));
+  }
+  redirect(toastUrl(`/admin/patients/${patient.id}`, `Draft saved for ${firstName}`, "✓"));
+}
+
+// Edit an existing patient — allowed at any status (even after paid/done).
+export async function updatePatient(formData: FormData) {
+  const cfg = await getPricing();
+  const id = String(formData.get("patientId"));
+  const intent = String(formData.get("intent") || "save");
+  const { admin, patient } = await requireOwnedPatient(id);
+  // Only a Super Admin may reassign ownership (the field only renders for them).
+  const ownerRaw = formData.get("ownerId");
+  const ownerChange =
+    admin.isSuperAdmin && ownerRaw !== null ? { ownerId: String(ownerRaw) || null } : {};
+  const fields = parseProposalFormData(formData);
+  const { firstName, lastName, email, treatmentType } = fields;
 
   if (!firstName || !/.+@.+\..+/.test(email)) {
     redirect(toastUrl(`/admin/patients/${id}/proposal`, "A first name and valid email are required", "!", "#E0A429"));
   }
   if (intent === "send" && patient.status === "draft") {
-    const check = validateProposalForSend({ firstName, lastName, email, phone, videoUrl, alignerCount, pkg, treatmentType });
+    const check = validateProposalForSend({ ...fields, treatmentType });
     if (!check.ok) {
       redirect(toastUrl(`/admin/patients/${id}/proposal`, check.message, "!", "#E0A429"));
     }
@@ -840,18 +882,7 @@ export async function updatePatient(formData: FormData) {
   await db.patient.update({
     where: { id },
     data: {
-      firstName,
-      lastName,
-      email,
-      phone,
-      alignerCount,
-      pkg,
-      videoUrl,
-      notes,
-      treatmentType,
-      includeWhitening,
-      pricePence: treatmentPricePence(treatmentType, alignerCount, cfg, { includeWhitening }),
-      upfrontPaidPence: treatmentBookingCreditPence(treatmentType, cfg),
+      ...proposalPatientData(fields, cfg),
       ...ownerChange,
       activities: {
         create: {

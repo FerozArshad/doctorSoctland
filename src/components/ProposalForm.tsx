@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useFormStatus } from "react-dom";
 import { updatePatient } from "@/app/admin/actions";
+import { estMonths, fmt, patientBalancePence, priceForPence, type PricingConfig } from "@/lib/pricing";
 import { validateProposalForSend } from "@/lib/proposal-validation";
 import SentByPicker from "@/components/SentByPicker";
 

@@ -18,6 +18,7 @@ import { isMessageActivity } from "@/lib/messages";
 import { publicActivityText } from "@/lib/activity-display";
 import { patientTemplateText } from "@/lib/patient-templates";
 import { syncPatientStripePayments } from "@/lib/stripe-checkout";
+import { CONSENT_PARAGRAPHS, CONSENT_TITLE } from "@/lib/consent";
 
 export const dynamic = "force-dynamic";
 

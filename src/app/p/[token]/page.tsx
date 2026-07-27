@@ -16,6 +16,7 @@ import OtpGate from "@/components/OtpGate";
 import VideoBlock from "@/components/VideoBlock";
 import PatientReceiptsList from "@/components/PatientReceiptsList";
 import { syncCheckoutSession, syncPatientStripePayments } from "@/lib/stripe-checkout";
+import Toast from "@/components/Toast";
 
 export const dynamic = "force-dynamic";
 

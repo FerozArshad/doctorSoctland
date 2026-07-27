@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { getAdmin } from "@/lib/auth";
-import { netPricePence } from "@/lib/pricing";
 import { BRAND } from "@/lib/brand";
-import { COORDINATORS } from "@/lib/coordinators";
+import { buildMonthlyReportData, pad, staffLabel } from "@/lib/build-monthly-report";
+import { getPricing } from "@/lib/pricing-settings";
+import { parseFinanceNetMap } from "@/lib/report-metrics";
 import {
   reportExportRows,
   reportToPdfHtml,
@@ -14,17 +15,6 @@ import {
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
-
-const pad = (n: number) => String(n).padStart(2, "0");
-
-function staffOf(email: string) {
-  return COORDINATORS.find((c) => c.email === email)?.key ?? "other";
-}
-function staffLabel(key: string) {
-  if (key === "all") return "All staff";
-  if (key === "other") return "Other";
-  return COORDINATORS.find((c) => c.key === key)?.name || key;
-}
 
 export async function GET(req: NextRequest) {
   const me = await getAdmin();
@@ -40,15 +30,14 @@ export async function GET(req: NextRequest) {
   const mMatch = /^(\d{4})-(\d{2})$/.exec(req.nextUrl.searchParams.get("m") || "");
   const year = mMatch ? parseInt(mMatch[1], 10) : now.getFullYear();
   const month = mMatch ? Math.min(12, Math.max(1, parseInt(mMatch[2], 10))) : now.getMonth() + 1;
-  const start = new Date(year, month - 1, 1);
-  const end = new Date(year, month, 1);
-  const monthName = start.toLocaleString("en-GB", { month: "long", year: "numeric" });
-  const inMonth = (d: Date | null) => !!d && d >= start && d < end;
-
   const staffKey = req.nextUrl.searchParams.get("s") || "all";
+  const financeNetRaw = req.nextUrl.searchParams.get("financeNet");
+
   const baseWhere = me.isSuperAdmin
     ? {}
     : { OR: [{ ownerId: me.id }, { sentByEmail: me.email }] };
+
+  const cfg = await getPricing();
 
   const [patients, paidPayments] = await Promise.all([
     db.patient.findMany({
@@ -60,8 +49,17 @@ export async function GET(req: NextRequest) {
         email: true,
         pricePence: true,
         upfrontPaidPence: true,
+        status: true,
+        paymentPreference: true,
+        financeStatus: true,
+        financeApprovedAt: true,
+        consentSignedAt: true,
         proposalSentAt: true,
         sentByEmail: true,
+        payments: {
+          where: { status: "paid" },
+          select: { type: true, status: true, paidAt: true },
+        },
       },
     }),
     db.payment.findMany({
@@ -76,79 +74,58 @@ export async function GET(req: NextRequest) {
     }),
   ]);
 
-  const matchStaff = (email: string) => {
-    if (!me.isSuperAdmin) return true;
-    if (staffKey === "all") return true;
-    return staffOf(email) === staffKey;
-  };
+  const scopeLabel = me.isSuperAdmin ? staffLabel(staffKey) : `${me.name} (${me.email})`;
 
-  const scoped = patients.filter((p) => matchStaff(p.sentByEmail || ""));
-  const proposals = scoped
-    .filter((p) => inMonth(p.proposalSentAt))
-    .map((p) => ({
-      patientName: `${p.firstName} ${p.lastName}`.trim(),
-      email: p.email,
-      amountPence: netPricePence(p.pricePence, p.upfrontPaidPence),
-      staff: staffLabel(staffOf(p.sentByEmail || "")),
-    }));
-
-  const firstPay = new Map<string, Date>();
-  for (const p of paidPayments) {
-    if (!p.paidAt || !matchStaff(p.patient.sentByEmail || "")) continue;
-    const cur = firstPay.get(p.patientId);
-    if (!cur || p.paidAt < cur) firstPay.set(p.patientId, p.paidAt);
-  }
-  const orderIds = Array.from(firstPay.entries())
-    .filter(([, d]) => inMonth(d))
-    .map(([id]) => id);
-  const byId = new Map(patients.map((p) => [p.id, p]));
-  const orders = orderIds.map((id) => {
-    const p = byId.get(id)!;
-    return {
-      patientName: `${p.firstName} ${p.lastName}`.trim(),
-      email: p.email,
-      amountPence: netPricePence(p.pricePence, p.upfrontPaidPence),
-      staff: staffLabel(staffOf(p.sentByEmail || "")),
-    };
+  const report = buildMonthlyReportData({
+    patients,
+    payments: paidPayments,
+    year,
+    month,
+    staffKey,
+    scopeLabel,
+    defaultCreditPence: cfg.upfrontPence,
+    financeNetRaw,
+    isSuperAdmin: me.isSuperAdmin,
+    adminEmail: me.email,
+    adminId: me.id,
   });
 
-  const monthPayments = paidPayments.filter(
-    (p) => inMonth(p.paidAt) && matchStaff(p.patient.sentByEmail || "")
-  );
-  const incomePence = monthPayments.reduce((a, p) => a + p.amountPence, 0);
-  const orderValueSum = orders.reduce((a, o) => a + o.amountPence, 0);
-  const conversionPct =
-    proposals.length > 0 ? Math.round((100 * orders.length) / proposals.length) : null;
+  const financeNetByPatient = parseFinanceNetMap(financeNetRaw);
 
-  const stamp = (d: Date) =>
-    d.toLocaleString("en-GB", { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" });
-
-  const scopeLabel = me.isSuperAdmin
-    ? staffLabel(staffKey)
-    : `${me.name} (${me.email})`;
+  if (format === "pdf" && report.financePatients.length > 0) {
+    const missing = report.financePatients.filter((p) => !financeNetByPatient[p.id]);
+    if (missing.length > 0) {
+      return NextResponse.json(
+        {
+          error: "Finance net values required",
+          message: `Enter net value from finance for: ${missing.map((p) => p.name).join(", ")}`,
+        },
+        { status: 400 }
+      );
+    }
+  }
 
   const data: ReportExportInput = {
     practiceName: BRAND.name,
-    scopeLabel,
-    monthName,
-    year,
-    month,
-    proposalsSent: proposals.length,
-    invisalignOrders: orders.length,
-    conversionPct,
-    avgOrderPence: orders.length ? Math.round(orderValueSum / orders.length) : 0,
-    invisalignIncomePence: incomePence,
-    proposals,
-    orders,
-    payments: monthPayments
-      .sort((a, b) => (a.paidAt && b.paidAt ? a.paidAt.getTime() - b.paidAt.getTime() : 0))
-      .map((p) => ({
-        patientName: `${p.patient.firstName} ${p.patient.lastName}`.trim(),
-        email: p.patient.email,
-        type: p.type,
-        amountPence: p.amountPence,
-        paidAt: p.paidAt ? stamp(p.paidAt) : "",
-      })),
+    scopeLabel: report.scopeLabel,
+    monthName: report.monthName,
+    year: report.year,
+    month: report.month,
+    proposalsSent: report.proposalCount,
+    invisalignOrders: report.orderCount,
+    conversionPct: report.conversionPct,
+    avgOrderPence: report.avgOrderPence,
+    invisalignIncomePence: report.totalIncomePence,
+    cashCollectedPence: report.cashCollectedPence,
+    bookingCreditPence: report.bookingCreditPence,
+    financeIncomePence: report.financeIncomePence,
+    defaultCreditPence: report.defaultCreditPence,
+    proposals: report.proposals,
+    orders: report.orders.map((o) => ({
+      ...o,
+      financeNetPence: financeNetByPatient[o.id],
+    })),
+    payments: report.paymentLines,
   };
 
   const base = `Dental-Scotland-report-${scopeLabel.replace(/\s+/g, "-")}-${year}-${pad(month)}`;
@@ -173,7 +150,7 @@ export async function GET(req: NextRequest) {
     });
   }
 
-  const xml = rowsToExcelXml(rows, monthName);
+  const xml = rowsToExcelXml(rows, report.monthName);
   return new NextResponse(xml, {
     headers: {
       "Content-Type": "application/vnd.ms-excel; charset=utf-8",

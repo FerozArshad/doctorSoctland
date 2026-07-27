@@ -4,25 +4,45 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { db } from "@/lib/db";
 import { requireAdmin } from "@/lib/auth";
-import { fmt, netPricePence } from "@/lib/pricing";
+import { fmt } from "@/lib/pricing";
+import { getPricing } from "@/lib/pricing-settings";
 import { COORDINATORS, FALLBACK_COORDINATOR } from "@/lib/coordinators";
 import { firstNameOf } from "@/lib/status";
+import { buildMonthlyReportData, pad, staffLabel } from "@/lib/build-monthly-report";
+import { PAYMENT_LINE_TYPE_LABELS, type ReportPaymentType } from "@/lib/report-metrics";
 import TopBar from "@/components/TopBar";
+import ReportPdfExportButton from "@/components/ReportPdfExportButton";
 
 export const dynamic = "force-dynamic";
 
-const pad = (n: number) => String(n).padStart(2, "0");
-
 type StaffKey = "all" | string;
 
-function staffOf(email: string): string {
-  return COORDINATORS.find((c) => c.email === email)?.key ?? "other";
+const PAYMENT_TYPE_STYLE: Record<ReportPaymentType, { fg: string; bg: string }> = {
+  Deposit: { fg: "#B7791F", bg: "#FBF3E2" },
+  "Paid in Full": { fg: "#1C7C3A", bg: "#E6F6EA" },
+  Finance: { fg: "#7A3EC0", bg: "#F3EBFC" },
+};
+
+function PaymentTypeBadge({ type }: { type: ReportPaymentType }) {
+  const s = PAYMENT_TYPE_STYLE[type];
+  return (
+    <span className="badge" style={{ color: s.fg, background: s.bg, padding: "3px 9px", fontSize: 11.5, whiteSpace: "nowrap" }}>
+      {type}
+    </span>
+  );
 }
 
-function staffLabel(key: StaffKey) {
-  if (key === "all") return "All staff";
-  if (key === "other") return "Other";
-  return COORDINATORS.find((c) => c.key === key)?.name || key;
+function valueNote(gross: number, credit: number, net: number) {
+  return (
+    <div>
+      <div style={{ fontSize: 14, fontWeight: 800, color: "#0B7A6E" }}>{fmt(net)}</div>
+      {credit > 0 && (
+        <div style={{ fontSize: 11, color: "#9AA6B4", marginTop: 2 }}>
+          {fmt(gross)} − {fmt(credit)} credit
+        </div>
+      )}
+    </div>
+  );
 }
 
 export default async function ReportsPage({
@@ -37,7 +57,6 @@ export default async function ReportsPage({
   const year = mMatch ? parseInt(mMatch[1], 10) : now.getFullYear();
   const month = mMatch ? Math.min(12, Math.max(1, parseInt(mMatch[2], 10))) : now.getMonth() + 1;
   const start = new Date(year, month - 1, 1);
-  const end = new Date(year, month, 1);
   const monthName = start.toLocaleString("en-GB", { month: "long", year: "numeric" });
   const prev = new Date(year, month - 2, 1);
   const next = new Date(year, month, 1);
@@ -49,10 +68,11 @@ export default async function ReportsPage({
     redirect(`/admin/reports?m=${year}-${pad(month)}`);
   }
 
-  // Plain admins only see their own attributed patients; Super Admin can segment anyone.
   const baseWhere = me.isSuperAdmin
     ? {}
     : { OR: [{ ownerId: me.id }, { sentByEmail: me.email }] };
+
+  const cfg = await getPricing();
 
   const [patients, payments] = await Promise.all([
     db.patient.findMany({
@@ -64,14 +84,23 @@ export default async function ReportsPage({
         email: true,
         pricePence: true,
         upfrontPaidPence: true,
+        status: true,
+        paymentPreference: true,
+        financeStatus: true,
+        financeApprovedAt: true,
+        consentSignedAt: true,
         proposalSentAt: true,
         sentByEmail: true,
         sentByName: true,
         ownerId: true,
+        payments: {
+          where: { status: "paid" },
+          select: { type: true, status: true, paidAt: true },
+        },
       },
     }),
     db.payment.findMany({
-      where: { status: "paid", patient: baseWhere, paidAt: { gte: start, lt: end } },
+      where: { status: "paid", patient: baseWhere },
       select: {
         patientId: true,
         amountPence: true,
@@ -82,52 +111,21 @@ export default async function ReportsPage({
     }),
   ]);
 
-  const inMonth = (d: Date | null | undefined) => !!d && d >= start && d < end;
+  const scopeLabel = me.isSuperAdmin ? staffLabel(staffKey) : `${me.name} (${me.email})`;
 
-  const matchStaff = (email: string) => {
-    if (staffKey === "all") return true;
-    return staffOf(email) === staffKey;
-  };
-
-  const scopedPatients = patients.filter((p) => matchStaff(p.sentByEmail || ""));
-  const proposals = scopedPatients
-    .filter((p) => inMonth(p.proposalSentAt))
-    .sort((a, b) => (a.proposalSentAt!.getTime() - b.proposalSentAt!.getTime()));
-
-  const firstPay = new Map<string, Date>();
-  for (const p of payments) {
-    if (!p.paidAt) continue;
-    if (!matchStaff(p.patient.sentByEmail || "")) continue;
-    const cur = firstPay.get(p.patientId);
-    if (!cur || p.paidAt < cur) firstPay.set(p.patientId, p.paidAt);
-  }
-  const orderIds = Array.from(firstPay.entries())
-    .filter(([, d]) => inMonth(d))
-    .map(([id]) => id);
-  const patientById = new Map(patients.map((p) => [p.id, p]));
-  const orders = orderIds.map((id) => {
-    const p = patientById.get(id)!;
-    return {
-      id,
-      name: `${p.firstName} ${p.lastName}`.trim(),
-      email: p.email,
-      amountPence: netPricePence(p.pricePence, p.upfrontPaidPence),
-      staff: staffLabel(staffOf(p.sentByEmail || "")),
-    };
+  const report = buildMonthlyReportData({
+    patients,
+    payments,
+    year,
+    month,
+    staffKey,
+    scopeLabel,
+    defaultCreditPence: cfg.upfrontPence,
+    isSuperAdmin: me.isSuperAdmin,
+    adminEmail: me.email,
+    adminId: me.id,
   });
 
-  const monthPayments = payments
-    .filter((p) => inMonth(p.paidAt) && matchStaff(p.patient.sentByEmail || ""))
-    .sort((a, b) => (a.paidAt && b.paidAt ? a.paidAt.getTime() - b.paidAt.getTime() : 0));
-
-  const proposalCount = proposals.length;
-  const orderCount = orders.length;
-  const conversion = proposalCount > 0 ? Math.round((100 * orderCount) / proposalCount) : null;
-  const orderValueSum = orders.reduce((a, o) => a + o.amountPence, 0);
-  const avgRevenue = orderCount > 0 ? Math.round(orderValueSum / orderCount) : 0;
-  const incomePence = monthPayments.reduce((a, p) => a + p.amountPence, 0);
-
-  // Staff picker counts for this month (Super Admin only).
   const staffTabs: Array<{ key: StaffKey; label: string }> = [
     { key: "all", label: "All staff" },
     ...COORDINATORS.map((c) => ({ key: c.key, label: firstNameOf(c.name) })),
@@ -137,6 +135,9 @@ export default async function ReportsPage({
   const qs = (d: Date, s: StaffKey = staffKey) =>
     `?m=${d.getFullYear()}-${pad(d.getMonth() + 1)}&s=${s}`;
 
+  const exportHref = (format: string) =>
+    `/api/admin/reports/export?format=${format}&m=${year}-${pad(month)}&s=${staffKey}`;
+
   const stat = (label: string, value: string, sub: string) => (
     <div key={label} className="card" style={{ padding: 18 }}>
       <div style={{ fontSize: 24, fontWeight: 800, letterSpacing: "-.02em" }}>{value}</div>
@@ -144,9 +145,6 @@ export default async function ReportsPage({
       <div style={{ fontSize: 12, color: "#8A96A5", marginTop: 2 }}>{sub}</div>
     </div>
   );
-
-  const exportHref = (format: string) =>
-    `/api/admin/reports/export?format=${format}&m=${year}-${pad(month)}&s=${staffKey}`;
 
   return (
     <>
@@ -191,39 +189,70 @@ export default async function ReportsPage({
               )}
               <a href={exportHref("csv")} className="btn btn-outline" style={{ padding: "7px 12px", fontSize: 12.5, textDecoration: "none" }}>Export CSV</a>
               <a href={exportHref("xlsx")} className="btn btn-outline" style={{ padding: "7px 12px", fontSize: 12.5, textDecoration: "none" }}>Excel</a>
-              <a href={exportHref("pdf")} className="btn btn-teal" style={{ padding: "7px 12px", fontSize: 12.5, textDecoration: "none" }}>PDF for management</a>
+              <ReportPdfExportButton
+                monthKey={`${year}-${pad(month)}`}
+                staffKey={staffKey}
+                financePatients={report.financePatients}
+              />
             </div>
           </div>
 
           <div style={{ marginTop: 14, padding: "12px 18px", borderRadius: 12, background: "#F4FCFA", border: "1px solid #CFEDE5", fontSize: 13.5, color: "#0B7A6E", fontWeight: 600 }}>
-            Live from patient &amp; payment records · {staffLabel(staffKey)} · not editable
+            Live from patient &amp; payment records · {staffLabel(staffKey)} · {fmt(cfg.upfrontPence)} booking credit included in totals
           </div>
 
           <div className="ds-stats" style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 14, marginTop: 14 }}>
-            {stat("Proposals sent", String(proposalCount), `secure links sent in ${monthName}`)}
-            {stat("Invisalign orders", String(orderCount), "patients who went ahead (first payment)")}
-            {stat("Conversion rate", conversion === null ? "—" : `${conversion}%`, "orders ÷ proposals sent")}
-            {stat("Avg revenue / patient", avgRevenue ? fmt(avgRevenue) : "—", "average treatment value of new orders")}
+            {stat("Proposals sent", String(report.proposalCount), `secure links sent in ${monthName}`)}
+            {stat("Invisalign orders", String(report.orderCount), "patients who went ahead (payment or finance)")}
+            {stat("Conversion rate", report.conversionPct === null ? "—" : `${report.conversionPct}%`, "orders ÷ proposals sent")}
+            {stat("Avg revenue / patient", report.avgOrderPence ? fmt(report.avgOrderPence) : "—", "gross treatment value incl. booking credit")}
+          </div>
+
+          <div className="card" style={{ marginTop: 14, padding: "16px 20px" }}>
+            <div style={{ fontSize: 15, fontWeight: 800, marginBottom: 10 }}>Income this month</div>
+            <div style={{ display: "grid", gap: 8, fontSize: 13.5 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", gap: 12 }}>
+                <span style={{ color: "#5C6a79" }}>Card / Stripe collected</span>
+                <strong>{fmt(report.cashCollectedPence)}</strong>
+              </div>
+              <div style={{ display: "flex", justifyContent: "space-between", gap: 12 }}>
+                <span style={{ color: "#5C6a79" }}>Booking credit ({fmt(cfg.upfrontPence)} per order)</span>
+                <strong>{fmt(report.bookingCreditPence)}</strong>
+              </div>
+              {report.financePatients.length > 0 && (
+                <div style={{ display: "flex", justifyContent: "space-between", gap: 12 }}>
+                  <span style={{ color: "#5C6a79" }}>Finance net (enter on PDF export)</span>
+                  <strong>{report.financeIncomePence ? fmt(report.financeIncomePence) : "—"}</strong>
+                </div>
+              )}
+              <div style={{ display: "flex", justifyContent: "space-between", gap: 12, paddingTop: 8, borderTop: "1px solid #EEF2F6", fontWeight: 800 }}>
+                <span>Total income</span>
+                <span style={{ color: "#0B7A6E" }}>{fmt(report.totalIncomePence)}</span>
+              </div>
+            </div>
           </div>
 
           <div className="ds-split" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 18, marginTop: 18, alignItems: "start" }}>
             <div className="card" style={{ overflow: "hidden" }}>
               <div style={{ padding: "14px 18px", borderBottom: "1px solid #EEF2F6" }}>
                 <div style={{ fontSize: 15, fontWeight: 800 }}>Proposals sent</div>
-                <div style={{ fontSize: 12.5, color: "#7A8696", marginTop: 2 }}>Read-only · patient name</div>
+                <div style={{ fontSize: 12.5, color: "#7A8696", marginTop: 2 }}>Patient · payment type · value</div>
               </div>
-              {proposals.length === 0 ? (
+              {report.proposals.length === 0 ? (
                 <div style={{ padding: 24, fontSize: 13.5, color: "#9AA6B4" }}>No proposals sent in {monthName}.</div>
               ) : (
-                proposals.map((p) => (
-                  <div key={p.id} style={{ display: "flex", justifyContent: "space-between", gap: 12, padding: "12px 18px", borderTop: "1px solid #F1F4F8" }}>
-                    <div>
-                      <div style={{ fontSize: 13.5, fontWeight: 700 }}>{`${p.firstName} ${p.lastName}`.trim()}</div>
+                report.proposals.map((p) => (
+                  <div key={p.id} style={{ display: "flex", justifyContent: "space-between", gap: 12, padding: "12px 18px", borderTop: "1px solid #F1F4F8", flexWrap: "wrap" }}>
+                    <div style={{ minWidth: 0, flex: 1 }}>
+                      <div style={{ fontSize: 13.5, fontWeight: 700 }}>{p.patientName}</div>
                       <div style={{ fontSize: 11.5, color: "#9AA6B4", marginTop: 2 }}>{p.email}</div>
+                      <div style={{ marginTop: 8 }}>
+                        <PaymentTypeBadge type={p.paymentType} />
+                      </div>
                     </div>
-                    <div style={{ fontSize: 12.5, color: "#5C6a79", textAlign: "right" }}>
-                      {fmt(netPricePence(p.pricePence, p.upfrontPaidPence))}
-                      <div style={{ fontSize: 11, color: "#9AA6B4", marginTop: 2 }}>{staffLabel(staffOf(p.sentByEmail || ""))}</div>
+                    <div style={{ textAlign: "right" }}>
+                      {valueNote(p.grossPence, p.bookingCreditPence, p.netPence)}
+                      <div style={{ fontSize: 11, color: "#9AA6B4", marginTop: 4 }}>{p.staff}</div>
                     </div>
                   </div>
                 ))
@@ -233,36 +262,63 @@ export default async function ReportsPage({
             <div className="card" style={{ overflow: "hidden" }}>
               <div style={{ padding: "14px 18px", borderBottom: "1px solid #EEF2F6" }}>
                 <div style={{ fontSize: 15, fontWeight: 800 }}>Orders this month</div>
-                <div style={{ fontSize: 12.5, color: "#7A8696", marginTop: 2 }}>Read-only · patient name &amp; amount</div>
+                <div style={{ fontSize: 12.5, color: "#7A8696", marginTop: 2 }}>Patient · payment type · value</div>
               </div>
-              {orders.length === 0 ? (
+              {report.orders.length === 0 ? (
                 <div style={{ padding: 24, fontSize: 13.5, color: "#9AA6B4" }}>No new orders in {monthName}.</div>
               ) : (
-                <>
-                  {orders.map((o) => (
-                    <div key={o.id} style={{ display: "flex", justifyContent: "space-between", gap: 12, padding: "12px 18px", borderTop: "1px solid #F1F4F8" }}>
-                      <div>
-                        <div style={{ fontSize: 13.5, fontWeight: 700 }}>{o.name}</div>
-                        <div style={{ fontSize: 11.5, color: "#9AA6B4", marginTop: 2 }}>{o.email}</div>
-                      </div>
-                      <div style={{ fontSize: 14, fontWeight: 800, color: "#0B7A6E", textAlign: "right" }}>
-                        {fmt(o.amountPence)}
-                        <div style={{ fontSize: 11, color: "#9AA6B4", fontWeight: 600, marginTop: 2 }}>{o.staff}</div>
+                report.orders.map((o) => (
+                  <div key={o.id} style={{ display: "flex", justifyContent: "space-between", gap: 12, padding: "12px 18px", borderTop: "1px solid #F1F4F8", flexWrap: "wrap" }}>
+                    <div style={{ minWidth: 0, flex: 1 }}>
+                      <div style={{ fontSize: 13.5, fontWeight: 700 }}>{o.patientName}</div>
+                      <div style={{ fontSize: 11.5, color: "#9AA6B4", marginTop: 2 }}>{o.email}</div>
+                      <div style={{ marginTop: 8 }}>
+                        <PaymentTypeBadge type={o.paymentType} />
                       </div>
                     </div>
-                  ))}
-                  <div style={{ display: "flex", justifyContent: "space-between", padding: "12px 18px", borderTop: "1px solid #E7ECF2", background: "#F4FCFA", fontWeight: 800 }}>
-                    <span style={{ fontSize: 13, color: "#0B7A6E" }}>Collected in month</span>
-                    <span style={{ fontSize: 15, color: "#0B7A6E" }}>{fmt(incomePence)}</span>
+                    <div style={{ textAlign: "right" }}>
+                      {valueNote(o.grossPence, o.bookingCreditPence, o.netPence)}
+                      <div style={{ fontSize: 11, color: "#9AA6B4", marginTop: 4 }}>{o.staff}</div>
+                    </div>
                   </div>
-                </>
+                ))
               )}
             </div>
           </div>
 
+          <div className="card" style={{ marginTop: 18, overflow: "hidden" }}>
+            <div style={{ padding: "14px 18px", borderBottom: "1px solid #EEF2F6" }}>
+              <div style={{ fontSize: 15, fontWeight: 800 }}>Payments &amp; income</div>
+              <div style={{ fontSize: 12.5, color: "#7A8696", marginTop: 2 }}>
+                Card payments, {fmt(cfg.upfrontPence)} booking credit, and finance (when net value entered for PDF)
+              </div>
+            </div>
+            {report.paymentLines.length === 0 ? (
+              <div style={{ padding: 24, fontSize: 13.5, color: "#9AA6B4" }}>No payment activity in {monthName}.</div>
+            ) : (
+              report.paymentLines.map((line, i) => (
+                <div key={i} style={{ display: "flex", justifyContent: "space-between", gap: 12, padding: "12px 18px", borderTop: "1px solid #F1F4F8", flexWrap: "wrap" }}>
+                  <div style={{ minWidth: 0, flex: 1 }}>
+                    <div style={{ fontSize: 13.5, fontWeight: 700 }}>{line.patientName}</div>
+                    <div style={{ fontSize: 12, color: "#7A8696", marginTop: 2, display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                      <span>{PAYMENT_LINE_TYPE_LABELS[line.type] || line.type}</span>
+                      <PaymentTypeBadge type={line.paymentType} />
+                    </div>
+                    {line.note && <div style={{ fontSize: 11.5, color: "#9AA6B4", marginTop: 4 }}>{line.note}</div>}
+                  </div>
+                  <div style={{ textAlign: "right" }}>
+                    <div style={{ fontSize: 14, fontWeight: 800, color: "#0B7A6E" }}>{fmt(line.amountPence)}</div>
+                    <div style={{ fontSize: 11.5, color: "#9AA6B4", marginTop: 2 }}>{line.paidAt}</div>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+
           <div style={{ marginTop: 18, fontSize: 12.5, color: "#9AA6B4", lineHeight: 1.55 }}>
             Conversion = orders ÷ proposals sent for {monthName}
-            {staffKey !== "all" ? ` (${staffLabel(staffKey)})` : ""}. Average revenue uses treatment value of new orders.
+            {staffKey !== "all" ? ` (${staffLabel(staffKey)})` : ""}. Payment type shows Deposit, Paid in Full, or Finance.
+            Finance orders are included when finance is accepted or the patient applies. {fmt(cfg.upfrontPence)} booking credit is added to income for each new order.
             {me.isSuperAdmin ? "" : ` Showing only patients attributed to ${me.name} (${me.email}).`}
             {" "}Fallback sender: {FALLBACK_COORDINATOR.email}.
           </div>

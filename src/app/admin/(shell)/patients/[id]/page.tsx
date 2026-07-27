@@ -429,7 +429,16 @@ export default async function PatientProfile({ params }: { params: { id: string 
                   </div>
                 )}
 
-                <PatientPaymentsSection payments={c.payments} />
+                <PatientPaymentsSection
+                  payments={c.payments}
+                  bookingCreditPence={c.upfrontPaidPence || cfg.upfrontPence}
+                  patient={{
+                    status: c.status,
+                    paymentPreference: c.paymentPreference,
+                    financeStatus: c.financeStatus,
+                    payments: c.payments,
+                  }}
+                />
 
                 <PaymentReceiptsSection patientId={c.id} receipts={c.paymentReceipts} />
 

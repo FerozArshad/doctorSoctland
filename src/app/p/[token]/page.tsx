@@ -200,7 +200,7 @@ export default async function ProposalPage({
 
       <div className="ds-view ds-proposal-pad">
         <div className="ds-proposal-shell" style={{ maxWidth: 1080, margin: "0 auto", background: "#fff", borderRadius: 20, overflow: "hidden", boxShadow: "0 24px 48px -24px rgba(11,24,40,.35)", border: "1px solid rgba(14,26,43,.06)" }}>
-          <div className="ds-pad-header" style={{ background: "#0B1828", padding: "18px 24px", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
+          <div className="ds-pad-header ds-proposal-header" style={{ background: "#0B1828", padding: "18px 24px", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
             <BrandLogo width={150} height={40} priority />
             <div style={{ textAlign: "right", color: "#8FA6C0", fontSize: 11, fontWeight: 700, letterSpacing: ".06em", textTransform: "uppercase" }}>Invisalign Proposal</div>
           </div>

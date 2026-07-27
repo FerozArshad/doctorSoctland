@@ -35,11 +35,11 @@ function ProposalActions({ isDraft, patientId }: { isDraft: boolean; patientId: 
 
   if (!isDraft) {
     return (
-      <div style={{ display: "flex", gap: 12, marginTop: 26 }}>
-        <a className="btn btn-outline" href={`/admin/patients/${patientId}`} style={{ flex: 1, textAlign: "center", textDecoration: "none" }}>
+      <div className="ds-proposal-form-actions">
+        <a className="btn btn-outline" href={`/admin/patients/${patientId}`} style={{ textAlign: "center", textDecoration: "none" }}>
           Back to patient
         </a>
-        <button type="submit" className="btn btn-teal" name="intent" value="save" disabled={pending} style={{ flex: 1.3 }}>
+        <button type="submit" className="btn btn-teal" name="intent" value="save" disabled={pending}>
           {pending ? "Saving…" : "Save proposal changes"}
         </button>
       </div>
@@ -50,7 +50,7 @@ function ProposalActions({ isDraft, patientId }: { isDraft: boolean; patientId: 
     <>
       <div style={{ height: 1, background: "#EEF2F6", margin: "24px 0" }} />
       <SentByPicker />
-      <div style={{ display: "flex", gap: 12, marginTop: 26, flexWrap: "wrap" }}>
+      <div className="ds-proposal-form-actions" style={{ flexWrap: "wrap" }}>
         <a className="btn btn-outline" href="/admin/patients" style={{ flex: "1 1 120px", textAlign: "center", textDecoration: "none" }}>
           Back to list
         </a>
@@ -231,7 +231,7 @@ export default function ProposalForm({
         <div style={{ marginTop: 20 }}>
           <label className="label">Package</label>
           <input type="hidden" name="pkg" value={pkg} />
-          <div style={{ display: "flex", gap: 10, marginTop: 8 }}>
+          <div className="ds-pkg-btns" style={{ display: "flex", gap: 10, marginTop: 8 }}>
             <button type="button" onClick={() => setPkg("Express")} style={pkgBtn(pkg === "Express")}>
               Express <span style={{ fontWeight: 500, opacity: 0.7 }}>≤ 7 aligners</span>
             </button>

@@ -226,10 +226,19 @@ a { color: inherit; transition: color .15s var(--ease), opacity .15s var(--ease)
 /* Patient proposal */
 .ds-proposal-page {
   min-height: 100dvh;
+  max-width: 100%;
+  overflow-x: hidden;
   background: linear-gradient(180deg, #E8F1F3 0%, #F4F7F9 42%, #EEF2F5 100%);
 }
 .ds-proposal-pad {
   padding: 24px 16px 44px;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+.ds-proposal-shell {
+  max-width: 100%;
+  width: 100%;
+  box-sizing: border-box;
 }
 
 .ds-proposal-split {
@@ -237,6 +246,17 @@ a { color: inherit; transition: color .15s var(--ease), opacity .15s var(--ease)
   grid-template-columns: 1fr 1fr;
   gap: 14px;
   align-items: stretch;
+  min-width: 0;
+}
+.ds-proposal-split > * {
+  min-width: 0;
+  max-width: 100%;
+}
+.ds-proposal-header {
+  flex-wrap: wrap;
+}
+.ds-pay-option {
+  min-width: 0;
 }
 
 @media (max-width: 900px) {
@@ -255,6 +275,8 @@ a { color: inherit; transition: color .15s var(--ease), opacity .15s var(--ease)
   .ds-proposal-cta { flex-direction: column !important; align-items: stretch !important; text-align: center !important; }
   .ds-proposal-cta button { width: 100% !important; }
   .ds-proposal-shell { border-radius: 14px !important; }
+  .ds-pay-option { flex-wrap: wrap !important; }
+  .ds-pay-option > div:last-child { width: 100%; text-align: left !important; margin-top: 4px; }
   .ds-pad-lg { padding: 22px 16px !important; }
   .ds-pad-header { padding: 16px 16px !important; }
   .ds-shell-pad { padding: 16px 12px 36px !important; }
@@ -268,6 +290,11 @@ a { color: inherit; transition: color .15s var(--ease), opacity .15s var(--ease)
   .ds-split { grid-template-columns: 1fr !important; }
   .ds-form-split { grid-template-columns: 1fr !important; }
   .ds-form-split .ds-sticky-preview { position: static !important; top: auto !important; }
+  .ds-split > *,
+  .ds-form-split > * {
+    min-width: 0;
+    max-width: 100%;
+  }
 }
 @media (max-width: 560px) {
   .ds-stats { grid-template-columns: 1fr !important; }
@@ -603,4 +630,97 @@ a { color: inherit; transition: color .15s var(--ease), opacity .15s var(--ease)
 /* Touch-friendly tables */
 @media (max-width: 700px) {
   .ds-table-scroll { overflow-x: auto !important; -webkit-overflow-scrolling: touch; }
+}
+
+/* ── Patient profile (admin detail) ─────────────────────────────────────── */
+
+.ds-patient-page {
+  max-width: 100%;
+  min-width: 0;
+}
+.ds-patient-card {
+  padding: 24px;
+  min-width: 0;
+  overflow: hidden;
+}
+.ds-patient-comp-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+.ds-patient-inst-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.ds-patient-payment-actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.ds-patient-payment-actions form {
+  flex: 1 1 160px;
+  display: flex;
+  min-width: 0;
+}
+.ds-proposal-form-actions {
+  display: flex;
+  gap: 12px;
+  margin-top: 26px;
+  flex-wrap: wrap;
+}
+.ds-proposal-form-actions > a,
+.ds-proposal-form-actions > button {
+  flex: 1 1 140px;
+  min-width: 0;
+}
+
+@media (max-width: 768px) {
+  .patient-action-bar {
+    flex-direction: column;
+    align-items: stretch !important;
+  }
+  .patient-action-bar > a.btn,
+  .patient-action-bar > button.btn {
+    width: 100% !important;
+    white-space: normal;
+    text-align: center;
+  }
+  .ds-patient-card {
+    padding: 16px !important;
+  }
+  .ds-patient-comp-grid {
+    grid-template-columns: 1fr !important;
+  }
+  .ds-patient-inst-row {
+    flex-direction: column;
+    align-items: flex-start !important;
+    gap: 6px;
+  }
+  .ds-patient-payment-actions {
+    flex-direction: column;
+  }
+  .ds-patient-payment-actions form {
+    width: 100% !important;
+    flex: 1 1 auto !important;
+  }
+  .ds-proposal-form-actions {
+    flex-direction: column;
+  }
+  .ds-patient-payment-actions form .btn {
+    width: 100%;
+  }
+  .ds-pkg-btns {
+    flex-direction: column !important;
+  }
+  .ds-pkg-btns > button {
+    width: 100% !important;
+  }
+  .ds-proposal-form-actions > a,
+  .ds-proposal-form-actions > button {
+    width: 100% !important;
+    flex: 1 1 auto !important;
+  }
 }

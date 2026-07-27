@@ -61,6 +61,7 @@ export default function PaymentOptionsForm({
           return (
             <label
               key={o.key}
+              className="ds-pay-option"
               style={{
                 display: "flex",
                 alignItems: "center",

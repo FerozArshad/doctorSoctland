@@ -157,14 +157,14 @@ export default async function PatientProfile({ params }: { params: { id: string 
     <>
       <TopBar title="Patient" sub="Treatment & payment details" />
       <div className="ds-scroll ds-admin-pad" style={{ flex: 1, overflow: "auto" }}>
-        <div className="ds-view">
+        <div className="ds-view ds-patient-page">
           <Link href="/admin/patients" style={{ color: "#7A8696", fontWeight: 600, fontSize: 13.5, display: "flex", alignItems: "center", gap: 6, marginBottom: 16, textDecoration: "none" }}>
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m15 18-6-6 6-6" /></svg>
             All patients
           </Link>
 
           {/* header card */}
-          <div className="card" style={{ padding: 24 }}>
+          <div className="card ds-patient-card">
             <div style={{ display: "flex", alignItems: "center", gap: 16, flexWrap: "wrap" }}>
               <div style={{ width: 58, height: 58, borderRadius: "50%", background: avatarBg(c.id), color: "#fff", display: "grid", placeItems: "center", fontWeight: 800, fontSize: 20, flex: "none" }}>{initials(c.firstName, c.lastName)}</div>
               <div style={{ flex: 1, minWidth: 0 }}>
@@ -244,7 +244,7 @@ export default async function PatientProfile({ params }: { params: { id: string 
           <div className="ds-split" style={{ display: "grid", gridTemplateColumns: "1.55fr 1fr", gap: 18, marginTop: 18, alignItems: "start" }}>
             <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
               {/* Signed consent + statement copy — top of patient record */}
-              <div className="card" style={{ padding: 24 }}>
+              <div className="card ds-patient-card">
                 <div style={{ fontSize: 15, fontWeight: 800, marginBottom: 4 }}>
                   {c.consentSignedAt
                     ? c.paymentPreference === "finance" || c.financeStatus !== "none"
@@ -332,7 +332,7 @@ export default async function PatientProfile({ params }: { params: { id: string 
               />
 
               {/* plan */}
-              <div className="card" style={{ padding: 24 }}>
+              <div className="card ds-patient-card">
                 <div style={{ fontSize: 15, fontWeight: 800, marginBottom: 18 }}>Treatment plan</div>
                 <div className="ds-quad" style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 14 }}>
                   <div style={{ background: "#FBFCFD", border: "1px solid #EEF2F6", borderRadius: 12, padding: 14 }}>
@@ -371,26 +371,26 @@ export default async function PatientProfile({ params }: { params: { id: string 
               </div>
 
               {/* complimentary */}
-              <div className="card" style={{ padding: 24 }}>
+              <div className="card ds-patient-card">
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
                   <div style={{ fontSize: 15, fontWeight: 800 }}>Complimentary (included)</div>
                   <span style={{ fontSize: 14, fontWeight: 800, color: "#0B7A6E" }}>{COMP_TOTAL} value</span>
                 </div>
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+                <div className="ds-patient-comp-grid">
                   {COMP_ITEMS.map((item) => (
-                    <div key={item.label} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 12px", borderRadius: 10, background: "#FBFCFD", border: "1px solid #EEF2F6" }}>
-                      <div style={{ display: "flex", alignItems: "center", gap: 9 }}>
-                        <span style={{ width: 18, height: 18, borderRadius: "50%", background: "#DDF3EC", color: "#0B7A6E", display: "grid", placeItems: "center", fontWeight: 800, fontSize: 10 }}>✓</span>
-                        <span style={{ fontSize: 13, fontWeight: 600, color: "#2C3847" }}>{item.label}</span>
+                    <div key={item.label} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 12px", borderRadius: 10, background: "#FBFCFD", border: "1px solid #EEF2F6", gap: 8, minWidth: 0 }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 9, minWidth: 0, flex: 1 }}>
+                        <span style={{ width: 18, height: 18, borderRadius: "50%", background: "#DDF3EC", color: "#0B7A6E", display: "grid", placeItems: "center", fontWeight: 800, fontSize: 10, flex: "none" }}>✓</span>
+                        <span style={{ fontSize: 13, fontWeight: 600, color: "#2C3847", wordBreak: "break-word" }}>{item.label}</span>
                       </div>
-                      <span style={{ fontSize: 12.5, color: "#9AA6B4", fontWeight: 700 }}>{item.value}</span>
+                      <span style={{ fontSize: 12.5, color: "#9AA6B4", fontWeight: 700, flex: "none" }}>{item.value}</span>
                     </div>
                   ))}
                 </div>
               </div>
 
               {/* payment progress */}
-              <div className="card" style={{ padding: 24 }}>
+              <div className="card ds-patient-card">
                 <div style={{ fontSize: 15, fontWeight: 800, marginBottom: 16 }}>Payment</div>
                 {c.paymentPreference && (
                   <div style={{ marginBottom: 14, padding: "11px 14px", borderRadius: 11, background: "#F3EBFC", border: "1px solid #E4D3F7", fontSize: 13.5, color: "#7A3EC0", fontWeight: 700 }}>
@@ -415,7 +415,7 @@ export default async function PatientProfile({ params }: { params: { id: string 
                   <div style={{ marginTop: 16, border: "1px solid #EEF2F6", borderRadius: 12, overflow: "hidden" }}>
                     <div style={{ padding: "10px 14px", background: "#FAFBFC", fontSize: 12, fontWeight: 700, letterSpacing: ".05em", textTransform: "uppercase", color: "#8A96A5" }}>Scheduled instalments (auto-collected)</div>
                     {c.instalments.map((inst) => (
-                      <div key={inst.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "11px 14px", borderTop: "1px solid #F1F4F8", fontSize: 13.5 }}>
+                      <div key={inst.id} className="ds-patient-inst-row" style={{ padding: "11px 14px", borderTop: "1px solid #F1F4F8", fontSize: 13.5 }}>
                         <span style={{ fontWeight: 700 }}>Instalment {inst.number}/3 · {fmt(inst.amountPence)}</span>
                         <span style={{ color: "#7A8696" }}>{inst.dueDate.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}</span>
                         <span className="badge" style={{
@@ -433,7 +433,7 @@ export default async function PatientProfile({ params }: { params: { id: string 
 
                 <PaymentReceiptsSection patientId={c.id} receipts={c.paymentReceipts} />
 
-                <div style={{ marginTop: 14, display: "flex", gap: 10, flexWrap: "wrap" }}>
+                <div className="ds-patient-payment-actions" style={{ marginTop: 14 }}>
                   <form action={syncStripePayment}>
                     <input type="hidden" name="patientId" value={c.id} />
                     <FormSubmitButton
@@ -443,7 +443,7 @@ export default async function PatientProfile({ params }: { params: { id: string 
                       pendingLabel="Syncing…"
                     />
                   </form>
-                  <form action={recordDeposit} style={{ flex: 1, display: "flex", minWidth: 160 }}>
+                  <form action={recordDeposit}>
                     <input type="hidden" name="patientId" value={c.id} />
                     <FormSubmitButton
                       className="btn btn-outline"
@@ -452,7 +452,7 @@ export default async function PatientProfile({ params }: { params: { id: string 
                       pendingLabel="Saving…"
                     />
                   </form>
-                  <form action={markPaid} style={{ flex: 1, display: "flex" }}>
+                  <form action={markPaid}>
                     <input type="hidden" name="patientId" value={c.id} />
                     <FormSubmitButton
                       className="btn btn-dark"
@@ -465,7 +465,7 @@ export default async function PatientProfile({ params }: { params: { id: string 
               </div>
 
               {/* quick message templates */}
-              <div className="card" style={{ padding: 24 }}>
+              <div className="card ds-patient-card">
                 <div style={{ fontSize: 15, fontWeight: 800, marginBottom: 4 }}>Message templates</div>
                 <div style={{ fontSize: 12.5, color: "#7A8696", marginBottom: 14, lineHeight: 1.5 }}>
                   One-click send to {c.firstName} by email (and WhatsApp when available).
@@ -490,7 +490,7 @@ export default async function PatientProfile({ params }: { params: { id: string 
 
             <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
               {/* timeline */}
-              <div className="card" style={{ padding: 24 }}>
+              <div className="card ds-patient-card">
                 <div style={{ fontSize: 15, fontWeight: 800, marginBottom: 18 }}>Status</div>
                 <div style={{ display: "flex", flexDirection: "column" }}>
                   {timeline.map((t) => (
@@ -510,7 +510,7 @@ export default async function PatientProfile({ params }: { params: { id: string 
                 </div>
               </div>
               {/* activity */}
-              <div className="card" style={{ padding: 24 }}>
+              <div className="card ds-patient-card">
                 <div style={{ fontSize: 15, fontWeight: 800, marginBottom: 14 }}>Activity</div>
                 <div style={{ display: "flex", flexDirection: "column" }}>
                   {c.activities.filter((a) => !isMessageActivity(a.text)).map((a) => (
@@ -525,7 +525,7 @@ export default async function PatientProfile({ params }: { params: { id: string 
                 </div>
               </div>
               {c.notes && (
-                <div className="card" style={{ padding: 24 }}>
+                <div className="card ds-patient-card">
                   <div style={{ fontSize: 15, fontWeight: 800, marginBottom: 10 }}>Notes</div>
                   <div style={{ fontSize: 13.5, color: "#3C4a59", lineHeight: 1.6 }}>{c.notes}</div>
                 </div>

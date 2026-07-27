@@ -21,7 +21,7 @@ export default function MessageLog({
   const lastSent = sent[0] ?? null;
 
   return (
-    <div className="card" style={{ padding: 24 }}>
+    <div className="card ds-patient-card">
       <div style={{ fontSize: 15, fontWeight: 800, marginBottom: 4 }}>Messages sent</div>
       <div style={{ fontSize: 12.5, color: "#7A8696", marginBottom: 16 }}>
         Automated proposal and follow-up emails — not a manual patient chat.

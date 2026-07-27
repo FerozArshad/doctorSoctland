@@ -132,7 +132,11 @@ export async function syncCheckoutSession(sessionId: string): Promise<{ applied:
 /** Sync all pending Stripe payments for a patient (e.g. after return from Checkout). */
 export async function syncPatientStripePayments(patientId: string): Promise<{ synced: number }> {
   const pending = await db.payment.findMany({
-    where: { patientId, status: "pending", stripeSessionId: { not: null } },
+    where: {
+      patientId,
+      status: { in: ["pending", "failed"] },
+      stripeSessionId: { not: null },
+    },
     orderBy: { createdAt: "desc" },
   });
 
@@ -164,7 +168,10 @@ export async function syncAllStripePayments(opts?: { days?: number }): Promise<{
   let errors = 0;
 
   const pending = await db.payment.findMany({
-    where: { status: "pending", stripeSessionId: { not: null } },
+    where: {
+      status: { in: ["pending", "failed"] },
+      stripeSessionId: { not: null },
+    },
     select: { stripeSessionId: true, patientId: true },
   });
   const sessionIds = new Set<string>();
@@ -189,7 +196,7 @@ export async function syncAllStripePayments(opts?: { days?: number }): Promise<{
     startingAfter = list.data[list.data.length - 1]?.id;
   }
 
-  for (const sessionId of sessionIds) {
+  for (const sessionId of Array.from(sessionIds)) {
     checked++;
     try {
       const result = await syncCheckoutSession(sessionId);
@@ -198,10 +205,19 @@ export async function syncAllStripePayments(opts?: { days?: number }): Promise<{
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       if (/no such checkout\.session/i.test(msg)) {
-        await db.payment.updateMany({
-          where: { stripeSessionId: sessionId, status: "pending" },
-          data: { status: "failed" },
-        });
+        // Only mark failed when the session truly doesn't exist in this Stripe account.
+        // Wrong API key (test vs live) also returns this — leave the row retryable.
+        const key = process.env.STRIPE_SECRET_KEY || "";
+        const liveSession = sessionId.startsWith("cs_live_");
+        const testSession = sessionId.startsWith("cs_test_");
+        const keyMismatch =
+          (liveSession && key.startsWith("sk_test_")) || (testSession && key.startsWith("sk_live_"));
+        if (!keyMismatch) {
+          await db.payment.updateMany({
+            where: { stripeSessionId: sessionId, status: { in: ["pending", "failed"] } },
+            data: { status: "failed" },
+          });
+        }
         skipped++;
       } else {
         errors++;

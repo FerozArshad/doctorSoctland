@@ -12,6 +12,7 @@
     "db:seed": "tsx --env-file=.env prisma/seed.ts",
     "bootstrap:remote": "tsx --env-file=.env scripts/bootstrap-remote.ts",
     "seed:live": "tsx --env-file=.env scripts/seed-via-live-api.ts",
+    "sync:stripe": "tsx scripts/sync-stripe.ts",
     "admin:password": "tsx --env-file=.env scripts/set-admin-password.ts"
   },
   "prisma": {

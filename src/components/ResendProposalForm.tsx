@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import SentByPicker from "@/components/SentByPicker";
 import FormSubmitButton from "@/components/FormSubmitButton";
@@ -16,7 +16,10 @@ export default function ResendProposalForm({
   defaultSentByKey?: string;
 }) {
   const [open, setOpen] = useState(false);
+  const [mounted, setMounted] = useState(false);
   const label = isDraft ? "Send proposal" : "Resend proposal";
+
+  useEffect(() => setMounted(true), []);
 
   const modal = open ? (
     <div
@@ -83,10 +86,15 @@ export default function ResendProposalForm({
 
   return (
     <>
-      <button type="button" className="btn btn-outline" onClick={() => setOpen(true)} style={{ padding: "11px 16px", fontSize: 13.5 }}>
+      <button
+        type="button"
+        className="btn btn-outline"
+        onClick={() => setOpen(true)}
+        style={{ padding: "11px 16px", fontSize: 13.5, whiteSpace: "nowrap" }}
+      >
         {label}
       </button>
-      {typeof document !== "undefined" && modal ? createPortal(modal, document.body) : null}
+      {mounted && modal ? createPortal(modal, document.body) : null}
     </>
   );
 }

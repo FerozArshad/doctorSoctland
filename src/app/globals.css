@@ -110,6 +110,33 @@ a { color: inherit; transition: color .15s var(--ease), opacity .15s var(--ease)
 }
 .btn:disabled { opacity: .55; cursor: not-allowed; box-shadow: none; transform: none; }
 
+/* Patient profile header — keep action buttons pill-shaped, not circular when wrapped */
+.patient-action-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+  justify-content: flex-end;
+}
+.patient-action-bar > a.btn,
+.patient-action-bar > button.btn,
+.patient-action-bar > form {
+  flex: 0 0 auto;
+}
+.patient-action-bar > a.btn,
+.patient-action-bar > button.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  white-space: nowrap;
+  width: auto;
+  min-width: 0;
+  max-width: 100%;
+}
+.patient-action-bar > form {
+  margin: 0;
+}
+
 .input {
   width: 100%; margin-top: 6px; padding: 11px 13px;
   border: 1px solid #E1E7EE; border-radius: 10px; font-size: 14px; background: #FBFCFD;

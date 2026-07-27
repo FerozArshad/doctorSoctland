@@ -164,10 +164,10 @@ export default async function PatientProfile({ params }: { params: { id: string 
           </Link>
 
           {/* header card */}
-          <div className="card" style={{ padding: 24, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 20, flexWrap: "wrap" }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
+          <div className="card" style={{ padding: 24 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 16, flexWrap: "wrap" }}>
               <div style={{ width: 58, height: 58, borderRadius: "50%", background: avatarBg(c.id), color: "#fff", display: "grid", placeItems: "center", fontWeight: 800, fontSize: 20, flex: "none" }}>{initials(c.firstName, c.lastName)}</div>
-              <div>
+              <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
                   <span style={{ fontSize: 22, fontWeight: 800, letterSpacing: "-.01em" }}>{c.firstName} {c.lastName}</span>
                   <span className="badge" style={{ color: st.fg, background: st.bg, padding: "4px 11px" }}>
@@ -221,7 +221,7 @@ export default async function PatientProfile({ params }: { params: { id: string 
                 </div>
               </div>
             </div>
-            <div style={{ display: "flex", gap: 10, flexWrap: "wrap", justifyContent: "flex-end" }}>
+            <div className="patient-action-bar" style={{ marginTop: 18, paddingTop: 18, borderTop: "1px solid #EEF2F6" }}>
               <Link href={`/admin/patients/${c.id}/proposal`} className={c.status === "draft" ? "btn btn-teal" : "btn btn-outline"} style={{ padding: "11px 18px", fontSize: 13.5, textDecoration: "none" }}>
                 {c.status === "draft" ? "Continue proposal" : "Edit proposal"}
               </Link>

@@ -44,7 +44,7 @@ export default function NotificationsBell() {
       </button>
 
       {open && (
-        <div style={{ position: "absolute", top: "calc(100% + 8px)", right: 0, width: 380, maxHeight: 520, overflow: "auto", background: "#fff", border: "1px solid #E7ECF2", borderRadius: 14, boxShadow: "0 18px 40px -18px rgba(16,32,54,.35)", zIndex: 50 }}>
+        <div style={{ position: "absolute", top: "calc(100% + 8px)", right: 0 }} className="ds-notif-panel">
           <div style={{ padding: "14px 16px", borderBottom: "1px solid #F1F4F8" }}>
             <div style={{ fontSize: 14, fontWeight: 800 }}>Notifications</div>
             <div style={{ fontSize: 12, color: "#7A8696", marginTop: 2 }}>Follow-ups, instalments &amp; sends</div>

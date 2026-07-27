@@ -33,7 +33,7 @@ export default async function EmailLogDetailPage({ params }: { params: { id: str
           </Link>
         }
       />
-      <div className="ds-scroll" style={{ flex: 1, overflow: "auto", padding: 28 }}>
+      <div className="ds-scroll ds-admin-pad" style={{ flex: 1, overflow: "auto" }}>
         <div style={{ display: "grid", gap: 18, maxWidth: 900 }}>
           <div className="card" style={{ padding: 24 }}>
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 16, fontSize: 14 }}>

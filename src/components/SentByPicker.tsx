@@ -36,7 +36,7 @@ export default function SentByPicker({ compact = false, defaultKey }: { compact?
       </div>
 
       {isOther ? (
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginTop: 10 }}>
+        <div className="ds-form-2col" style={{ marginTop: 10 }}>
           <input className="input" name="sentByOtherName" placeholder="Full name" />
           <input className="input" name="sentByOtherEmail" type="email" placeholder="name@example.com" />
         </div>

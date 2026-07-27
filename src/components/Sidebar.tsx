@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import BrandLogo from "@/components/BrandLogo";
 import FormSubmitButton from "@/components/FormSubmitButton";
 import { adminLogout } from "@/app/admin/actions";
+import { useAdminShell } from "@/components/AdminShellContext";
 
 const NAV = [
   { key: "dashboard", label: "Dashboard", href: "/admin", d: "M4 4h6v7H4V4zm10 0h6v5h-6V4zM4 15h6v5H4v-5zm10-2h6v7h-6v-7z" },
@@ -32,6 +33,7 @@ export default function Sidebar({
   adminInitials: string;
 }) {
   const pathname = usePathname();
+  const { navOpen, closeNav } = useAdminShell();
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
   const activeKey =
@@ -71,10 +73,14 @@ export default function Sidebar({
 
   useEffect(() => {
     setMenuOpen(false);
-  }, [pathname]);
+    closeNav();
+  }, [pathname, closeNav]);
 
   return (
-    <aside className="ds-sidebar" style={{ width: 248, flex: "none", background: "#0B1828", display: "flex", flexDirection: "column", position: "sticky", top: 0, height: "100vh", overflow: "visible" }}>
+    <aside
+      className={"ds-sidebar" + (navOpen ? " is-open" : "")}
+      style={{ width: 248, flex: "none", background: "#0B1828", display: "flex", flexDirection: "column", position: "sticky", top: 0, height: "100vh", overflow: "visible" }}
+    >
       <div className="ds-sb-logo" style={{ padding: "26px 22px 18px" }}>
         <BrandLogo width={140} height={38} />
       </div>
@@ -89,6 +95,7 @@ export default function Sidebar({
               key={n.key}
               href={n.href}
               title={n.label}
+              onClick={closeNav}
               className={"ds-sb-link" + (active ? " is-active" : "")}
               style={{
                 display: "flex",

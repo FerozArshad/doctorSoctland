@@ -221,7 +221,7 @@ export default function WhatsAppSettingsForm({
           <input className="input" name="templateLang" defaultValue={cfg.templateLang || "en_GB"} />
         </div>
 
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12, marginTop: 14 }}>
+        <div className="ds-form-3col" style={{ marginTop: 14 }}>
           <div>
             <label className="label">Proposal template</label>
             <input className="input" name="tplProposal" defaultValue={cfg.tplProposal} />

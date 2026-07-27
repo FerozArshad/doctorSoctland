@@ -116,9 +116,9 @@ export default async function Dashboard() {
   return (
     <>
       <TopBar title="Dashboard" sub="Practice overview & activity" />
-      <div className="ds-scroll" style={{ flex: 1, overflow: "auto", padding: 28 }}>
+      <div className="ds-scroll ds-admin-pad" style={{ flex: 1, overflow: "auto" }}>
         <div className="ds-view">
-          <div className="ds-stats" style={{ display: "grid", gridTemplateColumns: `repeat(${statCards.length},1fr)`, gap: 18 }}>
+          <div className="ds-stats" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 18 }}>
             {statCards.map((s) => (
               <div key={s.label} className="card" style={{ padding: 20, boxShadow: "0 1px 2px rgba(16,32,54,.03)" }}>
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>

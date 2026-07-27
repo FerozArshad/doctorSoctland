@@ -247,58 +247,257 @@ a { color: inherit; transition: color .15s var(--ease), opacity .15s var(--ease)
 @media (max-width: 1000px) {
   .ds-stats { grid-template-columns: 1fr 1fr !important; }
   .ds-split { grid-template-columns: 1fr !important; }
+  .ds-form-split { grid-template-columns: 1fr !important; }
+  .ds-form-split .ds-sticky-preview { position: static !important; top: auto !important; }
 }
 @media (max-width: 560px) {
   .ds-stats { grid-template-columns: 1fr !important; }
   .ds-quad { grid-template-columns: 1fr 1fr !important; }
 }
 
-/* Admin sidebar collapses on tablet/phone — icon rail, centered */
-@media (max-width: 900px) {
-  .ds-sidebar {
-    width: 64px !important;
-    padding-left: 0 !important;
-    padding-right: 0 !important;
-  }
-  .ds-sidebar .ds-sb-label { display: none !important; }
-  .ds-sidebar .ds-sb-logo { display: none !important; }
-  .ds-sidebar .ds-sb-nav {
-    padding: 10px 8px !important;
-    display: flex !important;
-    flex-direction: column !important;
-    align-items: center !important;
-  }
-  .ds-sidebar .ds-sb-link {
-    width: 44px !important;
-    height: 44px !important;
-    min-height: 44px !important;
-    margin: 3px 0 !important;
-    padding: 0 !important;
-    gap: 0 !important;
-    justify-content: center !important;
-    align-items: center !important;
-    border-radius: 12px !important;
-    box-shadow: none !important;
-    overflow: hidden !important;
-  }
-  .ds-sidebar .ds-sb-link.is-active {
-    background: rgba(60, 199, 247, 0.2) !important;
-    box-shadow: none !important;
-  }
-  .ds-sidebar .ds-sb-count { display: none !important; }
-  .ds-sidebar .ds-sb-footer {
-    padding: 10px 0 !important;
-    justify-content: center !important;
-  }
-  .ds-sidebar .ds-sb-avatar {
-    width: 32px !important;
-    height: 32px !important;
-    font-size: 11px !important;
-  }
-  .ds-admin-pad { padding: 16px 12px !important; }
+/* ── Admin shell (desktop / tablet / mobile) ───────────────────────────── */
+
+.ds-admin-shell {
+  display: flex;
+  min-height: 100vh;
+  min-height: 100dvh;
+}
+.ds-admin-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  height: 100dvh;
+}
+.ds-admin-pad {
+  padding: 28px;
+}
+.ds-form-split {
+  display: grid;
+  grid-template-columns: 1.3fr 1fr;
+  gap: 18px;
+  align-items: start;
+}
+.ds-form-2col {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+}
+.ds-form-3col {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 12px;
 }
 
-/* Touch-friendly tables on small screens */
+/* Top bar */
+.ds-topbar {
+  flex: none;
+  min-height: 70px;
+  background: #fff;
+  border-bottom: 1px solid #E7ECF2;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 28px;
+}
+.ds-topbar-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+  flex: 1;
+}
+.ds-topbar-titles { min-width: 0; }
+.ds-topbar-title {
+  font-size: 19px;
+  font-weight: 800;
+  letter-spacing: -.01em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.ds-topbar-sub {
+  font-size: 13px;
+  color: #7A8696;
+  margin-top: 1px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.ds-topbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+}
+.ds-topbar-menu {
+  display: none;
+  width: 44px;
+  height: 44px;
+  border-radius: 11px;
+  border: 1px solid #E7ECF2;
+  background: #fff;
+  color: #3C4a59;
+  cursor: pointer;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+}
+.ds-topbar-new {
+  display: inline-flex !important;
+  align-items: center;
+  gap: 8px;
+  padding: 11px 18px !important;
+  border-radius: 11px !important;
+  font-size: 14px !important;
+  text-decoration: none !important;
+  white-space: nowrap;
+}
+
+/* Sidebar drawer backdrop */
+.ds-sidebar-backdrop {
+  display: none;
+  position: fixed;
+  inset: 0;
+  z-index: 190;
+  border: none;
+  padding: 0;
+  margin: 0;
+  background: rgba(11, 24, 40, 0.55);
+  cursor: pointer;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity .22s var(--ease);
+}
+.ds-sidebar-backdrop.is-open {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+/* Tablet + phone: off-canvas drawer (replaces icon rail) */
+@media (max-width: 1024px) {
+  .ds-sidebar-backdrop { display: block; }
+  .ds-topbar-menu { display: inline-flex; }
+  .ds-sidebar {
+    position: fixed !important;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    z-index: 200;
+    width: min(280px, 88vw) !important;
+    transform: translateX(-105%);
+    transition: transform .26s var(--ease);
+    box-shadow: none;
+  }
+  .ds-sidebar.is-open {
+    transform: translateX(0);
+    box-shadow: 8px 0 40px rgba(0, 0, 0, 0.35);
+  }
+  .ds-admin-pad { padding: 20px 16px !important; }
+  .ds-topbar { padding: 10px 16px !important; }
+}
+
+@media (max-width: 640px) {
+  .ds-admin-pad { padding: 16px 12px !important; }
+  .ds-topbar { padding: 8px 12px !important; min-height: 60px; }
+  .ds-topbar-title { font-size: 17px; }
+  .ds-topbar-sub { font-size: 12px; }
+  .ds-topbar-new-label { display: none; }
+  .ds-topbar-new { padding: 11px 12px !important; min-width: 44px; justify-content: center; }
+  .ds-form-2col { grid-template-columns: 1fr !important; }
+  .ds-form-3col { grid-template-columns: 1fr !important; }
+  .ds-quad { grid-template-columns: 1fr !important; }
+}
+
+/* Patients table */
+.ds-patients-toolbar {
+  padding: 18px 20px;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  border-bottom: 1px solid #EEF2F6;
+}
+.ds-patients-search {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  max-width: 340px;
+}
+.ds-filter-chips {
+  display: flex;
+  gap: 7px;
+  flex-wrap: wrap;
+}
+.ds-patients-head {
+  display: grid;
+  padding: 12px 20px;
+  font-size: 11.5px;
+  font-weight: 700;
+  letter-spacing: .05em;
+  text-transform: uppercase;
+  color: #8A96A5;
+  border-bottom: 1px solid #EEF2F6;
+  background: #FAFBFC;
+}
+.ds-patients-row {
+  display: grid;
+  padding: 14px 20px;
+  align-items: center;
+  border-bottom: 1px solid #F1F4F8;
+  cursor: pointer;
+}
+.ds-pat-mobile-label {
+  display: none;
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: .05em;
+  text-transform: uppercase;
+  color: #9AA6B4;
+  margin-bottom: 4px;
+}
+
+@media (max-width: 768px) {
+  .ds-patients-search { max-width: none; width: 100%; flex: 1 1 100%; }
+  .ds-filter-chips {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    max-width: 100%;
+    padding-bottom: 2px;
+  }
+  .ds-patients-head { display: none !important; }
+  .ds-patients-row {
+    display: flex !important;
+    flex-direction: column;
+    align-items: stretch !important;
+    gap: 10px;
+    padding: 16px !important;
+  }
+  .ds-pat-mobile-label { display: block; }
+  .ds-pat-col-arrow { display: flex; justify-content: flex-end; margin-top: 4px; }
+}
+
+/* Notifications panel */
+.ds-notif-panel {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  width: min(380px, calc(100vw - 24px));
+  max-height: min(520px, calc(100dvh - 100px));
+  overflow: auto;
+  background: #fff;
+  border: 1px solid #E7ECF2;
+  border-radius: 14px;
+  box-shadow: 0 18px 40px -18px rgba(16, 32, 54, .35);
+  z-index: 50;
+}
+
+/* Touch-friendly tables */
 @media (max-width: 700px) {
   .ds-table-scroll { overflow-x: auto !important; -webkit-overflow-scrolling: touch; }
 }

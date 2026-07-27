@@ -29,7 +29,7 @@ export default function NewPatientForm() {
           Enter the patient&apos;s contact details, then build the full treatment proposal on the next screen — including save draft and send.
         </div>
 
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14, marginTop: 22 }}>
+        <div className="ds-form-2col" style={{ marginTop: 22 }}>
           <div>
             <label className="label">First name *</label>
             <input

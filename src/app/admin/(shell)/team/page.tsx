@@ -28,8 +28,8 @@ export default async function TeamPage() {
   return (
     <>
       <TopBar title="Team" sub="Admin accounts & access" />
-      <div className="ds-scroll" style={{ flex: 1, overflow: "auto", padding: 28 }}>
-        <div className="ds-view" style={{ display: "grid", gridTemplateColumns: "1.4fr 1fr", gap: 18, alignItems: "start" }}>
+      <div className="ds-scroll ds-admin-pad" style={{ flex: 1, overflow: "auto" }}>
+        <div className="ds-view ds-split" style={{ display: "grid", gridTemplateColumns: "1.4fr 1fr", gap: 18, alignItems: "start" }}>
           <div className="card" style={{ overflow: "hidden" }}>
             <div style={{ padding: "18px 20px", borderBottom: "1px solid #EEF2F6" }}>
               <div style={{ fontSize: 16, fontWeight: 800 }}>Admins</div>

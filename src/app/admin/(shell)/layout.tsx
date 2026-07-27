@@ -2,7 +2,7 @@ import { Suspense } from "react";
 import { db } from "@/lib/db";
 import { patientWhere, requireAdmin } from "@/lib/auth";
 import { initials } from "@/lib/status";
-import Sidebar from "@/components/Sidebar";
+import AdminShellFrame from "@/components/AdminShellFrame";
 import Toast from "@/components/Toast";
 import { MessageNotificationsProvider } from "@/components/MessageNotificationsContext";
 
@@ -15,21 +15,20 @@ export default async function AdminShell({ children }: { children: React.ReactNo
 
   return (
     <MessageNotificationsProvider>
-      <div style={{ display: "flex", minHeight: "100vh" }}>
-        <Sidebar
-          patientCount={patientCount}
-          adminName={admin.name}
-          adminRole={admin.role}
-          isSuperAdmin={admin.isSuperAdmin}
-          adminInitials={initials(first || "?", rest.join(" "))}
-        />
-        <main style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", height: "100vh" }}>
-          {children}
-        </main>
-        <Suspense>
-          <Toast />
-        </Suspense>
-      </div>
+      <AdminShellFrame
+        sidebar={{
+          patientCount,
+          adminName: admin.name,
+          adminRole: admin.role,
+          isSuperAdmin: admin.isSuperAdmin,
+          adminInitials: initials(first || "?", rest.join(" ")),
+        }}
+      >
+        {children}
+      </AdminShellFrame>
+      <Suspense>
+        <Toast />
+      </Suspense>
     </MessageNotificationsProvider>
   );
 }

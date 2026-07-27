@@ -30,8 +30,7 @@ export default function PricingSettingsForm({ cfg }: { cfg: PricingConfig }) {
   );
 
   return (
-    <form action={updatePricing} className="ds-view"
-      style={{ display: "grid", gridTemplateColumns: "1.3fr 1fr", gap: 18, alignItems: "start" }}>
+    <form action={updatePricing} className="ds-view ds-form-split">
       <div className="card" style={{ padding: 26 }}>
         <div style={{ fontSize: 16, fontWeight: 800 }}>Pricing tiers</div>
         <div style={{ fontSize: 13, color: "#7A8696", marginTop: 2, lineHeight: 1.6 }}>
@@ -42,7 +41,7 @@ export default function PricingSettingsForm({ cfg }: { cfg: PricingConfig }) {
         <div style={{ height: 1, background: "#EEF2F6", margin: "22px 0" }} />
         <div style={{ fontSize: 14, fontWeight: 800, marginBottom: 12 }}>Treatment price by aligner count</div>
 
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
+        <div className="ds-form-2col">
           <div>
             <label className="label">Tier 1 — up to (aligners)</label>
             {num(t1Max, setT1Max, "tier1MaxAligners")}
@@ -68,7 +67,7 @@ export default function PricingSettingsForm({ cfg }: { cfg: PricingConfig }) {
         <div style={{ height: 1, background: "#EEF2F6", margin: "22px 0" }} />
         <div style={{ fontSize: 14, fontWeight: 800, marginBottom: 12 }}>Payments</div>
 
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
+        <div className="ds-form-2col">
           <div>
             <label className="label">Deposit (£)</label>
             {num(dep, setDep, "depositPounds", "0.01")}
@@ -96,7 +95,7 @@ export default function PricingSettingsForm({ cfg }: { cfg: PricingConfig }) {
       </div>
 
       {/* live preview */}
-      <div className="card" style={{ padding: 24, position: "sticky", top: 0 }}>
+      <div className="card ds-sticky-preview" style={{ padding: 24, position: "sticky", top: 0 }}>
         <div style={{ fontSize: 12, fontWeight: 700, letterSpacing: ".08em", textTransform: "uppercase", color: "#0E9384" }}>What a patient sees</div>
         <div style={{ fontSize: 13, color: "#8A96A5", marginTop: 6 }}>Example: {t1Max + 1}–{t2Max} aligners, booking credit paid</div>
 

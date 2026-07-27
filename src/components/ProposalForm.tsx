@@ -183,7 +183,7 @@ export default function ProposalForm({
   });
 
   return (
-    <form action={updatePatient} onSubmit={validate} className="ds-view" style={{ display: "grid", gridTemplateColumns: "1.3fr 1fr", gap: 18, alignItems: "start" }}>
+    <form action={updatePatient} onSubmit={validate} className="ds-view ds-form-split">
       <input type="hidden" name="patientId" value={patient.id} />
       <div className="card" style={{ padding: 26 }}>
         <div style={{ fontSize: 16, fontWeight: 800 }}>Proposal</div>
@@ -198,7 +198,7 @@ export default function ProposalForm({
           </div>
         )}
 
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14, marginTop: 22 }}>
+        <div className="ds-form-2col" style={{ marginTop: 22 }}>
           <div>
             <label className="label">First name *</label>
             <input className={"input" + (errs.first ? " err" : "")} name="firstName" value={firstName} onChange={(e) => { setFirstName(e.target.value); setErrs((s) => ({ ...s, first: false })); }} placeholder="First name" />
@@ -265,7 +265,7 @@ export default function ProposalForm({
         <ProposalActions isDraft={isDraft} patientId={patient.id} />
       </div>
 
-      <div className="card" style={{ padding: 24, position: "sticky", top: 0 }}>
+      <div className="card ds-sticky-preview" style={{ padding: 24, position: "sticky", top: 0 }}>
         <div style={{ fontSize: 12, fontWeight: 700, letterSpacing: ".08em", textTransform: "uppercase", color: "#0E9384" }}>Live proposal preview</div>
         <div style={{ fontSize: 22, fontWeight: 800, marginTop: 12 }}>{(firstName || "New") + " " + (lastName || "patient")}</div>
         <div style={{ fontSize: 13, color: "#8A96A5" }}>{email || "Email will appear here"}</div>

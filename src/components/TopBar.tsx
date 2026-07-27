@@ -2,25 +2,32 @@
 
 import Link from "next/link";
 import NotificationsBell from "@/components/NotificationsBell";
+import { useAdminShell } from "@/components/AdminShellContext";
 
 export default function TopBar({ title, sub, actions }: { title: string; sub: string; actions?: React.ReactNode }) {
+  const { openNav } = useAdminShell();
+
   return (
-    <header style={{ height: 70, flex: "none", background: "#fff", borderBottom: "1px solid #E7ECF2", display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 28px" }}>
-      <div>
-        <div style={{ fontSize: 19, fontWeight: 800, letterSpacing: "-.01em" }}>{title}</div>
-        <div style={{ fontSize: 13, color: "#7A8696", marginTop: 1 }}>{sub}</div>
+    <header className="ds-topbar">
+      <div className="ds-topbar-left">
+        <button type="button" className="ds-topbar-menu" onClick={openNav} aria-label="Open navigation">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden>
+            <path d="M4 6h16M4 12h16M4 18h16" />
+          </svg>
+        </button>
+        <div className="ds-topbar-titles">
+          <div className="ds-topbar-title">{title}</div>
+          <div className="ds-topbar-sub">{sub}</div>
+        </div>
       </div>
-      <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+      <div className="ds-topbar-actions">
         {actions}
         <NotificationsBell />
-        <Link
-          href="/admin/patients/new"
-          style={{ background: "#0E9384", color: "#fff", border: "none", padding: "11px 18px", borderRadius: 11, fontWeight: 700, fontSize: 14, cursor: "pointer", display: "flex", alignItems: "center", gap: 8, textDecoration: "none" }}
-        >
-          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round">
+        <Link href="/admin/patients/new" className="ds-topbar-new btn btn-teal">
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" aria-hidden>
             <path d="M12 5v14M5 12h14" />
           </svg>
-          New patient
+          <span className="ds-topbar-new-label">New patient</span>
         </Link>
       </div>
     </header>

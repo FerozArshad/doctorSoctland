@@ -72,8 +72,8 @@ export default function PatientsTable({ rows }: { rows: PatientRow[] }) {
 
   return (
     <div className="ds-view card" style={{ overflow: "hidden" }}>
-      <div style={{ padding: "18px 20px", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16, flexWrap: "wrap", borderBottom: "1px solid #EEF2F6" }}>
-        <div style={{ position: "relative", flex: 1, minWidth: 220, maxWidth: 340 }}>
+      <div className="ds-patients-toolbar">
+        <div className="ds-patients-search">
           <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#9AA6B4" strokeWidth="2" strokeLinecap="round" style={{ position: "absolute", left: 13, top: 11 }}>
             <circle cx="11" cy="11" r="7" /><path d="m21 21-4.3-4.3" />
           </svg>
@@ -84,7 +84,7 @@ export default function PatientsTable({ rows }: { rows: PatientRow[] }) {
             style={{ width: "100%", padding: "10px 12px 10px 38px", border: "1px solid #E1E7EE", borderRadius: 10, fontSize: 14, background: "#FBFCFD" }}
           />
         </div>
-        <div style={{ display: "flex", gap: 7, flexWrap: "wrap" }}>
+        <div className="ds-filter-chips">
           {CHIP_DEFS.map(([k, label]) => (
             <button
               key={k}
@@ -105,7 +105,7 @@ export default function PatientsTable({ rows }: { rows: PatientRow[] }) {
       {/* sent-by filter */}
       <div style={{ padding: "12px 20px", display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", borderBottom: "1px solid #EEF2F6", background: "#FBFCFD" }}>
         <span style={{ fontSize: 11.5, fontWeight: 700, letterSpacing: ".05em", textTransform: "uppercase", color: "#8A96A5" }}>Sent by</span>
-        <div style={{ display: "flex", gap: 7, flexWrap: "wrap" }}>
+        <div className="ds-filter-chips">
           {COORD_CHIPS.map(([k, label]) => (
             <button
               key={k}
@@ -123,7 +123,7 @@ export default function PatientsTable({ rows }: { rows: PatientRow[] }) {
         </div>
       </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: grid, padding: "12px 20px", fontSize: 11.5, fontWeight: 700, letterSpacing: ".05em", textTransform: "uppercase", color: "#8A96A5", borderBottom: "1px solid #EEF2F6", background: "#FAFBFC" }}>
+      <div className="ds-patients-head" style={{ gridTemplateColumns: grid }}>
         <div>Patient</div><div>Plan</div><div>Value</div><div>Status</div><div>Last activity</div><div></div>
       </div>
 
@@ -132,23 +132,28 @@ export default function PatientsTable({ rows }: { rows: PatientRow[] }) {
         return (
           <div
             key={r.id}
-            className="row-hover"
+            className="row-hover ds-patients-row"
             onClick={() => router.push(r.status === "draft" ? `/admin/patients/${r.id}/proposal` : `/admin/patients/${r.id}`)}
-            style={{ display: "grid", gridTemplateColumns: grid, padding: "14px 20px", alignItems: "center", borderBottom: "1px solid #F1F4F8", cursor: "pointer" }}
+            style={{ gridTemplateColumns: grid }}
           >
-            <div style={{ display: "flex", alignItems: "center", gap: 12, minWidth: 0 }}>
+            <div className="ds-pat-col-patient" style={{ display: "flex", alignItems: "center", gap: 12, minWidth: 0 }}>
               <div style={{ width: 38, height: 38, borderRadius: "50%", background: r.avatarBg, color: "#fff", display: "grid", placeItems: "center", fontWeight: 700, fontSize: 13, flex: "none" }}>{r.initials}</div>
               <div style={{ minWidth: 0 }}>
                 <div style={{ fontSize: 14, fontWeight: 700, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{r.name}</div>
                 <div style={{ fontSize: 12.5, color: "#8A96A5", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{r.email}</div>
               </div>
             </div>
-            <div style={{ fontSize: 13.5, color: "#3C4a59" }}>
+            <div className="ds-pat-col-plan" style={{ fontSize: 13.5, color: "#3C4a59" }}>
+              <div className="ds-pat-mobile-label">Plan</div>
               <span style={{ fontWeight: 700 }}>{r.alignerCount}</span> aligners
               <div style={{ fontSize: 12, color: "#9AA6B4" }}>Invisalign {r.pkg}</div>
             </div>
-            <div style={{ fontSize: 14.5, fontWeight: 800 }}>{r.priceFmt}</div>
-            <div>
+            <div className="ds-pat-col-value" style={{ fontSize: 14.5, fontWeight: 800 }}>
+              <div className="ds-pat-mobile-label">Value</div>
+              {r.priceFmt}
+            </div>
+            <div className="ds-pat-col-status">
+              <div className="ds-pat-mobile-label">Status</div>
               <span className="badge" style={{ color: st.fg, background: st.bg }}>
                 <span style={{ width: 6, height: 6, borderRadius: "50%", background: st.dot }} />
                 {st.label}
@@ -168,8 +173,11 @@ export default function PatientsTable({ rows }: { rows: PatientRow[] }) {
                 </div>
               )}
             </div>
-            <div style={{ fontSize: 13, color: "#7A8696" }}>{r.lastAgo}</div>
-            <div style={{ textAlign: "right", color: "#B4BECB", fontSize: 12, fontWeight: 700 }}>
+            <div className="ds-pat-col-activity" style={{ fontSize: 13, color: "#7A8696" }}>
+              <div className="ds-pat-mobile-label">Last activity</div>
+              {r.lastAgo}
+            </div>
+            <div className="ds-pat-col-arrow" style={{ textAlign: "right", color: "#B4BECB", fontSize: 12, fontWeight: 700 }}>
               {r.status === "draft" ? (
                 <span style={{ color: "#0E9384" }}>Continue →</span>
               ) : (

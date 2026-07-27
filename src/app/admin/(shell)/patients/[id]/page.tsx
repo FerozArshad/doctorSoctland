@@ -156,7 +156,7 @@ export default async function PatientProfile({ params }: { params: { id: string 
   return (
     <>
       <TopBar title="Patient" sub="Treatment & payment details" />
-      <div className="ds-scroll" style={{ flex: 1, overflow: "auto", padding: 28 }}>
+      <div className="ds-scroll ds-admin-pad" style={{ flex: 1, overflow: "auto" }}>
         <div className="ds-view">
           <Link href="/admin/patients" style={{ color: "#7A8696", fontWeight: 600, fontSize: 13.5, display: "flex", alignItems: "center", gap: 6, marginBottom: 16, textDecoration: "none" }}>
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m15 18-6-6 6-6" /></svg>

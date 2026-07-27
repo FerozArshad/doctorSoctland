@@ -4,9 +4,9 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { db } from "@/lib/db";
 import { canAccessPatient, clearAdminSession, createAdminSession, requireAdmin } from "@/lib/auth";
-import { fmt, fullPricePence, netPricePence, priceForPence } from "@/lib/pricing";
-import { parseTreatmentType, treatmentLabel } from "@/lib/treatments";
+import { fmt, fullPricePence, netPricePence, treatmentPricePence, treatmentBookingCreditPence } from "@/lib/pricing";
 import { getPricing } from "@/lib/pricing-settings";
+import { parseTreatmentType, treatmentCopy, treatmentLabel, defaultPlanCount, isValidVeneerTeethCount } from "@/lib/treatments";
 import { COORDINATORS, coordinatorFor, fromHeader, FALLBACK_COORDINATOR, type Coordinator } from "@/lib/coordinators";
 import { brandedEmail, emailConfigured, financeLinkEmailHtml, proposalEmailHtml, sendEmail, sendProposalWhatsApp, sendWhatsApp, escapeHtml, adminWelcomeEmailHtml, adminPasswordResetEmailHtml, notifyAdmin } from "@/lib/notify";
 import { gmailConfigured } from "@/lib/google";
@@ -761,6 +761,7 @@ export async function createPatient(formData: FormData) {
         email,
         phone,
         treatmentType,
+        upfrontPaidPence: treatmentBookingCreditPence(treatmentType, cfg),
         activities: { create: { text: `Contact details updated — opening proposal (${treatmentLabel(treatmentType)})` } },
       },
     });
@@ -773,7 +774,7 @@ export async function createPatient(formData: FormData) {
     );
   }
 
-  const alignerCount = 14;
+  const alignerCount = defaultPlanCount(treatmentType);
   const patient = await db.patient.create({
     data: {
       firstName,
@@ -786,9 +787,10 @@ export async function createPatient(formData: FormData) {
       videoUrl: "",
       notes: "",
       status: "draft",
-      pricePence: priceForPence(alignerCount, cfg),
+      pricePence: treatmentPricePence(treatmentType, alignerCount, cfg),
       discountPct: cfg.discountPct,
-      upfrontPaidPence: cfg.upfrontPence,
+      upfrontPaidPence: treatmentBookingCreditPence(treatmentType, cfg),
+      includeWhitening: false,
       ownerId: admin.id,
       activities: { create: { text: `Draft proposal created — ${treatmentLabel(treatmentType)}` } },
     },
@@ -807,11 +809,16 @@ export async function updatePatient(formData: FormData) {
   const ownerRaw = formData.get("ownerId");
   const ownerChange =
     admin.isSuperAdmin && ownerRaw !== null ? { ownerId: String(ownerRaw) || null } : {};
+  const treatmentType = parseTreatmentType(formData.get("treatmentType"));
   const firstName = String(formData.get("firstName") || "").trim();
   const lastName = String(formData.get("lastName") || "").trim();
   const email = String(formData.get("email") || "").trim().toLowerCase();
   const phone = String(formData.get("phone") || "").trim();
-  const alignerCount = Math.min(40, Math.max(1, parseInt(String(formData.get("alignerCount") || "14"), 10) || 14));
+  let alignerCount = Math.min(40, Math.max(1, parseInt(String(formData.get("alignerCount") || "14"), 10) || 14));
+  if (treatmentType === "veneers" && !isValidVeneerTeethCount(alignerCount)) {
+    alignerCount = 6;
+  }
+  const includeWhitening = treatmentType === "composite_bonding" && formData.get("includeWhitening") === "on";
   const pkg = formData.get("pkg") === "Express" ? "Express" : "Go";
   const videoUrl = String(formData.get("videoUrl") || "").trim();
   const notes = String(formData.get("notes") || "").trim();
@@ -820,7 +827,7 @@ export async function updatePatient(formData: FormData) {
     redirect(toastUrl(`/admin/patients/${id}/proposal`, "A first name and valid email are required", "!", "#E0A429"));
   }
   if (intent === "send" && patient.status === "draft") {
-    const check = validateProposalForSend({ firstName, lastName, email, phone, videoUrl, alignerCount, pkg });
+    const check = validateProposalForSend({ firstName, lastName, email, phone, videoUrl, alignerCount, pkg, treatmentType });
     if (!check.ok) {
       redirect(toastUrl(`/admin/patients/${id}/proposal`, check.message, "!", "#E0A429"));
     }
@@ -841,8 +848,10 @@ export async function updatePatient(formData: FormData) {
       pkg,
       videoUrl,
       notes,
-      pricePence: priceForPence(alignerCount, cfg),
-      upfrontPaidPence: cfg.upfrontPence,
+      treatmentType,
+      includeWhitening,
+      pricePence: treatmentPricePence(treatmentType, alignerCount, cfg, { includeWhitening }),
+      upfrontPaidPence: treatmentBookingCreditPence(treatmentType, cfg),
       ...ownerChange,
       activities: {
         create: {
@@ -1024,12 +1033,13 @@ async function deliverProposal(patientId: string, sentBy?: Coordinator) {
   const cfg = await getPricing();
   const patient = await db.patient.findUniqueOrThrow({ where: { id: patientId } });
   const co = sentBy ?? coordinatorFor(patient.sentByName, patient.sentByEmail);
+  const copy = treatmentCopy(patient.treatmentType);
   const results: string[] = [];
   log.info("proposal.deliver.start", { patientId, email: patient.email, phone: patient.phone || null });
   try {
     await sendEmail(
       patient.email,
-      "Your Invisalign Treatment Proposal — Dental Scotland",
+      `${copy.proposalTitle} — Dental Scotland`,
       proposalEmailHtml(patient, cfg),
       fromHeader(co),
       { category: "proposal", patientId: patient.id }
@@ -1225,12 +1235,12 @@ export async function deletePatient(formData: FormData) {
 export async function sendPatientTemplate(formData: FormData) {
   const id = String(formData.get("patientId"));
   const template = String(formData.get("template") || "") as PatientTemplateId;
-  if (template !== "invisalign_ordered" && template !== "finance_received") {
+  if (template !== "treatment_ordered" && template !== "finance_received") {
     redirect(toastUrl(`/admin/patients/${id}`, "Unknown message template", "!", "#E0A429"));
   }
   const { patient } = await requireOwnedPatient(id);
-  const text = patientTemplateText(template, patient.firstName);
-  const title = patientTemplateTitle(template);
+  const text = patientTemplateText(template, patient.firstName, patient.treatmentType);
+  const title = patientTemplateTitle(template, patient.treatmentType);
 
   const emailHtml = brandedEmail(
     title,

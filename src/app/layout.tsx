@@ -3,8 +3,8 @@ import "./globals.css";
 import { BRAND } from "@/lib/brand";
 
 export const metadata: Metadata = {
-  title: `${BRAND.name} — Invisalign`,
-  description: `Invisalign treatment proposals & payments · ${BRAND.name}`,
+  title: `${BRAND.name} — Treatment proposals`,
+  description: `Treatment proposals & payments · ${BRAND.name}`,
 };
 
 export const viewport: Viewport = {

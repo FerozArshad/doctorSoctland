@@ -4,8 +4,8 @@ import { db } from "@/lib/db";
 import { estMonths, fmt, netPricePence, paymentPreferenceLabel } from "@/lib/pricing";
 import { getPricing } from "@/lib/pricing-settings";
 import { avatarBg, initials, statusOf, timeAgo } from "@/lib/status";
-import { COMP_ITEMS, COMP_TOTAL } from "@/lib/content";
-import { treatmentLabel } from "@/lib/treatments";
+import { includedItemsFor, includedTotalFor } from "@/lib/content";
+import { treatmentLabel, treatmentCopy, planCountShortLabel } from "@/lib/treatments";
 import { approveFinance, markPaid, recordDeposit, sendPatientTemplate, setFinanceStatus, syncStripePayment } from "@/app/admin/actions";
 import ResendProposalForm from "@/components/ResendProposalForm";
 import { coordinatorKeyFor, COORDINATORS } from "@/lib/coordinators";
@@ -19,7 +19,7 @@ import PaymentReceiptsSection from "@/components/PaymentReceiptsSection";
 import PatientPaymentsSection from "@/components/PatientPaymentsSection";
 import { isMessageActivity } from "@/lib/messages";
 import { publicActivityText } from "@/lib/activity-display";
-import { patientTemplateText } from "@/lib/patient-templates";
+import { patientTemplateText, patientTemplateTitle } from "@/lib/patient-templates";
 import { syncPatientStripePayments } from "@/lib/stripe-checkout";
 import { CONSENT_PARAGRAPHS, CONSENT_TITLE } from "@/lib/consent";
 
@@ -135,6 +135,9 @@ export default async function PatientProfile({ params }: { params: { id: string 
   // Progress is against what they actually owe (net of any booking credit).
   // Guard the divide — a zero price would render width:"NaN%" and break the bar.
   const netOwed = netPricePence(c.pricePence, c.upfrontPaidPence);
+  const planCopy = treatmentCopy(c.treatmentType);
+  const includedItems = includedItemsFor(c.treatmentType);
+  const includedTotal = includedTotalFor(c.treatmentType);
   const paidPct = netOwed > 0 ? Math.min(100, Math.max(0, Math.round((100 * c.amountPaidPence) / netOwed))) : 0;
 
   const timeline = TIMELINE_STEPS.map((label, i) => {
@@ -228,6 +231,9 @@ export default async function PatientProfile({ params }: { params: { id: string 
             <div className="patient-action-bar" style={{ marginTop: 18, paddingTop: 18, borderTop: "1px solid #EEF2F6" }}>
               <Link href={`/admin/patients/${c.id}/proposal`} className={c.status === "draft" ? "btn btn-teal" : "btn btn-outline"} style={{ padding: "11px 18px", fontSize: 13.5, textDecoration: "none" }}>
                 {c.status === "draft" ? "Continue proposal" : "Edit proposal"}
+              </Link>
+              <Link href={`/admin/patients/${c.id}/proposal#choose-treatment`} className="btn btn-outline" style={{ padding: "11px 16px", fontSize: 13.5, textDecoration: "none" }}>
+                Change treatment
               </Link>
               <ResendProposalForm patientId={c.id} isDraft={c.status === "draft"} defaultSentByKey={sentByKey} />
               <Link href={`/p/${c.proposalToken}`} className="btn btn-teal" style={{ padding: "11px 18px", fontSize: 13.5, display: "flex", alignItems: "center", gap: 8, textDecoration: "none" }}>
@@ -338,11 +344,15 @@ export default async function PatientProfile({ params }: { params: { id: string 
               {/* plan */}
               <div className="card ds-patient-card">
                 <div style={{ fontSize: 15, fontWeight: 800, marginBottom: 18 }}>Treatment plan</div>
-                <div className="ds-quad" style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 14 }}>
+                <div className="ds-quad" style={{ display: "grid", gridTemplateColumns: planCopy.usesAligners ? "repeat(4,1fr)" : "repeat(3,1fr)", gap: 14 }}>
+                  {(planCopy.usesAligners || planCopy.usesTeethCount) && (
                   <div style={{ background: "#FBFCFD", border: "1px solid #EEF2F6", borderRadius: 12, padding: 14 }}>
-                    <div style={{ fontSize: 12, color: "#8A96A5", fontWeight: 600 }}>Aligners</div>
+                    <div style={{ fontSize: 12, color: "#8A96A5", fontWeight: 600 }}>{planCountShortLabel(c.treatmentType)}</div>
                     <div style={{ fontSize: 22, fontWeight: 800, marginTop: 4 }}>{c.alignerCount}</div>
                   </div>
+                  )}
+                  {planCopy.usesAligners && (
+                  <>
                   <div style={{ background: "#FBFCFD", border: "1px solid #EEF2F6", borderRadius: 12, padding: 14 }}>
                     <div style={{ fontSize: 12, color: "#8A96A5", fontWeight: 600 }}>Duration</div>
                     <div style={{ fontSize: 22, fontWeight: 800, marginTop: 4 }}>{estMonths(c.alignerCount)}<span style={{ fontSize: 13, color: "#7A8696" }}>mo</span></div>
@@ -351,6 +361,14 @@ export default async function PatientProfile({ params }: { params: { id: string 
                     <div style={{ fontSize: 12, color: "#8A96A5", fontWeight: 600 }}>Package</div>
                     <div style={{ fontSize: 18, fontWeight: 800, marginTop: 6 }}>{c.pkg}</div>
                   </div>
+                  </>
+                  )}
+                  {!planCopy.usesAligners && !planCopy.usesTeethCount && (
+                  <div style={{ background: "#FBFCFD", border: "1px solid #EEF2F6", borderRadius: 12, padding: 14 }}>
+                    <div style={{ fontSize: 12, color: "#8A96A5", fontWeight: 600 }}>Treatment</div>
+                    <div style={{ fontSize: 18, fontWeight: 800, marginTop: 6 }}>{planCopy.label}</div>
+                  </div>
+                  )}
                   <div style={{ background: "#F0FBF8", border: "1px solid #CFEDE5", borderRadius: 12, padding: 14 }}>
                     <div style={{ fontSize: 12, color: "#0B7A6E", fontWeight: 600 }}>
                       {c.upfrontPaidPence > 0 ? "Amount to pay" : "Total"}
@@ -368,8 +386,16 @@ export default async function PatientProfile({ params }: { params: { id: string 
                     <div style={{ width: 0, height: 0, borderLeft: "11px solid #fff", borderTop: "7px solid transparent", borderBottom: "7px solid transparent", marginLeft: 3 }} />
                   </div>
                   <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ color: "#fff", fontSize: 13.5, fontWeight: 700 }}>ClinCheck video attached</div>
-                    <div style={{ color: "#8FA6C0", fontSize: 12, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{c.videoUrl || "No video link added"}</div>
+                    <div style={{ color: "#fff", fontSize: 13.5, fontWeight: 700 }}>
+                      {planCopy.usesClinCheckVideo
+                        ? "ClinCheck video attached"
+                        : planCopy.usesAiSimulation
+                          ? "AI simulation link"
+                          : "Media link"}
+                    </div>
+                    <div style={{ color: "#8FA6C0", fontSize: 12, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                      {c.videoUrl || (planCopy.usesAiSimulation ? "No simulation link added" : "No video link added")}
+                    </div>
                   </div>
                 </div>
               </div>
@@ -378,10 +404,10 @@ export default async function PatientProfile({ params }: { params: { id: string 
               <div className="card ds-patient-card">
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
                   <div style={{ fontSize: 15, fontWeight: 800 }}>Complimentary (included)</div>
-                  <span style={{ fontSize: 14, fontWeight: 800, color: "#0B7A6E" }}>{COMP_TOTAL} value</span>
+                  <span style={{ fontSize: 14, fontWeight: 800, color: "#0B7A6E" }}>{includedTotal} value</span>
                 </div>
                 <div className="ds-patient-comp-grid">
-                  {COMP_ITEMS.map((item) => (
+                  {includedItems.map((item) => (
                     <div key={item.label} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 12px", borderRadius: 10, background: "#FBFCFD", border: "1px solid #EEF2F6", gap: 8, minWidth: 0 }}>
                       <div style={{ display: "flex", alignItems: "center", gap: 9, minWidth: 0, flex: 1 }}>
                         <span style={{ width: 18, height: 18, borderRadius: "50%", background: "#DDF3EC", color: "#0B7A6E", display: "grid", placeItems: "center", fontWeight: 800, fontSize: 10, flex: "none" }}>✓</span>
@@ -481,15 +507,15 @@ export default async function PatientProfile({ params }: { params: { id: string 
                   One-click send to {c.firstName} by email (and WhatsApp when available).
                 </div>
                 <div style={{ padding: "12px 14px", borderRadius: 12, background: "#F7FAFC", border: "1px solid #E7ECF2", fontSize: 13, color: "#3C4a59", lineHeight: 1.6, marginBottom: 12 }}>
-                  {patientTemplateText("invisalign_ordered", c.firstName)}
+                  {patientTemplateText("treatment_ordered", c.firstName, c.treatmentType)}
                 </div>
                 <form action={sendPatientTemplate}>
                   <input type="hidden" name="patientId" value={c.id} />
-                  <input type="hidden" name="template" value="invisalign_ordered" />
+                  <input type="hidden" name="template" value="treatment_ordered" />
                   <FormSubmitButton
                     className="btn btn-teal"
                     style={{ width: "100%", padding: 12, fontSize: 13.5 }}
-                    label="Send “Invisalign ordered”"
+                    label={`Send “${patientTemplateTitle("treatment_ordered", c.treatmentType)}”`}
                     pendingLabel="Sending…"
                   />
                 </form>

@@ -49,9 +49,12 @@ export default async function ProposalPage({ params }: { params: { id: string } 
               notes: p.notes,
               ownerId: p.ownerId,
               status: p.status,
+              treatmentType: p.treatmentType || "invisalign",
+              includeWhitening: p.includeWhitening ?? false,
             }}
             cfg={cfg}
             owners={owners}
+            canDelete={admin.isSuperAdmin}
           />
           <AdminPatientFiles
             patientId={p.id}

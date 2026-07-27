@@ -21,9 +21,12 @@ export const PRICING_DEFAULTS: PricingConfig = {
   tier2Pence: 225_000,
   tier3Pence: 275_000,
   depositPence: 70_000, // £700
-  upfrontPence: 25_000, // £250 consultation/booking paid before the proposal
+  upfrontPence: 25_000, // £250 consultation/booking paid before the proposal (Invisalign)
   discountPct: 5,
 };
+
+/** £30 booking credit for veneers and composite bonding. */
+export const REDUCED_BOOKING_CREDIT_PENCE = 3_000;
 
 // Total the patient still owes: treatment price minus any upfront already paid.
 // All payment options (full / deposit / instalments / finance) are computed on this.
@@ -31,13 +34,31 @@ export function netPricePence(pricePence: number, upfrontPaidPence: number): num
   return Math.max(0, pricePence - (upfrontPaidPence || 0));
 }
 
-/** Assessment booking fee — credited for every patient by default. */
+/** Assessment booking fee — credited for every patient by default (Invisalign). */
 export function bookingCreditPence(cfg: PricingConfig = PRICING_DEFAULTS): number {
   return cfg.upfrontPence;
 }
 
-export function patientBalancePence(pricePence: number, cfg: PricingConfig = PRICING_DEFAULTS): number {
-  return netPricePence(pricePence, bookingCreditPence(cfg));
+/** Treatment-aware booking credit — £30 for veneers & composite bonding; config value for Invisalign etc. */
+export function treatmentBookingCreditPence(
+  treatmentType: string | null | undefined,
+  cfg: PricingConfig = PRICING_DEFAULTS
+): number {
+  const t = (treatmentType || "invisalign").trim();
+  if (t === "veneers" || t === "composite_bonding") return REDUCED_BOOKING_CREDIT_PENCE;
+  return cfg.upfrontPence;
+}
+
+export function patientBalancePence(
+  pricePence: number,
+  cfgOrUpfront: PricingConfig | number = PRICING_DEFAULTS,
+  treatmentType?: string | null
+): number {
+  const upfront =
+    typeof cfgOrUpfront === "number"
+      ? cfgOrUpfront
+      : treatmentBookingCreditPence(treatmentType, cfgOrUpfront);
+  return netPricePence(pricePence, upfront);
 }
 
 export function priceForPence(alignerCount: number, cfg: PricingConfig = PRICING_DEFAULTS): number {
@@ -71,6 +92,42 @@ export function finance36Pence(pricePence: number): number {
 
 export function fmt(pence: number): string {
   return "£" + Math.round(pence / 100).toLocaleString("en-GB");
+}
+
+// ── Veneers & composite bonding (fixed product pricing) ─────────────────
+export const COMPOSITE_PRICE_PER_TOOTH_PENCE = 24_900; // £249
+export const WHITENING_ADDON_PENCE = 35_000; // £350
+
+export const VENEER_PACKAGES = [
+  { teeth: 6, pricePence: 249_900 },
+  { teeth: 10, pricePence: 349_900 },
+  { teeth: 20, pricePence: 599_900 },
+] as const;
+
+export function veneerPackageForTeeth(teeth: number) {
+  return VENEER_PACKAGES.find((p) => p.teeth === teeth) ?? null;
+}
+
+export function veneerPricePence(teeth: number): number {
+  return veneerPackageForTeeth(teeth)?.pricePence ?? VENEER_PACKAGES[0].pricePence;
+}
+
+export function compositeBondingPricePence(teeth: number, includeWhitening = false): number {
+  const base = Math.max(0, teeth) * COMPOSITE_PRICE_PER_TOOTH_PENCE;
+  return base + (includeWhitening ? WHITENING_ADDON_PENCE : 0);
+}
+
+/** Total treatment price before booking credit — treatment-type aware. */
+export function treatmentPricePence(
+  treatmentType: string,
+  count: number,
+  cfg: PricingConfig = PRICING_DEFAULTS,
+  opts?: { includeWhitening?: boolean }
+): number {
+  const t = (treatmentType || "invisalign").trim();
+  if (t === "veneers") return veneerPricePence(count);
+  if (t === "composite_bonding") return compositeBondingPricePence(count, !!opts?.includeWhitening);
+  return priceForPence(count, cfg);
 }
 
 /** Human-readable label for a stored paymentPreference (admin profile view). */

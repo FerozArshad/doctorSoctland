@@ -5,6 +5,7 @@ import FormSubmitButton from "@/components/FormSubmitButton";
 import { Suspense } from "react";
 import { sendOtp, verifyOtp } from "@/app/p/actions";
 import Toast from "@/components/Toast";
+import { treatmentCopy } from "@/lib/treatments";
 
 function maskEmail(email: string) {
   const [user, domain] = email.split("@");
@@ -20,6 +21,7 @@ export default function OtpGate({
   firstName,
   email,
   phone,
+  treatmentType,
   sent,
   channel,
   devCode,
@@ -28,11 +30,13 @@ export default function OtpGate({
   firstName: string;
   email: string;
   phone: string;
+  treatmentType?: string | null;
   sent: boolean;
   channel: string;
   devCode?: string;
 }) {
   const hasPhone = !!phone && phone !== "—";
+  const copy = treatmentCopy(treatmentType);
 
   return (
     <div style={{ minHeight: "100vh", background: "#EAF0F2", display: "grid", placeItems: "center", padding: 20 }}>
@@ -45,7 +49,7 @@ export default function OtpGate({
           <div style={{ padding: "32px 34px" }}>
             <div style={{ fontSize: 22, fontWeight: 800, letterSpacing: "-.01em" }}>Hi {firstName} 👋</div>
             <div style={{ fontSize: 14, color: "#5C6a79", marginTop: 6, lineHeight: 1.65 }}>
-              Your Invisalign proposal is ready. To keep your details private, we&apos;ll send a one-time code to confirm it&apos;s you.
+              Your {copy.otpProposalLabel} is ready. To keep your details private, we&apos;ll send a one-time code to confirm it&apos;s you.
             </div>
 
             {!sent ? (

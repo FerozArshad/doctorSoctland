@@ -7,6 +7,7 @@ import type { Patient } from "@prisma/client";
 import { brandedEmail } from "./notify";
 import { coordinatorFor, signOff, followUpBookingUrl, type Coordinator } from "./coordinators";
 import { fmt, finance36Pence, fullPricePence, instalmentPence, netPricePence, type PricingConfig } from "./pricing";
+import { treatmentCopy } from "./treatments";
 
 export const LOCK_DAYS = 30;
 export const TOUCH_DAYS = [1, 4, 10, 20, 26, 29, 30] as const;
@@ -61,6 +62,11 @@ const CTA = (link: string) =>
   `<div style="text-align:center;margin:24px 0 8px;"><a href="${link}" style="display:inline-block;background:#0E9384;color:#ffffff;text-decoration:none;padding:15px 32px;border-radius:11px;font-weight:800;font-size:15px;">Review your plan &amp; choose a payment option →</a></div>`;
 const PS = (s: string) => `<p style="font-size:13px;line-height:1.7;color:#7A8696;margin:18px 0 0;font-style:italic;">P.S. ${s}</p>`;
 const SIGN = (v: SeqValues) => `<p style="font-size:15px;line-height:1.7;color:#3C4a59;margin:18px 0 0;">${signOff(v.co)}</p>`;
+const copy = (p: Patient) => treatmentCopy(p.treatmentType);
+const providerLead = (p: Patient) =>
+  copy(p).usesAligners
+    ? "As Scotland's largest and lowest-priced Invisalign provider, "
+    : "As a trusted cosmetic dental provider in Scotland, ";
 
 export type Touch = {
   n: number;
@@ -78,13 +84,13 @@ export const TOUCHES: Touch[] = [
     n: 1,
     day: 1,
     label: "Price-lock + micro-CTA",
-    subject: (p) => `Your personalised Invisalign plan, ${p.firstName} — price locked for ${LOCK_DAYS} days`,
+    subject: (p) => `Your personalised ${copy(p).followUpPlanName}, ${p.firstName} — price locked for ${LOCK_DAYS} days`,
     html: (p, v) =>
       brandedEmail(
         "Your price is locked in",
         P(`Hi ${p.firstName},`) +
           P(
-            `It's Dental Scotland here. As Scotland's largest and lowest-priced Invisalign provider, we wanted to make sure your personalised plan hasn't slipped by.`
+            `It's Dental Scotland here. ${providerLead(p)}we wanted to make sure your personalised plan hasn't slipped by.`
           ) +
           P(`Your price is currently locked in at:`) +
           `<ul style="font-size:15px;line-height:1.9;color:#3C4a59;margin:0 0 14px;padding-left:20px;">
@@ -104,7 +110,7 @@ export const TOUCHES: Touch[] = [
           )
       ),
     whatsapp: (p, v) =>
-      `Hi ${p.firstName}! 😊 Just a friendly note from Dental Scotland — your Invisalign plan is ready and your price is locked in:\n\n` +
+      `Hi ${p.firstName}! 😊 Just a friendly note from Dental Scotland — your ${copy(p).followUpPlanName} is ready and your price is locked in:\n\n` +
       `💰 ${v.full} if paid in full (${v.discountPct}% off), or\n` +
       `💳 ${v.spread} spread via ${v.deposit} deposit or 0% finance — from as little as ${v.fromMonth}/month\n\n` +
       `No rush, but didn't want you to miss it! 👉 ${v.link}\n\n` +
@@ -116,13 +122,13 @@ export const TOUCHES: Touch[] = [
     n: 2,
     day: 4,
     label: "Monthly framing + proof",
-    subject: (p, v) => `Invisalign from ${v.fromMonth}/month — your payment options, ${p.firstName}`,
+    subject: (p, v) => `${copy(p).label} from ${v.fromMonth}/month — your payment options, ${p.firstName}`,
     html: (p, v) =>
       brandedEmail(
         `From ${v.fromMonth}/month`,
         P(`Hi ${p.firstName},`) +
           P(
-            `A lot of patients tell us the hardest part isn't deciding to do it — it's figuring out how to pay for it. As Scotland's largest Invisalign provider, here's your plan broken down simply:`
+            `A lot of patients tell us the hardest part isn't deciding to do it — it's figuring out how to pay for it. Here's your ${copy(p).followUpPlanName} broken down simply:`
           ) +
           `<ul style="font-size:15px;line-height:1.9;color:#3C4a59;margin:0 0 14px;padding-left:20px;">
              <li><strong>Pay in full:</strong> ${v.full} (save ${v.discountPct}%)</li>
@@ -136,7 +142,7 @@ export const TOUCHES: Touch[] = [
           PS(`Most patients choose the deposit or finance option — full payment isn't required to get started.`)
       ),
     whatsapp: (p, v) =>
-      `Hi ${p.firstName}, quick breakdown of your Invisalign payment options:\n\n` +
+      `Hi ${p.firstName}, quick breakdown of your ${copy(p).label} payment options:\n\n` +
       `✅ Pay in full: ${v.full} (save ${v.discountPct}%)\n` +
       `✅ Deposit plan: ${v.deposit} down, then ${v.instal}/month\n` +
       `✅ 0% finance: from ${v.fromMonth}/month\n\n` +
@@ -150,14 +156,14 @@ export const TOUCHES: Touch[] = [
     n: 3,
     day: 10,
     label: "Trust and reassurance",
-    subject: (p) => `Why patients choose Dental Scotland for Invisalign, ${p.firstName}`,
+    subject: (p) => `Why patients choose Dental Scotland for ${copy(p).label}, ${p.firstName}`,
     html: (p, v) =>
       brandedEmail(
         "Why patients choose us",
         P(`Hi ${p.firstName},`) +
-          P(`Checking in again on your Invisalign plan. A few reasons patients choose us:`) +
+          P(`Checking in again on your ${copy(p).followUpPlanName}. A few reasons patients choose us:`) +
           `<ul style="font-size:15px;line-height:1.9;color:#3C4a59;margin:0 0 14px;padding-left:20px;">
-             <li>Scotland's largest and lowest-priced Invisalign provider</li>
+             ${copy(p).usesAligners ? "<li>Scotland's largest and lowest-priced Invisalign provider</li>" : "<li>Trusted cosmetic dental care across Scotland</li>"}
              <li>${PATIENTS_TREATED} treated</li>
              <li>${GOOGLE_RATING}</li>
            </ul>` +
@@ -168,9 +174,9 @@ export const TOUCHES: Touch[] = [
           PS(`Your current price is only guaranteed until <strong>${v.lockDate}</strong> — after that, we'd need to requote.`)
       ),
     whatsapp: (p, v) =>
-      `Hi ${p.firstName}, checking in on your Invisalign plan 😊\n\n` +
+      `Hi ${p.firstName}, checking in on your ${copy(p).followUpPlanName} 😊\n\n` +
       `A few reasons patients choose us:\n` +
-      `⭐ Scotland's largest & lowest-priced Invisalign provider\n` +
+      `${copy(p).usesAligners ? "⭐ Scotland's largest & lowest-priced Invisalign provider\n" : "⭐ Trusted cosmetic dental care across Scotland\n"}` +
       `⭐ ${PATIENTS_TREATED} treated\n` +
       `⭐ ${GOOGLE_RATING}\n\n` +
       `Your price is still locked at ${v.full} (or ${v.fromMonth}/month spread).\n\n` +
@@ -183,7 +189,7 @@ export const TOUCHES: Touch[] = [
     n: 4,
     day: 20,
     label: "Urgency begins (10 days left)",
-    subject: (p, v) => `${v.daysLeft} days left on your locked-in Invisalign price, ${p.firstName}`,
+    subject: (p, v) => `${v.daysLeft} days left on your locked-in ${copy(p).label} price, ${p.firstName}`,
     html: (p, v) =>
       brandedEmail(
         "10 days left on your price",
@@ -205,7 +211,7 @@ export const TOUCHES: Touch[] = [
           PS(`If now isn't the right time, that's completely fine — just reply and let us know, and we'll stop the reminders.`)
       ),
     whatsapp: (p, v) =>
-      `Hi ${p.firstName} ⏰ just a heads-up — your Invisalign price expires in ${v.daysLeft} days.\n\n` +
+      `Hi ${p.firstName} ⏰ just a heads-up — your ${copy(p).label} price expires in ${v.daysLeft} days.\n\n` +
       `Lock in now and keep:\n` +
       `✅ ${v.full} (vs. full price after expiry)\n` +
       `✅ ${v.fromMonth}/month deposit or finance option\n` +
@@ -219,13 +225,13 @@ export const TOUCHES: Touch[] = [
     n: 5,
     day: 26,
     label: "Urgency escalates (4 days left)",
-    subject: (p, v) => `Your Invisalign price is held until ${v.lockDate}, ${p.firstName}`,
+    subject: (p, v) => `Your ${copy(p).label} price is held until ${v.lockDate}, ${p.firstName}`,
     html: (p, v) =>
       brandedEmail(
         `${v.daysLeft} days left`,
         P(`Hi ${p.firstName},`) +
           P(
-            `Your Invisalign price is locked until <strong>${v.lockDate}</strong> — just <strong>${v.daysLeft} days</strong> from now.`
+            `Your ${copy(p).label} price is locked until <strong>${v.lockDate}</strong> — just <strong>${v.daysLeft} days</strong> from now.`
           ) +
           P(
             `To be straight with you: after that we can't hold <strong>${v.full}</strong>. Prices move, and we'd need to requote you at whatever's current.`
@@ -241,7 +247,7 @@ export const TOUCHES: Touch[] = [
           PS(`It takes about two minutes to secure your price — you can always ask us questions afterwards.`)
       ),
     whatsapp: (p, v) =>
-      `Hi ${p.firstName}, only ${v.daysLeft} days left on your Invisalign price! ⏳\n\n` +
+      `Hi ${p.firstName}, only ${v.daysLeft} days left on your ${copy(p).label} price! ⏳\n\n` +
       `Quick recap:\n` +
       `💰 ${v.full} in full, or ${v.fromMonth}/month via finance\n` +
       `✅ Ready to activate right now\n\n` +
@@ -254,7 +260,7 @@ export const TOUCHES: Touch[] = [
     n: 6,
     day: 29,
     label: "Final chance (1 day left)",
-    subject: (p) => `Your locked-in Invisalign price expires tomorrow, ${p.firstName}`,
+    subject: (p) => `Your locked-in ${copy(p).label} price expires tomorrow, ${p.firstName}`,
     html: (p, v) =>
       brandedEmail(
         "Your price expires tomorrow",
@@ -271,7 +277,7 @@ export const TOUCHES: Touch[] = [
           PS(`No hard feelings if the answer's no — a one-word reply and we'll leave you in peace.`)
       ),
     whatsapp: (p, v) =>
-      `Hi ${p.firstName}, your ${v.full} Invisalign price expires tomorrow ⚠️\n\n` +
+      `Hi ${p.firstName}, your ${v.full} ${copy(p).label} price expires tomorrow ⚠️\n\n` +
       `After that we'd need to book a new consultation and requote.\n\n` +
       `👉 ${v.link}\n\n` +
       `Not today? Book a call on your proposal: ${v.callUrl}`,
@@ -282,7 +288,7 @@ export const TOUCHES: Touch[] = [
     n: 7,
     day: 30,
     label: "Last hours",
-    subject: (p) => `Your Invisalign price expires today, ${p.firstName}`,
+    subject: (p) => `Your ${copy(p).label} price expires today, ${p.firstName}`,
     html: (p, v) =>
       brandedEmail(
         "Last hours",
@@ -297,7 +303,7 @@ export const TOUCHES: Touch[] = [
           SIGN(v)
       ),
     whatsapp: (p, v) =>
-      `Hi ${p.firstName}, final call — your Invisalign price expires today ⏰\n\n` +
+      `Hi ${p.firstName}, final call — your ${copy(p).label} price expires today ⏰\n\n` +
       `👉 ${v.link}\n\n` +
       `Want to talk it through? Book a call on your proposal: ${v.callUrl}`,
   },

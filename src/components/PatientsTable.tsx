@@ -3,6 +3,7 @@ import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { STATUS, StatusKey } from "@/lib/status";
 import { treatmentLabel } from "@/lib/treatments";
+import { fmt, veneerPricePence } from "@/lib/pricing";
 
 export type PatientRow = {
   id: string;
@@ -151,6 +152,16 @@ export default function PatientsTable({ rows }: { rows: PatientRow[] }) {
               {r.treatmentType === "invisalign" && (
                 <div style={{ fontSize: 12, color: "#9AA6B4", marginTop: 2 }}>
                   {r.alignerCount} aligners · {r.pkg}
+                </div>
+              )}
+              {(r.treatmentType === "veneers") && (
+                <div style={{ fontSize: 12, color: "#9AA6B4", marginTop: 2 }}>
+                  {r.alignerCount} teeth · {fmt(veneerPricePence(r.alignerCount))}
+                </div>
+              )}
+              {r.treatmentType === "composite_bonding" && (
+                <div style={{ fontSize: 12, color: "#9AA6B4", marginTop: 2 }}>
+                  {r.alignerCount} teeth
                 </div>
               )}
             </div>

@@ -1,0 +1,1 @@
+ALTER TABLE "Patient" ADD COLUMN IF NOT EXISTS "includeWhitening" BOOLEAN NOT NULL DEFAULT false;

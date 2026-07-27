@@ -8,7 +8,7 @@ import bcrypt from "bcryptjs";
 import { db } from "@/lib/db";
 import { createPatientSession, getAdmin, getPatientSession } from "@/lib/auth";
 import { rateLimit } from "@/lib/ratelimit";
-import { fmt, fullPricePence, patientBalancePence } from "@/lib/pricing";
+import { fmt, fullPricePence, netPricePence, treatmentBookingCreditPence } from "@/lib/pricing";
 import { getPricing } from "@/lib/pricing-settings";
 import { brandedEmail, escapeHtml, notifyAdmin, notifyFinanceApplication, sendEmail, sendLoginCodeWhatsApp, whatsappConfigured } from "@/lib/notify";
 import { log, summarizeError } from "@/lib/log";
@@ -20,6 +20,7 @@ import { checkoutAssetUrl, stripeCheckoutBranding, stripeCheckoutCustomText } fr
 import { BRAND } from "@/lib/brand";
 import { FOLLOW_UPS_COMPLETE_TOUCH } from "@/lib/follow-ups";
 import { patientTemplateText, patientTemplateTitle } from "@/lib/patient-templates";
+import { paymentServiceDescription, treatmentCopy } from "@/lib/treatments";
 
 const appUrl = () => process.env.APP_URL || "http://localhost:3000";
 
@@ -119,12 +120,13 @@ export async function sendOtp(formData: FormData) {
       }
       log.info("otp.whatsapp.ok", { patientId: patient.id });
     } else {
+      const otpCopy = treatmentCopy(patient.treatmentType);
       const r = await sendEmail(
         patient.email,
         `${code} is your Dental Scotland verification code`,
         brandedEmail(
           "Your verification code",
-          `<p style="font-size:15px;line-height:1.7;color:#3C4a59;">Hi ${patient.firstName}, use this code to open your Invisalign proposal. It expires in 10 minutes and can only be used once.</p>
+          `<p style="font-size:15px;line-height:1.7;color:#3C4a59;">Hi ${patient.firstName}, use this code to open your ${otpCopy.otpProposalLabel}. It expires in 10 minutes and can only be used once.</p>
            <div style="text-align:center;margin:22px 0;"><span style="display:inline-block;background:#F0FBF8;color:#0B7A6E;font-size:34px;font-weight:800;letter-spacing:.35em;padding:16px 28px 16px 38px;border-radius:14px;">${code}</span></div>
            <p style="font-size:12.5px;color:#9AA6B4;">If you didn't request this, you can safely ignore this email.</p>`
         ),
@@ -256,16 +258,20 @@ async function createCheckoutUrl(token: string, type: "full" | "deposit"): Promi
 
   // Charge on the net total (treatment price minus any upfront already paid).
   const cfg = await getPricing();
-  const net = patientBalancePence(patient.pricePence, cfg);
+  const net = netPricePence(
+    patient.pricePence,
+    patient.upfrontPaidPence || treatmentBookingCreditPence(patient.treatmentType, cfg)
+  );
   const full = fullPricePence(net, patient.discountPct);
   const amount = type === "full" ? full : cfg.depositPence;
+  const service = paymentServiceDescription(patient.treatmentType, patient.pkg, patient.alignerCount, patient.includeWhitening);
   const name =
     type === "full"
-      ? `Invisalign ${patient.pkg} — pay in full (${patient.discountPct}% discount)`
-      : `Invisalign ${patient.pkg} — ${fmt(cfg.depositPence)} deposit (then 3 monthly instalments)`;
+      ? `${service} — pay in full (${patient.discountPct}% discount)`
+      : `${service} — ${fmt(cfg.depositPence)} deposit (then 3 monthly instalments)`;
   const description =
     type === "full"
-      ? `${BRAND.name} · personalised Invisalign treatment paid in full`
+      ? `${BRAND.name} · ${treatmentCopy(patient.treatmentType).label} treatment paid in full`
       : `${BRAND.name} · deposit today; 3 remaining payments collected automatically each month`;
 
   const branding = stripeCheckoutBranding();
@@ -485,6 +491,7 @@ export async function completePaymentConsent(
           email: patient.email,
           sentByEmail: patient.sentByEmail,
           ownerId: patient.ownerId,
+          treatmentType: patient.treatmentType,
         },
         note
       );
@@ -570,7 +577,7 @@ export async function markInterested(formData: FormData) {
   });
   void notifyAdmin(
     `⭐ ${patient.firstName} ${patient.lastName} is interested!`,
-    `${patient.firstName} clicked I'M INTERESTED on their ${fmt(patient.pricePence)} Invisalign proposal. View: ${appUrl()}/admin/patients/${patient.id}`
+    `${patient.firstName} clicked I'M INTERESTED on their ${fmt(patient.pricePence)} ${treatmentCopy(patient.treatmentType).label} proposal. View: ${appUrl()}/admin/patients/${patient.id}`
   );
   redirect(toastUrl(`/p/${token}`, "Brilliant! We've let your Treatment Coordinator know", "★", "#9B51E0"));
 }
@@ -604,7 +611,7 @@ export async function bookCall(formData: FormData) {
   });
   void notifyAdmin(
     `📞 ${patient.firstName} ${patient.lastName} requested a call`,
-    `Please call ${patient.firstName} on ${patient.phone || patient.email} about their Invisalign proposal. View: ${appUrl()}/admin/patients/${patient.id}`
+    `Please call ${patient.firstName} on ${patient.phone || patient.email} about their ${treatmentCopy(patient.treatmentType).label} proposal. View: ${appUrl()}/admin/patients/${patient.id}`
   );
   redirect(toastUrl(`/p/${token}`, "Call requested — we'll be in touch shortly", "📞", "#2E6BFF"));
 }

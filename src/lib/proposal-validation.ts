@@ -1,4 +1,5 @@
 import { normalisePhone } from "./notify";
+import { treatmentCopy, isValidVeneerTeethCount } from "./treatments";
 
 export type ProposalFields = {
   firstName: string;
@@ -8,10 +9,12 @@ export type ProposalFields = {
   videoUrl: string;
   alignerCount: number;
   pkg: string;
+  treatmentType?: string;
 };
 
 /** Required before a proposal can be emailed to the patient. */
 export function validateProposalForSend(fields: ProposalFields): { ok: true } | { ok: false; message: string } {
+  const copy = treatmentCopy(fields.treatmentType);
   if (!fields.firstName.trim()) {
     return { ok: false, message: "First name is required before sending" };
   }
@@ -25,15 +28,34 @@ export function validateProposalForSend(fields: ProposalFields): { ok: true } | 
   if (!phone || phone === "—" || !normalisePhone(phone)) {
     return { ok: false, message: "A valid mobile number (WhatsApp) is required before sending" };
   }
-  const video = (fields.videoUrl || "").trim();
-  if (!/^https?:\/\/.+/i.test(video)) {
-    return { ok: false, message: "ClinCheck video link is required before sending" };
+  if (copy.usesClinCheckVideo) {
+    const video = (fields.videoUrl || "").trim();
+    if (!/^https?:\/\/.+/i.test(video)) {
+      return { ok: false, message: "ClinCheck video link is required before sending" };
+    }
   }
-  if (!fields.alignerCount || fields.alignerCount < 1) {
-    return { ok: false, message: "Number of aligners is required before sending" };
+  if (copy.usesAiSimulation) {
+    const simulation = (fields.videoUrl || "").trim();
+    if (!/^https?:\/\/.+/i.test(simulation)) {
+      return { ok: false, message: "AI simulation link is required before sending" };
+    }
   }
-  if (fields.pkg !== "Express" && fields.pkg !== "Go") {
-    return { ok: false, message: "Package (Express or Go) is required before sending" };
+  if (copy.usesAligners) {
+    if (!fields.alignerCount || fields.alignerCount < 1) {
+      return { ok: false, message: "Number of aligners is required before sending" };
+    }
+    if (fields.pkg !== "Express" && fields.pkg !== "Go") {
+      return { ok: false, message: "Package (Express or Go) is required before sending" };
+    }
+  }
+  if (fields.treatmentType === "veneers") {
+    if (!isValidVeneerTeethCount(fields.alignerCount)) {
+      return { ok: false, message: "Choose a veneers package (6, 10 or 20 teeth) before sending" };
+    }
+  } else if (copy.usesTeethCount) {
+    if (!fields.alignerCount || fields.alignerCount < 1) {
+      return { ok: false, message: "Number of teeth is required before sending" };
+    }
   }
   return { ok: true };
 }

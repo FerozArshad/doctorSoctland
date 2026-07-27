@@ -6,6 +6,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { stripe, stripeConfigured } from "@/lib/stripe";
 import { fmt, netPricePence } from "@/lib/pricing";
+import { treatmentLabel } from "@/lib/treatments";
 import {
   instalmentFailedEmailHtml,
   instalmentOverdueEmailHtml,
@@ -136,7 +137,7 @@ export async function GET(req: NextRequest) {
         payment_method: p.stripePaymentMethodId,
         off_session: true,
         confirm: true,
-        description: `Invisalign instalment ${inst.number}/3 — ${p.firstName} ${p.lastName}`,
+        description: `${treatmentLabel(p.treatmentType)} instalment ${inst.number}/3 — ${p.firstName} ${p.lastName}`,
         statement_descriptor_suffix: "DENTAL",
       });
 

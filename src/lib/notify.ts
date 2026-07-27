@@ -4,7 +4,8 @@
 import { Resend } from "resend";
 import type { Patient } from "@prisma/client";
 import { db } from "./db";
-import { estMonths, fmt, fullPricePence, instalmentPence, netPricePence, PRICING_DEFAULTS, type PricingConfig } from "./pricing";
+import { estMonths, fmt, fullPricePence, instalmentPence, netPricePence, PRICING_DEFAULTS, WHITENING_ADDON_PENCE, veneerPricePence, type PricingConfig } from "./pricing";
+import { paymentServiceDescription, treatmentCopy } from "./treatments";
 import { gmailConfigured, sendGmail } from "./google";
 import { log, summarizeError } from "./log";
 import { getWhatsAppConfig, getWhatsAppHealth } from "./whatsapp-settings";
@@ -431,14 +432,15 @@ export async function notifyAdmin(subject: string, text: string) {
 
 /** Email the coordinator + admin when a patient applies for finance. */
 export async function notifyFinanceApplication(
-  patient: Pick<Patient, "id" | "firstName" | "lastName" | "email" | "sentByEmail" | "ownerId">,
+  patient: Pick<Patient, "id" | "firstName" | "lastName" | "email" | "sentByEmail" | "ownerId" | "treatmentType">,
   note?: string
 ) {
   const name = `${patient.firstName} ${patient.lastName}`.trim();
   const link = `${appUrl()}/admin/patients/${patient.id}`;
+  const t = treatmentCopy(patient.treatmentType).label;
   const subject = `📝 ${name} applied for 0% finance`;
   const text =
-    `${name} (${patient.email}) signed consent and applied for 0% finance on their Invisalign proposal.` +
+    `${name} (${patient.email}) signed consent and applied for 0% finance on their ${t} proposal.` +
     (note ? ` Message: “${note}”` : "") +
     ` View: ${link}`;
 
@@ -518,6 +520,7 @@ export function brandedEmail(title: string, bodyHtml: string) {
 }
 
 export function proposalEmailHtml(p: Patient, cfg: PricingConfig = PRICING_DEFAULTS) {
+  const copy = treatmentCopy(p.treatmentType);
   const net = netPricePence(p.pricePence, p.upfrontPaidPence);
   const full = fullPricePence(net, p.discountPct);
   const instal = instalmentPence(net, cfg.depositPence);
@@ -529,14 +532,25 @@ export function proposalEmailHtml(p: Patient, cfg: PricingConfig = PRICING_DEFAU
       ? row("Booking payment received", "− " + fmt(p.upfrontPaidPence), true) +
         row("Balance remaining", fmt(net), true)
       : "";
+  const planRows = copy.usesAligners
+    ? row("Number of aligners", String(p.alignerCount)) +
+      row("Estimated treatment time", "≈ " + estMonths(p.alignerCount) + " months") +
+      row("Treatment package", "Invisalign " + p.pkg)
+    : copy.usesVeneerPackages
+      ? row("Veneers package", `${p.alignerCount} teeth`) + row("Package price", fmt(veneerPricePence(p.alignerCount)))
+      : copy.offersWhitening
+        ? row("Number of teeth", String(p.alignerCount)) +
+          (p.includeWhitening ? row("Whitening add-on", fmt(WHITENING_ADDON_PENCE)) : "") +
+          row("Treatment", copy.label)
+        : copy.usesTeethCount
+          ? row("Number of teeth", String(p.alignerCount)) + row("Treatment", copy.label)
+          : row("Treatment", copy.label);
   return brandedEmail(
-    "Your Invisalign Treatment Proposal",
+    copy.proposalTitle,
     `<p style="font-size:15px;line-height:1.7;color:#3C4a59;margin:0 0 8px;">Hi ${p.firstName},</p>
-     <p style="font-size:15px;line-height:1.7;color:#3C4a59;margin:0 0 20px;">Thank you for attending your Invisalign assessment with Dental Scotland. Your personalised ClinCheck treatment plan is now complete — view it, watch your smile transformation video, and choose how you'd like to pay.</p>
+     <p style="font-size:15px;line-height:1.7;color:#3C4a59;margin:0 0 20px;">${copy.emailIntro}</p>
      <table style="width:100%;border:1px solid #E7ECF2;border-radius:14px;border-collapse:separate;border-spacing:0;overflow:hidden;">
-       ${row("Number of aligners", String(p.alignerCount))}
-       ${row("Estimated treatment time", "≈ " + estMonths(p.alignerCount) + " months")}
-       ${row("Treatment package", "Invisalign " + p.pkg)}
+       ${planRows}
        ${row("Total investment", fmt(p.pricePence), true)}
        ${upfrontRow}
      </table>
@@ -547,21 +561,38 @@ export function proposalEmailHtml(p: Patient, cfg: PricingConfig = PRICING_DEFAU
        <li>0% interest-free finance over 12, 24 or 36 months</li>
      </ul>
      <div style="text-align:center;">
-       <a href="${link}" style="display:inline-block;background:#0E9384;color:#ffffff;text-decoration:none;padding:15px 34px;border-radius:11px;font-weight:800;font-size:15px;">View your proposal &amp; smile video →</a>
+       <a href="${link}" style="display:inline-block;background:#0E9384;color:#ffffff;text-decoration:none;padding:15px 34px;border-radius:11px;font-weight:800;font-size:15px;">View your proposal${copy.usesClinCheckVideo ? " &amp; smile video" : copy.usesAiSimulation ? " &amp; AI simulation" : ""} →</a>
      </div>
      <p style="font-size:12.5px;color:#9AA6B4;text-align:center;margin:16px 0 0;">This secure link is personal to you.</p>`
   );
 }
 
 export function proposalWhatsAppText(p: Patient) {
-  return `Hi ${p.firstName}! 🦷 Your personalised Invisalign treatment proposal from Dental Scotland is ready.\n\n✅ ${p.alignerCount} aligners · ≈${estMonths(p.alignerCount)} months · ${fmt(netPricePence(p.pricePence, p.upfrontPaidPence))} to pay${p.upfrontPaidPence > 0 ? ` (includes ${fmt(p.upfrontPaidPence)} booking credit)` : ""}\n🎬 Watch your smile transformation video and choose a payment option here:\n${proposalLink(p)}\n\nQuestions? Just reply to this message.`;
+  const copy = treatmentCopy(p.treatmentType);
+  const net = netPricePence(p.pricePence, p.upfrontPaidPence);
+  const planLine = copy.usesAligners
+    ? `✅ ${p.alignerCount} aligners · ≈${estMonths(p.alignerCount)} months · ${fmt(net)} to pay`
+    : copy.usesVeneerPackages
+      ? `✅ ${p.alignerCount} teeth veneers · ${fmt(veneerPricePence(p.alignerCount))} · ${fmt(net)} to pay`
+      : copy.offersWhitening
+        ? `✅ ${p.alignerCount} teeth${p.includeWhitening ? " + whitening" : ""} · ${copy.label} · ${fmt(net)} to pay`
+        : copy.usesTeethCount
+          ? `✅ ${p.alignerCount} teeth · ${copy.label} · ${fmt(net)} to pay`
+          : `✅ ${copy.label} · ${fmt(net)} to pay`;
+  const videoLine = copy.usesClinCheckVideo
+    ? "\n🎬 Watch your smile transformation video and choose a payment option here:"
+    : copy.usesAiSimulation
+      ? "\n✨ See your future smile with our AI Simulator and choose a payment option here:"
+      : "\n👉 View your proposal and choose a payment option here:";
+  return `Hi ${p.firstName}! 🦷 ${copy.whatsAppProposalLead}\n\n${planLine}${p.upfrontPaidPence > 0 ? ` (includes ${fmt(p.upfrontPaidPence)} booking credit)` : ""}${videoLine}\n${proposalLink(p)}\n\nQuestions? Just reply to this message.`;
 }
 
 export function receiptEmailHtml(p: Patient, amountPence: number, what: string) {
+  const copy = treatmentCopy(p.treatmentType);
   return brandedEmail(
     "Payment received — thank you!",
     `<p style="font-size:15px;line-height:1.7;color:#3C4a59;">Hi ${p.firstName},</p>
-     <p style="font-size:15px;line-height:1.7;color:#3C4a59;">We've received your payment of <strong style="color:#0B7A6E;">${fmt(amountPence)}</strong> (${what}). Our Treatment Coordinator will be in touch shortly to arrange your aligner fitting.</p>
+     <p style="font-size:15px;line-height:1.7;color:#3C4a59;">We've received your payment of <strong style="color:#0B7A6E;">${fmt(amountPence)}</strong> (${what}). ${copy.receiptNextSteps}</p>
      <p style="font-size:15px;line-height:1.7;color:#3C4a59;">We can't wait to see your new smile!</p>`
   );
 }
@@ -603,10 +634,11 @@ export function depositScheduleEmailHtml(
 /** Reminder ~3 days before an automatic instalment charge. */
 export function instalmentReminderEmailHtml(p: Patient, number: number, amountPence: number, dueDate: Date) {
   const when = dueDate.toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
+  const t = treatmentCopy(p.treatmentType).label;
   return brandedEmail(
     `Reminder: instalment ${number}/3 due soon`,
     `<p style="font-size:15px;line-height:1.7;color:#3C4a59;">Hi ${p.firstName},</p>
-     <p style="font-size:15px;line-height:1.7;color:#3C4a59;">Friendly heads-up from Dental Scotland: instalment <strong>${number} of 3</strong> for your Invisalign treatment (<strong style="color:#0B7A6E;">${fmt(amountPence)}</strong>) is due on <strong>${when}</strong>.</p>
+     <p style="font-size:15px;line-height:1.7;color:#3C4a59;">Friendly heads-up from Dental Scotland: instalment <strong>${number} of 3</strong> for your ${t} treatment (<strong style="color:#0B7A6E;">${fmt(amountPence)}</strong>) is due on <strong>${when}</strong>.</p>
      <p style="font-size:15px;line-height:1.7;color:#3C4a59;">We'll collect it automatically from the card you used for your deposit — no action needed unless your card details have changed. If they have, reply to this email and we'll help update them.</p>
      <p style="font-size:14px;line-height:1.7;color:#7A8696;">You'll get a receipt as soon as the payment goes through.</p>`
   );
@@ -615,10 +647,11 @@ export function instalmentReminderEmailHtml(p: Patient, number: number, amountPe
 /** Sent when an instalment charge fails or is overdue. */
 export function instalmentFailedEmailHtml(p: Patient, number: number, amountPence: number, reason: string) {
   const link = proposalLink(p);
+  const t = treatmentCopy(p.treatmentType).label;
   return brandedEmail(
     `Action needed: instalment ${number}/3 payment`,
     `<p style="font-size:15px;line-height:1.7;color:#3C4a59;">Hi ${p.firstName},</p>
-     <p style="font-size:15px;line-height:1.7;color:#3C4a59;">We weren't able to collect instalment <strong>${number} of 3</strong> (<strong style="color:#B4530A;">${fmt(amountPence)}</strong>) for your Invisalign treatment.</p>
+     <p style="font-size:15px;line-height:1.7;color:#3C4a59;">We weren't able to collect instalment <strong>${number} of 3</strong> (<strong style="color:#B4530A;">${fmt(amountPence)}</strong>) for your ${t} treatment.</p>
      <p style="font-size:15px;line-height:1.7;color:#3C4a59;"><strong>Reason:</strong> ${escapeHtml(reason)}</p>
      <p style="font-size:15px;line-height:1.7;color:#3C4a59;">Please reply to this email or contact us so we can update your payment details and keep your treatment on track.</p>
      <div style="text-align:center;margin:22px 0 8px;"><a href="${link}" style="display:inline-block;background:#0E9384;color:#fff;text-decoration:none;padding:13px 26px;border-radius:11px;font-weight:800;font-size:14.5px;">View your proposal →</a></div>`
@@ -650,6 +683,7 @@ export function instalmentOverdueWhatsApp(p: Patient, number: number, amountPenc
 // ── Payment reminder (for patients who've had a proposal but not yet paid) ──
 // Written in a warm, personal coordinator's voice — deliberately not generic.
 export function reminderEmailHtml(p: Patient, cfg: PricingConfig = PRICING_DEFAULTS) {
+  const copy = treatmentCopy(p.treatmentType);
   const net = netPricePence(p.pricePence, p.upfrontPaidPence);
   const full = fullPricePence(net, p.discountPct);
   const link = proposalLink(p);
@@ -660,7 +694,7 @@ export function reminderEmailHtml(p: Patient, cfg: PricingConfig = PRICING_DEFAU
   return brandedEmail(
     `Still thinking it over, ${p.firstName}?`,
     `<p style="font-size:15px;line-height:1.7;color:#3C4a59;margin:0 0 16px;">Hi ${p.firstName},</p>
-     <p style="font-size:15px;line-height:1.7;color:#3C4a59;margin:0 0 16px;">It's Dental Scotland here — just a friendly note to say your personalised Invisalign plan is still ready and waiting whenever you are. There's no rush, but we didn't want you to miss it.</p>
+     <p style="font-size:15px;line-height:1.7;color:#3C4a59;margin:0 0 16px;">It's Dental Scotland here — just a friendly note to say your personalised ${copy.followUpPlanName} is still ready and waiting whenever you are. There's no rush, but we didn't want you to miss it.</p>
      ${creditLine}
      <p style="font-size:15px;line-height:1.7;color:#3C4a59;margin:16px 0;">Prefer to pay in one go? You'll save ${p.discountPct}% and settle at <strong>${fmt(full)}</strong>. Or spread it with our ${fmt(cfg.depositPence)}-deposit plan or 0% finance — whatever feels right for you.</p>
      <div style="text-align:center;margin-top:8px;">
@@ -673,10 +707,11 @@ export function reminderEmailHtml(p: Patient, cfg: PricingConfig = PRICING_DEFAU
 
 // Sent when an admin approves a finance application and attaches the lender link.
 export function financeLinkEmailHtml(p: Patient, link: string) {
+  const t = treatmentCopy(p.treatmentType).label;
   return brandedEmail(
     "Your 0% finance application is ready",
     `<p style="font-size:15px;line-height:1.7;color:#3C4a59;">Hi ${p.firstName},</p>
-     <p style="font-size:15px;line-height:1.7;color:#3C4a59;">Thank you for applying for 0% interest-free finance for your Invisalign treatment. Your application has been reviewed and approved to proceed.</p>
+     <p style="font-size:15px;line-height:1.7;color:#3C4a59;">Thank you for applying for 0% interest-free finance for your ${t} treatment. Your application has been reviewed and approved to proceed.</p>
      <p style="font-size:15px;line-height:1.7;color:#3C4a59;">Please continue your application with our finance partner using the secure link below:</p>
      <div style="text-align:center;margin:22px 0 6px;">
        <a href="${link}" style="display:inline-block;background:#0E9384;color:#ffffff;text-decoration:none;padding:15px 34px;border-radius:11px;font-weight:800;font-size:15px;">Complete your finance application →</a>
@@ -687,8 +722,9 @@ export function financeLinkEmailHtml(p: Patient, link: string) {
 }
 
 export function reminderWhatsAppText(p: Patient, cfg: PricingConfig = PRICING_DEFAULTS) {
+  const copy = treatmentCopy(p.treatmentType);
   const net = netPricePence(p.pricePence, p.upfrontPaidPence);
   const full = fullPricePence(net, p.discountPct);
   const balance = p.upfrontPaidPence > 0 ? `${fmt(net)} to pay (includes ${fmt(p.upfrontPaidPence)} booking credit)` : `${fmt(net)}`;
-  return `Hi ${p.firstName}, it's Dental Scotland 🦷 Your Invisalign plan is still saved for you — no rush at all, we just didn't want you to miss it.\n\nThere's ${balance}, and paying in full saves ${p.discountPct}% (${fmt(full)}). You can also spread it with a ${fmt(cfg.depositPence)} deposit or 0% finance.\n\nHave a look and pick what suits you here:\n${proposalLink(p)}\n\nAny questions, just reply — a real person will help. 😊`;
+  return `Hi ${p.firstName}, it's Dental Scotland 🦷 Your ${copy.followUpPlanName} is still saved for you — no rush at all, we just didn't want you to miss it.\n\nThere's ${balance}, and paying in full saves ${p.discountPct}% (${fmt(full)}). You can also spread it with a ${fmt(cfg.depositPence)} deposit or 0% finance.\n\nHave a look and pick what suits you here:\n${proposalLink(p)}\n\nAny questions, just reply — a real person will help. 😊`;
 }

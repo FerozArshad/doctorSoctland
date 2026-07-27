@@ -3,9 +3,10 @@ import { notFound, redirect } from "next/navigation";
 import { Suspense } from "react";
 import { db } from "@/lib/db";
 import { getAdmin, getPatientSession } from "@/lib/auth";
-import { estMonths, finance36Pence, fmt, fullPricePence, instalmentPence, patientBalancePence, bookingCreditPence } from "@/lib/pricing";
+import { estMonths, finance36Pence, fmt, fullPricePence, instalmentPence, netPricePence, treatmentBookingCreditPence, WHITENING_ADDON_PENCE, veneerPricePence } from "@/lib/pricing";
 import { getPricing } from "@/lib/pricing-settings";
-import { COMP_ITEMS, COMP_TOTAL, WHY_US } from "@/lib/content";
+import { treatmentCopy, planCountShortLabel } from "@/lib/treatments";
+import { includedItemsFor, includedTotalFor, whyUsFor } from "@/lib/content";
 import { followUpBookingUrl, coordinatorFor } from "@/lib/coordinators";
 import BrandLogo from "@/components/BrandLogo";
 import PaymentOptionsForm, { PayOption } from "@/components/PaymentOptionsForm";
@@ -14,6 +15,7 @@ import FollowUpCallCard from "@/components/FollowUpCallCard";
 import ProposalHashScroll from "@/components/ProposalHashScroll";
 import OtpGate from "@/components/OtpGate";
 import VideoBlock from "@/components/VideoBlock";
+import SimulationBlock from "@/components/SimulationBlock";
 import PatientReceiptsList from "@/components/PatientReceiptsList";
 import { syncCheckoutSession, syncPatientStripePayments } from "@/lib/stripe-checkout";
 import Toast from "@/components/Toast";
@@ -102,6 +104,7 @@ export default async function ProposalPage({
         firstName={c.firstName}
         email={c.email}
         phone={c.phone}
+        treatmentType={c.treatmentType}
         sent={searchParams.otp === "sent"}
         channel={searchParams.channel || "email"}
         devCode={devCode}
@@ -110,16 +113,21 @@ export default async function ProposalPage({
   }
 
   const cfg = await getPricing();
-  const bookingCredit = bookingCreditPence(cfg);
+  const bookingCredit = treatmentBookingCreditPence(c.treatmentType, cfg);
   if (c.upfrontPaidPence !== bookingCredit) {
     await db.patient.update({ where: { id: c.id }, data: { upfrontPaidPence: bookingCredit } });
+    c = { ...c, upfrontPaidPence: bookingCredit };
   }
-  const net = patientBalancePence(c.pricePence, cfg);
+  const net = netPricePence(c.pricePence, bookingCredit);
   const full = fullPricePence(net, c.discountPct);
   const instal = instalmentPence(net, cfg.depositPence);
   const fin36 = finance36Pence(net);
   const co = coordinatorFor(c.sentByName, c.sentByEmail);
   const followUpBooking = followUpBookingUrl(co);
+  const copy = treatmentCopy(c.treatmentType);
+  const includedItems = includedItemsFor(c.treatmentType);
+  const includedTotal = includedTotalFor(c.treatmentType);
+  const whyUs = whyUsFor(c.treatmentType);
   const paid = c.status === "paid";
   const depositPaid = c.status === "deposit";
   const financeApplied =
@@ -202,14 +210,14 @@ export default async function ProposalPage({
         <div className="ds-proposal-shell" style={{ maxWidth: 1080, margin: "0 auto", background: "#fff", borderRadius: 20, overflow: "hidden", boxShadow: "0 24px 48px -24px rgba(11,24,40,.35)", border: "1px solid rgba(14,26,43,.06)" }}>
           <div className="ds-pad-header ds-proposal-header" style={{ background: "#0B1828", padding: "18px 24px", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
             <BrandLogo width={150} height={40} priority />
-            <div style={{ textAlign: "right", color: "#8FA6C0", fontSize: 11, fontWeight: 700, letterSpacing: ".06em", textTransform: "uppercase" }}>Invisalign Proposal</div>
+            <div style={{ textAlign: "right", color: "#8FA6C0", fontSize: 11, fontWeight: 700, letterSpacing: ".06em", textTransform: "uppercase" }}>{copy.portalBadge}</div>
           </div>
 
           <div className="ds-proposal-body" style={{ padding: "22px 22px 28px" }}>
             <div style={{ marginBottom: 18 }}>
               <div style={{ fontSize: 11, fontWeight: 800, letterSpacing: ".1em", textTransform: "uppercase", color: "#1EA8D8" }}>Your personalised plan</div>
               <h1 className="ds-proposal-title" style={{ fontSize: 24, fontWeight: 800, margin: "6px 0 0", letterSpacing: "-.02em", lineHeight: 1.2, color: "#0E1A2B" }}>
-                Your Invisalign Treatment Proposal
+                {copy.proposalHeading}
               </h1>
               {searchParams.paid && (
                 <div style={{ marginTop: 12, padding: "11px 14px", borderRadius: 11, background: "#E6F6EA", color: "#1C7C3A", fontWeight: 700, fontSize: 13.5 }}>
@@ -224,7 +232,7 @@ export default async function ProposalPage({
                 </div>
               )}
               <p style={{ fontSize: 14, lineHeight: 1.65, color: "#3C4a59", margin: "10px 0 0", maxWidth: 680 }}>
-                Hi {c.firstName}, thank you for attending your Invisalign assessment with Dental Scotland. Your personalised ClinCheck treatment plan is now complete — view it, watch your smile transformation video, and choose how you&apos;d like to pay.
+                Hi {c.firstName}, {copy.emailIntro}
               </p>
             </div>
 
@@ -234,11 +242,13 @@ export default async function ProposalPage({
               <section className="ds-proposal-data" style={{ display: "flex", flexDirection: "column", gap: 10 }}>
                 <div style={{ border: "1px solid #E7ECF2", borderRadius: 14, overflow: "hidden" }}>
                   <div style={{ background: "#0E1A2B", padding: "10px 14px", fontWeight: 700, fontSize: 11, letterSpacing: ".06em", textTransform: "uppercase", color: "#C5D4E6" }}>
-                    Your Invisalign plan
+                    {copy.planSectionTitle}
                   </div>
-                  <div className="ds-proposal-metrics" style={{ display: "grid", gridTemplateColumns: "1fr 1fr" }}>
+                  <div className="ds-proposal-metrics" style={{ display: "grid", gridTemplateColumns: copy.usesAligners ? "1fr 1fr" : "1fr" }}>
+                    {copy.usesAligners ? (
+                      <>
                     <div style={{ padding: "12px 12px", borderRight: "1px solid #EEF2F6", borderBottom: "1px solid #EEF2F6" }}>
-                      <div style={{ fontSize: 11, color: "#7A8696", fontWeight: 600 }}>Aligners</div>
+                      <div style={{ fontSize: 11, color: "#7A8696", fontWeight: 600 }}>{planCountShortLabel(c.treatmentType)}</div>
                       <div style={{ fontSize: 20, fontWeight: 800, marginTop: 2 }}>{c.alignerCount}</div>
                     </div>
                     <div style={{ padding: "12px 12px", borderBottom: "1px solid #EEF2F6" }}>
@@ -247,8 +257,54 @@ export default async function ProposalPage({
                     </div>
                     <div style={{ padding: "12px 12px", borderRight: "1px solid #EEF2F6" }}>
                       <div style={{ fontSize: 11, color: "#7A8696", fontWeight: 600 }}>Package</div>
-                      <div style={{ fontSize: 16, fontWeight: 800, marginTop: 3 }}>Invisalign {c.pkg}</div>
+                      <div style={{ fontSize: 16, fontWeight: 800, marginTop: 3 }}>{copy.label} {c.pkg}</div>
                     </div>
+                      </>
+                    ) : copy.usesVeneerPackages ? (
+                    <>
+                    <div style={{ padding: "12px 12px", borderBottom: "1px solid #EEF2F6" }}>
+                      <div style={{ fontSize: 11, color: "#7A8696", fontWeight: 600 }}>Package</div>
+                      <div style={{ fontSize: 20, fontWeight: 800, marginTop: 2 }}>{c.alignerCount} teeth</div>
+                    </div>
+                    <div style={{ padding: "12px 12px", borderBottom: "1px solid #EEF2F6" }}>
+                      <div style={{ fontSize: 11, color: "#7A8696", fontWeight: 600 }}>Package price</div>
+                      <div style={{ fontSize: 16, fontWeight: 800, marginTop: 3 }}>{fmt(veneerPricePence(c.alignerCount))}</div>
+                    </div>
+                    </>
+                    ) : copy.offersWhitening ? (
+                    <>
+                    <div style={{ padding: "12px 12px", borderBottom: "1px solid #EEF2F6" }}>
+                      <div style={{ fontSize: 11, color: "#7A8696", fontWeight: 600 }}>{planCountShortLabel(c.treatmentType)}</div>
+                      <div style={{ fontSize: 20, fontWeight: 800, marginTop: 2 }}>{c.alignerCount}</div>
+                    </div>
+                    {c.includeWhitening && (
+                    <div style={{ padding: "12px 12px", borderBottom: "1px solid #EEF2F6" }}>
+                      <div style={{ fontSize: 11, color: "#7A8696", fontWeight: 600 }}>Whitening</div>
+                      <div style={{ fontSize: 16, fontWeight: 800, marginTop: 3 }}>+{fmt(WHITENING_ADDON_PENCE)}</div>
+                    </div>
+                    )}
+                    <div style={{ padding: "12px 12px", borderBottom: "1px solid #EEF2F6" }}>
+                      <div style={{ fontSize: 11, color: "#7A8696", fontWeight: 600 }}>Treatment</div>
+                      <div style={{ fontSize: 16, fontWeight: 800, marginTop: 3 }}>{copy.label}</div>
+                    </div>
+                    </>
+                    ) : copy.usesTeethCount ? (
+                    <>
+                    <div style={{ padding: "12px 12px", borderBottom: "1px solid #EEF2F6" }}>
+                      <div style={{ fontSize: 11, color: "#7A8696", fontWeight: 600 }}>{planCountShortLabel(c.treatmentType)}</div>
+                      <div style={{ fontSize: 20, fontWeight: 800, marginTop: 2 }}>{c.alignerCount}</div>
+                    </div>
+                    <div style={{ padding: "12px 12px", borderBottom: "1px solid #EEF2F6" }}>
+                      <div style={{ fontSize: 11, color: "#7A8696", fontWeight: 600 }}>Treatment</div>
+                      <div style={{ fontSize: 16, fontWeight: 800, marginTop: 3 }}>{copy.label}</div>
+                    </div>
+                    </>
+                    ) : (
+                    <div style={{ padding: "12px 12px", borderBottom: "1px solid #EEF2F6" }}>
+                      <div style={{ fontSize: 11, color: "#7A8696", fontWeight: 600 }}>Treatment</div>
+                      <div style={{ fontSize: 16, fontWeight: 800, marginTop: 3 }}>{copy.label}</div>
+                    </div>
+                    )}
                     <>
                         <div style={{ padding: "12px 12px", background: "#F6F9FA" }}>
                           <div style={{ fontSize: 11, color: "#7A8696", fontWeight: 600 }}>Treatment total</div>
@@ -268,10 +324,10 @@ export default async function ProposalPage({
                 <div style={{ border: "1px solid #E7ECF2", borderRadius: 14, padding: "12px 11px 10px", background: "#fff" }}>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8, gap: 8 }}>
                     <div style={{ fontSize: 13, fontWeight: 800 }}>Included free</div>
-                    <span style={{ fontSize: 12, fontWeight: 800, color: "#0B7A6E" }}>{COMP_TOTAL}</span>
+                    <span style={{ fontSize: 12, fontWeight: 800, color: "#0B7A6E" }}>{includedTotal}</span>
                   </div>
                   <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
-                    {COMP_ITEMS.map((item) => (
+                    {includedItems.map((item) => (
                       <div key={item.label} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "7px 8px", borderRadius: 8, background: "#F6F9FA", gap: 8 }}>
                         <div style={{ display: "flex", alignItems: "center", gap: 7, minWidth: 0 }}>
                           <span style={{ width: 16, height: 16, borderRadius: "50%", background: "#DDF3EC", color: "#0B7A6E", display: "grid", placeItems: "center", fontWeight: 800, fontSize: 9, flex: "none" }}>✓</span>
@@ -281,20 +337,27 @@ export default async function ProposalPage({
                       </div>
                     ))}
                   </div>
+                  {copy.usesAligners && (
                   <p style={{ fontSize: 11, color: "#9AA6B4", margin: "8px 2px 0", lineHeight: 1.4 }}>
                     Treatment time is an estimate and may vary by about 1 month.
                   </p>
+                  )}
                 </div>
 
+                {copy.usesClinCheckVideo && c.videoUrl?.trim() ? (
                 <div style={{ border: "1px solid #E7ECF2", borderRadius: 14, padding: "12px 11px 11px", background: "#fff" }}>
                   <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 10, marginBottom: 10, flexWrap: "wrap" }}>
                     <h2 style={{ fontSize: 15, fontWeight: 800, margin: 0, color: "#0E1A2B" }}>Watch your future smile</h2>
-                    {c.videoUrl?.trim() ? (
-                      <span style={{ fontSize: 11.5, color: "#0B7A6E", fontWeight: 700 }}>ClinCheck preview</span>
-                    ) : null}
+                    <span style={{ fontSize: 11.5, color: "#0B7A6E", fontWeight: 700 }}>ClinCheck preview</span>
                   </div>
                   <VideoBlock url={c.videoUrl || ""} />
                 </div>
+                ) : null}
+                {copy.usesAiSimulation ? (
+                <div style={{ border: "1px solid #E7ECF2", borderRadius: 14, padding: "12px 11px 11px", background: "#fff" }}>
+                  <SimulationBlock url={c.videoUrl || ""} />
+                </div>
+                ) : null}
               </section>
 
               <section
@@ -320,7 +383,7 @@ export default async function ProposalPage({
 
                 {paid ? (
                   <div style={{ padding: "14px", borderRadius: 12, background: "#E6F6EA", color: "#1C7C3A", fontWeight: 700, fontSize: 14, lineHeight: 1.45, marginTop: "auto" }}>
-                    ✓ Paid in full — we&apos;ll arrange your aligner fitting.
+                    ✓ Paid in full — {copy.paidConfirmationNote}.
                   </div>
                 ) : depositPaid ? (
                   <div style={{ border: "1px solid #CFEDE5", background: "#F4FCFA", borderRadius: 12, padding: "14px", marginTop: "auto" }}>
@@ -417,7 +480,7 @@ export default async function ProposalPage({
             <div style={{ marginTop: 20 }}>
               <h2 style={{ fontSize: 15, fontWeight: 800, margin: "0 0 8px" }}>Why Dental Scotland?</h2>
               <div className="ds-proposal-why" style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 8 }}>
-                {WHY_US.map((w) => (
+                {whyUs.map((w) => (
                   <div key={w.title} style={{ padding: "11px 11px", borderRadius: 11, background: "#F6F9FA", border: "1px solid #EEF2F6" }}>
                     <div style={{ fontWeight: 800, fontSize: 12.5, color: "#16202E" }}>{w.title}</div>
                     <div style={{ fontSize: 11.5, color: "#5C6a79", marginTop: 3, lineHeight: 1.4 }}>{w.text}</div>
@@ -426,7 +489,7 @@ export default async function ProposalPage({
               </div>
             </div>
 
-            {paymentReceipts.length > 0 && <PatientReceiptsList receipts={paymentReceipts} />}
+            {paymentReceipts.length > 0 && <PatientReceiptsList receipts={paymentReceipts} treatmentType={c.treatmentType} />}
 
             <div style={{ marginTop: 18, textAlign: "center", color: "#9AA6B4", fontSize: 11.5, lineHeight: 1.65 }}>
               Dental Scotland · It&apos;s time to smile ·{" "}

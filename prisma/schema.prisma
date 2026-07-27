@@ -139,6 +139,8 @@ model Patient {
   // invisalign | veneers | implants | composite_bonding | other
   treatmentType         String       @default("invisalign")
   alignerCount          Int
+  // Composite bonding optional add-on (£350 whitening).
+  includeWhitening      Boolean      @default(false)
   pkg                   String       @default("Go") // Express | Go
   videoUrl              String       @default("")
   notes                 String       @default("")

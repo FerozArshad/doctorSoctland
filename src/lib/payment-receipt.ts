@@ -3,6 +3,7 @@ import type { Patient, Payment } from "@prisma/client";
 import { db } from "./db";
 import { fmt, fullPricePence, netPricePence } from "./pricing";
 import { brandedEmail, escapeHtml, sendEmail } from "./notify";
+import { paymentReceiptLabel, paymentServiceDescription, treatmentCopy } from "./treatments";
 import { stripe, stripeConfigured } from "./stripe";
 import { log, summarizeError } from "./log";
 
@@ -12,7 +13,7 @@ export type ReceiptLine = { label: string; value: string };
 
 export type ReceiptData = {
   receiptNumber: string;
-  patient: Pick<Patient, "id" | "firstName" | "lastName" | "email" | "phone" | "alignerCount" | "pkg" | "proposalToken">;
+  patient: Pick<Patient, "id" | "firstName" | "lastName" | "email" | "phone" | "alignerCount" | "pkg" | "proposalToken" | "treatmentType" | "includeWhitening">;
   amountPence: number;
   paidAt: Date;
   paymentMethod: string;
@@ -23,16 +24,12 @@ export type ReceiptData = {
   receiptUrl: string;
 };
 
-function paymentTypeLabel(type: string): string {
-  if (type === "full") return "Pay in full — Invisalign treatment";
-  if (type === "deposit") return "Treatment deposit — Invisalign";
-  if (type === "instalment") return "Monthly instalment — Invisalign treatment";
-  if (type === "manual") return "Manual payment — Invisalign treatment";
-  return "Invisalign treatment payment";
+function paymentTypeLabel(type: string, treatmentType: string | null | undefined): string {
+  return paymentReceiptLabel(type, treatmentType);
 }
 
 function serviceDescription(patient: Patient, payment: Payment): string {
-  const base = `Invisalign ${patient.pkg} treatment (${patient.alignerCount} aligners)`;
+  const base = paymentServiceDescription(patient.treatmentType, patient.pkg, patient.alignerCount, patient.includeWhitening);
   if (payment.type === "full") return `${base} — paid in full`;
   if (payment.type === "deposit") return `${base} — deposit`;
   if (payment.type === "instalment") return `${base} — instalment payment`;
@@ -113,6 +110,7 @@ export function buildReceiptHtml(data: ReceiptData): string {
 }
 
 export function paymentConfirmationEmailHtml(data: ReceiptData): string {
+  const copy = treatmentCopy(data.patient.treatmentType);
   const paidAt = data.paidAt.toLocaleString("en-GB", {
     day: "numeric",
     month: "long",
@@ -141,7 +139,7 @@ export function paymentConfirmationEmailHtml(data: ReceiptData): string {
      <div style="text-align:center;margin:22px 0 8px;">
        <a href="${data.receiptUrl}" style="display:inline-block;background:#0E9384;color:#fff;text-decoration:none;padding:13px 26px;border-radius:11px;font-weight:800;font-size:14.5px;">View receipt →</a>
      </div>
-     <p style="font-size:14px;line-height:1.7;color:#3C4a59;">Our Treatment Coordinator will be in touch shortly about your aligner fitting.</p>`
+     <p style="font-size:14px;line-height:1.7;color:#3C4a59;">${copy.receiptNextSteps}</p>`
   );
 }
 
@@ -181,7 +179,7 @@ async function buildReceiptData(patient: Patient, payment: Payment): Promise<Rec
     { label: "Payment method", value: paymentMethod },
     { label: "Transaction ID", value: transactionId },
     { label: "Services", value: serviceDescription(patient, payment) },
-    { label: "Payment type", value: paymentTypeLabel(payment.type) },
+    { label: "Payment type", value: paymentTypeLabel(payment.type, patient.treatmentType) },
   ];
 
   return {

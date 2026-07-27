@@ -7,6 +7,7 @@ import { avatarBg, initials, statusOf, timeAgo } from "@/lib/status";
 import { COMP_ITEMS, COMP_TOTAL } from "@/lib/content";
 import { approveFinance, markPaid, recordDeposit, sendPatientTemplate, setFinanceStatus, syncStripePayment } from "@/app/admin/actions";
 import ResendProposalForm from "@/components/ResendProposalForm";
+import { coordinatorKeyFor, COORDINATORS } from "@/lib/coordinators";
 import { canAccessPatient, requireAdmin } from "@/lib/auth";
 import TopBar from "@/components/TopBar";
 import MessageLog from "@/components/MessageLog";
@@ -78,6 +79,10 @@ export default async function PatientProfile({ params }: { params: { id: string 
     });
     redirect(`/admin/patients?${q.toString()}`);
   }
+  const sentByKey = (() => {
+    const k = coordinatorKeyFor(initial.sentByName, initial.sentByEmail);
+    return k === "practice" || k === "other" ? COORDINATORS[0]?.key ?? "millie" : k;
+  })();
 
   // Auto-sync when Stripe shows paid but webhook missed (pending row in DB).
   let c = initial;
@@ -220,7 +225,7 @@ export default async function PatientProfile({ params }: { params: { id: string 
               <Link href={`/admin/patients/${c.id}/proposal`} className={c.status === "draft" ? "btn btn-teal" : "btn btn-outline"} style={{ padding: "11px 18px", fontSize: 13.5, textDecoration: "none" }}>
                 {c.status === "draft" ? "Continue proposal" : "Edit proposal"}
               </Link>
-              <ResendProposalForm patientId={c.id} isDraft={c.status === "draft"} />
+              <ResendProposalForm patientId={c.id} isDraft={c.status === "draft"} defaultSentByKey={sentByKey} />
               <Link href={`/p/${c.proposalToken}`} className="btn btn-teal" style={{ padding: "11px 18px", fontSize: 13.5, display: "flex", alignItems: "center", gap: 8, textDecoration: "none" }}>
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M10 13a5 5 0 0 0 7 0l3-3a5 5 0 0 0-7-7l-1.5 1.5M14 11a5 5 0 0 0-7 0l-3 3a5 5 0 0 0 7 7l1.5-1.5" />

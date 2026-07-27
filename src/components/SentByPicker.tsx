@@ -4,8 +4,8 @@
 import { useState } from "react";
 import { COORDINATORS } from "@/lib/coordinators";
 
-export default function SentByPicker({ compact = false }: { compact?: boolean }) {
-  const [key, setKey] = useState(COORDINATORS[0]?.key ?? "millie");
+export default function SentByPicker({ compact = false, defaultKey }: { compact?: boolean; defaultKey?: string }) {
+  const [key, setKey] = useState(defaultKey || COORDINATORS[0]?.key || "millie");
   const isOther = key === "other";
 
   const btn = (active: boolean): React.CSSProperties => ({

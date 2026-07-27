@@ -15,7 +15,7 @@ import ProposalHashScroll from "@/components/ProposalHashScroll";
 import OtpGate from "@/components/OtpGate";
 import VideoBlock from "@/components/VideoBlock";
 import PatientReceiptsList from "@/components/PatientReceiptsList";
-import Toast from "@/components/Toast";
+import { syncCheckoutSession, syncPatientStripePayments } from "@/lib/stripe-checkout";
 
 export const dynamic = "force-dynamic";
 
@@ -33,9 +33,9 @@ export default async function ProposalPage({
   searchParams,
 }: {
   params: { token: string };
-  searchParams: { preview?: string; paid?: string; cancelled?: string; otp?: string; channel?: string; devcode?: string };
+  searchParams: { preview?: string; paid?: string; cancelled?: string; otp?: string; channel?: string; devcode?: string; session_id?: string };
 }) {
-  const c = await db.patient.findUnique({
+  const initial = await db.patient.findUnique({
     where: { proposalToken: params.token },
     include: {
       uploads: {
@@ -46,7 +46,7 @@ export default async function ProposalPage({
     },
   });
 
-  if (!c) {
+  if (!initial) {
     // Common mistake: using the patient record ID from /admin/patients/[id] in the URL.
     const byId = await db.patient.findUnique({
       where: { id: params.token },
@@ -56,6 +56,28 @@ export default async function ProposalPage({
       redirect(`/p/${byId.proposalToken}${queryString(searchParams)}`);
     }
     notFound();
+  }
+
+  // Fallback when Stripe webhook did not fire — sync payment on return from Checkout.
+  let c = initial;
+  if (searchParams.session_id) {
+    await syncCheckoutSession(searchParams.session_id).catch(() => {});
+  } else if (searchParams.paid === "full" || searchParams.paid === "deposit") {
+    await syncPatientStripePayments(c.id).catch(() => {});
+  }
+
+  if (searchParams.session_id || searchParams.paid) {
+    const fresh = await db.patient.findUnique({
+      where: { id: c.id },
+      include: {
+        uploads: {
+          where: { uploadedBy: "admin" },
+          orderBy: { createdAt: "desc" },
+          select: { id: true, fileName: true, mimeType: true, sizeBytes: true },
+        },
+      },
+    });
+    if (fresh) c = fresh;
   }
 
   const wantsPreview = searchParams.preview === "admin";

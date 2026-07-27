@@ -15,6 +15,8 @@ import { patientTemplateText, patientTemplateTitle, type PatientTemplateId } fro
 import { getWhatsAppConfig, getWhatsAppHealth } from "@/lib/whatsapp-settings";
 import { FOLLOW_UPS_COMPLETE_TOUCH } from "@/lib/follow-ups";
 import { issuePaymentReceipt, resendPaymentReceipt } from "@/lib/payment-receipt";
+import { validateProposalForSend } from "@/lib/proposal-validation";
+import { syncPatientStripePayments } from "@/lib/stripe-checkout";
 import {
   generateSecureAdminPassword,
   hashAdminPassword,
@@ -811,6 +813,12 @@ export async function updatePatient(formData: FormData) {
   if (!firstName || !/.+@.+\..+/.test(email)) {
     redirect(toastUrl(`/admin/patients/${id}/proposal`, "A first name and valid email are required", "!", "#E0A429"));
   }
+  if (intent === "send" && patient.status === "draft") {
+    const check = validateProposalForSend({ firstName, lastName, email, phone, videoUrl, alignerCount, pkg });
+    if (!check.ok) {
+      redirect(toastUrl(`/admin/patients/${id}/proposal`, check.message, "!", "#E0A429"));
+    }
+  }
   const clash = await db.patient.findFirst({ where: { email, NOT: { id } } });
   if (clash) {
     redirect(toastUrl(`/admin/patients/${id}/proposal`, "Another patient already uses that email", "!", "#E0A429"));
@@ -1057,7 +1065,19 @@ async function deliverProposal(patientId: string, sentBy?: Coordinator) {
 
 export async function sendProposal(formData: FormData) {
   const id = String(formData.get("patientId"));
-  await requireOwnedPatient(id);
+  const { patient } = await requireOwnedPatient(id);
+  const check = validateProposalForSend({
+    firstName: patient.firstName,
+    lastName: patient.lastName,
+    email: patient.email,
+    phone: patient.phone,
+    videoUrl: patient.videoUrl,
+    alignerCount: patient.alignerCount,
+    pkg: patient.pkg,
+  });
+  if (!check.ok) {
+    redirect(toastUrl(`/admin/patients/${id}`, check.message, "!", "#E0A429"));
+  }
   const co = pickCoordinator(formData);
   const results = await deliverProposal(id, co);
   const wa = results.find((r) => r.startsWith("WhatsApp"));
@@ -1119,6 +1139,20 @@ export async function markPaid(formData: FormData) {
   });
   await issuePaymentReceipt(payment.id).catch((e) => log.error("payment.receipt.fail", summarizeError(e)));
   redirect(toastUrl(`/admin/patients/${id}`, "Marked paid in full"));
+}
+
+export async function syncStripePayment(formData: FormData) {
+  const id = String(formData.get("patientId"));
+  await requireOwnedPatient(id);
+  const { synced } = await syncPatientStripePayments(id);
+  const patient = await db.patient.findUniqueOrThrow({ where: { id } });
+  const msg =
+    synced > 0
+      ? `Synced ${synced} payment(s) from Stripe — status is now ${patient.status}`
+      : patient.status === "paid" || patient.status === "deposit"
+        ? "Payment already recorded"
+        : "No completed Stripe checkout found — check Stripe Dashboard";
+  redirect(toastUrl(`/admin/patients/${id}`, msg, synced > 0 ? "✓" : "!", synced > 0 ? "#0E9384" : "#E0A429"));
 }
 
 export async function resendReceipt(formData: FormData) {

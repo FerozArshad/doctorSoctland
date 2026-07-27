@@ -5,7 +5,7 @@ import { estMonths, fmt, netPricePence, paymentPreferenceLabel } from "@/lib/pri
 import { getPricing } from "@/lib/pricing-settings";
 import { avatarBg, initials, statusOf, timeAgo } from "@/lib/status";
 import { COMP_ITEMS, COMP_TOTAL } from "@/lib/content";
-import { approveFinance, markPaid, recordDeposit, sendPatientTemplate, sendProposal, setFinanceStatus } from "@/app/admin/actions";
+import { approveFinance, markPaid, recordDeposit, sendPatientTemplate, sendProposal, setFinanceStatus, syncStripePayment } from "@/app/admin/actions";
 import { canAccessPatient, requireAdmin } from "@/lib/auth";
 import TopBar from "@/components/TopBar";
 import MessageLog from "@/components/MessageLog";
@@ -17,7 +17,7 @@ import PatientPaymentsSection from "@/components/PatientPaymentsSection";
 import { isMessageActivity } from "@/lib/messages";
 import { publicActivityText } from "@/lib/activity-display";
 import { patientTemplateText } from "@/lib/patient-templates";
-import { CONSENT_PARAGRAPHS, CONSENT_TITLE } from "@/lib/consent";
+import { syncPatientStripePayments } from "@/lib/stripe-checkout";
 
 export const dynamic = "force-dynamic";
 
@@ -32,7 +32,7 @@ const TIMELINE_STEPS = [
 
 export default async function PatientProfile({ params }: { params: { id: string } }) {
   const admin = await requireAdmin();
-  const c = await db.patient.findUnique({
+  const initial = await db.patient.findUnique({
     where: { id: params.id },
     include: {
       activities: { orderBy: { createdAt: "desc" }, take: 80 },
@@ -67,8 +67,8 @@ export default async function PatientProfile({ params }: { params: { id: string 
       },
     },
   });
-  if (!c) notFound();
-  if (!canAccessPatient(admin, c)) {
+  if (!initial) notFound();
+  if (!canAccessPatient(admin, initial)) {
     const q = new URLSearchParams({
       toast: "You don't have access to that patient",
       ticon: "!",
@@ -76,6 +76,49 @@ export default async function PatientProfile({ params }: { params: { id: string 
     });
     redirect(`/admin/patients?${q.toString()}`);
   }
+
+  // Auto-sync when Stripe shows paid but webhook missed (pending row in DB).
+  let c = initial;
+  if (c.payments.some((p) => p.status === "pending" && p.stripeSessionId) && c.status !== "paid") {
+    await syncPatientStripePayments(c.id).catch(() => {});
+    const fresh = await db.patient.findUnique({
+      where: { id: c.id },
+      include: {
+        activities: { orderBy: { createdAt: "desc" }, take: 80 },
+        instalments: { orderBy: { number: "asc" } },
+        payments: {
+          orderBy: { createdAt: "desc" },
+          select: {
+            id: true,
+            amountPence: true,
+            type: true,
+            status: true,
+            paidAt: true,
+            createdAt: true,
+            stripeSessionId: true,
+            stripePaymentIntentId: true,
+          },
+        },
+        paymentReceipts: {
+          orderBy: { createdAt: "desc" },
+          include: { payment: { select: { type: true, paidAt: true } } },
+        },
+        uploads: {
+          orderBy: { createdAt: "desc" },
+          select: {
+            id: true,
+            fileName: true,
+            mimeType: true,
+            sizeBytes: true,
+            uploadedBy: true,
+            createdAt: true,
+          },
+        },
+      },
+    });
+    if (fresh) c = fresh;
+  }
+
   const cfg = await getPricing();
 
   const st = statusOf(c.status);
@@ -391,8 +434,17 @@ export default async function PatientProfile({ params }: { params: { id: string 
 
                 <PaymentReceiptsSection patientId={c.id} receipts={c.paymentReceipts} />
 
-                <div style={{ marginTop: 14, display: "flex", gap: 10 }}>
-                  <form action={recordDeposit} style={{ flex: 1, display: "flex" }}>
+                <div style={{ marginTop: 14, display: "flex", gap: 10, flexWrap: "wrap" }}>
+                  <form action={syncStripePayment}>
+                    <input type="hidden" name="patientId" value={c.id} />
+                    <FormSubmitButton
+                      className="btn btn-outline"
+                      style={{ padding: 11, borderRadius: 10, fontSize: 13.5 }}
+                      label="Sync from Stripe"
+                      pendingLabel="Syncing…"
+                    />
+                  </form>
+                  <form action={recordDeposit} style={{ flex: 1, display: "flex", minWidth: 160 }}>
                     <input type="hidden" name="patientId" value={c.id} />
                     <FormSubmitButton
                       className="btn btn-outline"

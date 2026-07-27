@@ -300,7 +300,7 @@ async function createCheckoutUrl(token: string, type: "full" | "deposit"): Promi
     billing_address_collection: "auto",
     locale: "en-GB",
     metadata: { patientId: patient.id, type, brand: BRAND.name },
-    success_url: `${appUrl()}/p/${token}?paid=${type}`,
+    success_url: `${appUrl()}/p/${token}?paid=${type}&session_id={CHECKOUT_SESSION_ID}`,
     cancel_url: `${appUrl()}/p/${token}?cancelled=1`,
   };
 

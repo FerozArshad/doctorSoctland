@@ -2,17 +2,23 @@
 // the 3 monthly instalments after a deposit, and sends receipts/alerts.
 import { NextRequest, NextResponse } from "next/server";
 import type Stripe from "stripe";
-import { db } from "@/lib/db";
 import { stripe } from "@/lib/stripe";
-import { fmt, fullPricePence, instalmentPence, netPricePence } from "@/lib/pricing";
-import { getPricing } from "@/lib/pricing-settings";
-import { notifyAdmin, depositScheduleEmailHtml, sendEmail } from "@/lib/notify";
-import { issuePaymentReceipt } from "@/lib/payment-receipt";
+import { applyCheckoutSessionPaid } from "@/lib/stripe-checkout";
 import { log, summarizeError } from "@/lib/log";
-import { FOLLOW_UPS_COMPLETE_TOUCH } from "@/lib/follow-ups";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+
+/** Browser / health-check — Stripe delivers events via POST only. */
+export async function GET() {
+  const configured = !!process.env.STRIPE_WEBHOOK_SECRET?.trim();
+  return NextResponse.json({
+    ok: true,
+    endpoint: "stripe-webhook",
+    message: "This URL is for Stripe webhooks (POST only). Opening it in a browser is normal — configure it in Stripe Dashboard → Developers → Webhooks.",
+    webhookSecretConfigured: configured,
+  });
+}
 
 export async function POST(req: NextRequest) {
   const secret = process.env.STRIPE_WEBHOOK_SECRET;
@@ -24,119 +30,36 @@ export async function POST(req: NextRequest) {
   try {
     event = stripe().webhooks.constructEvent(body, sig, secret);
   } catch (e) {
+    log.warn("stripe.webhook.invalid_signature", summarizeError(e));
     return NextResponse.json({ error: "invalid signature" }, { status: 400 });
   }
 
-  if (event.type === "checkout.session.completed") {
-    const session = event.data.object as Stripe.Checkout.Session;
-    const patientId = session.metadata?.patientId;
-    const type = session.metadata?.type; // full | deposit
-    if (patientId && (type === "full" || type === "deposit")) {
-      await handleCheckoutPaid(session, patientId, type);
+  try {
+    if (event.type === "checkout.session.completed") {
+      const session = event.data.object as Stripe.Checkout.Session;
+      const patientId = session.metadata?.patientId;
+      const type = session.metadata?.type;
+      if (patientId && (type === "full" || type === "deposit")) {
+        await applyCheckoutSessionPaid(session, patientId, type);
+      }
     }
+
+    if (event.type === "payment_intent.succeeded") {
+      const pi = event.data.object as Stripe.PaymentIntent;
+      const sessionId = typeof pi.metadata?.checkout_session_id === "string" ? pi.metadata.checkout_session_id : null;
+      if (sessionId) {
+        const session = await stripe().checkout.sessions.retrieve(sessionId);
+        const patientId = session.metadata?.patientId;
+        const type = session.metadata?.type;
+        if (patientId && (type === "full" || type === "deposit")) {
+          await applyCheckoutSessionPaid(session, patientId, type);
+        }
+      }
+    }
+  } catch (e) {
+    log.error("stripe.webhook.handler.fail", { type: event.type, ...summarizeError(e) });
+    return NextResponse.json({ error: "handler failed" }, { status: 500 });
   }
 
   return NextResponse.json({ received: true });
-}
-
-async function handleCheckoutPaid(
-  session: Stripe.Checkout.Session,
-  patientId: string,
-  type: "full" | "deposit"
-) {
-  const patient = await db.patient.findUnique({ where: { id: patientId } });
-  if (!patient) return;
-  const amount = session.amount_total ?? 0;
-  const piId = typeof session.payment_intent === "string" ? session.payment_intent : session.payment_intent?.id;
-
-  // Idempotency: skip if this session was already processed
-  const existing = await db.payment.findUnique({ where: { stripeSessionId: session.id } });
-  if (existing?.status === "paid") return;
-
-  const paymentRecord = await db.payment.upsert({
-    where: { stripeSessionId: session.id },
-    update: { status: "paid", paidAt: new Date(), stripePaymentIntentId: piId },
-    create: {
-      patientId,
-      amountPence: amount,
-      type,
-      status: "paid",
-      paidAt: new Date(),
-      stripeSessionId: session.id,
-      stripePaymentIntentId: piId,
-    },
-  });
-
-  if (type === "full") {
-    await db.patient.update({
-      where: { id: patientId },
-      data: {
-        status: "paid",
-        amountPaidPence: fullPricePence(netPricePence(patient.pricePence, patient.upfrontPaidPence), patient.discountPct),
-        sequenceTouch: FOLLOW_UPS_COMPLETE_TOUCH,
-        activities: { create: { text: `Paid in full via secure link — ${fmt(amount)}` } },
-      },
-    });
-    await issuePaymentReceipt(paymentRecord.id).catch((e) => log.error("payment.receipt.fail", summarizeError(e)));
-    await notifyAdmin(
-      `💚 ${patient.firstName} ${patient.lastName} paid in full`,
-      `${fmt(amount)} received via Stripe.${piId ? ` Transaction: ${piId}.` : ""} Their aligners can be ordered now. View: ${(process.env.APP_URL || "https://dashboard.dentalscotland.com").replace(/\/$/, "")}/admin/patients/${patientId}`
-    );
-    return;
-  }
-
-  // Deposit: save card for off-session charges + schedule 3 monthly instalments
-  let pmId: string | null = null;
-  if (piId) {
-    try {
-      const pi = await stripe().paymentIntents.retrieve(piId);
-      pmId = typeof pi.payment_method === "string" ? pi.payment_method : pi.payment_method?.id ?? null;
-    } catch (e) {
-      console.error("Could not retrieve payment method:", e);
-    }
-  }
-
-  const cfg = await getPricing();
-  const per = instalmentPence(netPricePence(patient.pricePence, patient.upfrontPaidPence), cfg.depositPence);
-  const dueDates = [1, 2, 3].map((m) => {
-    const d = new Date();
-    d.setMonth(d.getMonth() + m);
-    return d;
-  });
-
-  await db.$transaction([
-    db.instalment.deleteMany({ where: { patientId, status: "scheduled" } }),
-    db.patient.update({
-      where: { id: patientId },
-      data: {
-        status: "deposit",
-        sequenceTouch: FOLLOW_UPS_COMPLETE_TOUCH,
-        // Record what Stripe actually took, not a hardcoded figure.
-        amountPaidPence: amount,
-        stripePaymentMethodId: pmId,
-        activities: {
-          create: [
-            { text: `${fmt(amount)} deposit paid via secure link` },
-            { text: `3 monthly instalments of ${fmt(per)} scheduled` },
-          ],
-        },
-      },
-    }),
-    ...dueDates.map((dueDate, i) =>
-      db.instalment.create({
-        data: { patientId, number: i + 1, amountPence: per, dueDate },
-      })
-    ),
-  ]);
-
-  await sendEmail(
-    patient.email,
-    "Deposit received — your instalment plan is set — Dental Scotland",
-    depositScheduleEmailHtml(patient, amount, per, dueDates)
-  ).catch(console.error);
-  await issuePaymentReceipt(paymentRecord.id).catch((e) => log.error("payment.receipt.fail", summarizeError(e)));
-  await notifyAdmin(
-    `💚 ${patient.firstName} ${patient.lastName} paid the ${fmt(amount)} deposit`,
-    `3 instalments of ${fmt(per)} scheduled monthly on their saved card.${piId ? ` Transaction: ${piId}.` : ""} View: ${(process.env.APP_URL || "https://dashboard.dentalscotland.com").replace(/\/$/, "")}/admin/patients/${patientId}`
-  );
 }

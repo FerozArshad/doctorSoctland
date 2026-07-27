@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useFormStatus } from "react-dom";
 import { updatePatient } from "@/app/admin/actions";
-import { estMonths, fmt, patientBalancePence, priceForPence, type PricingConfig } from "@/lib/pricing";
+import { validateProposalForSend } from "@/lib/proposal-validation";
 import SentByPicker from "@/components/SentByPicker";
 
 export type ProposalPatient = {
@@ -92,7 +92,7 @@ function ProposalActions({ isDraft, patientId }: { isDraft: boolean; patientId: 
       </div>
       <div style={{ fontSize: 12, color: "#9AA6B4", marginTop: 12, lineHeight: 1.6 }}>
         <strong>Save draft</strong> stores your progress — resume anytime from <strong>Patients → Draft</strong>.{" "}
-        <strong>Save &amp; send</strong> emails the patient and sends WhatsApp when a phone number is set.
+        <strong>Save &amp; send</strong> emails the patient (requires name, email, phone, and ClinCheck video).
       </div>
     </>
   );
@@ -115,7 +115,7 @@ export default function ProposalForm({
   const [pkg, setPkg] = useState<"Express" | "Go">(patient.pkg);
   const [video, setVideo] = useState(patient.videoUrl);
   const [notes, setNotes] = useState(patient.notes);
-  const [errs, setErrs] = useState({ first: false, email: false });
+  const [errs, setErrs] = useState({ first: false, last: false, email: false, phone: false, video: false });
   const isDraft = patient.status === "draft";
 
   const price = priceForPence(alignerCount, cfg);
@@ -123,11 +123,40 @@ export default function ProposalForm({
   const net = patientBalancePence(price, cfg);
 
   const validate = (e: React.FormEvent<HTMLFormElement>) => {
+    const fd = new FormData(e.currentTarget);
+    const intent = String(fd.get("intent") || "");
     const first = !firstName.trim();
+    const last = !lastName.trim();
     const em = !/.+@.+\..+/.test(email);
+    const ph = !phone.trim() || phone.trim() === "—";
+    const vid = !/^https?:\/\/.+/i.test(video.trim());
     if (first || em) {
       e.preventDefault();
-      setErrs({ first, email: em });
+      setErrs({ first, last, email: em, phone: ph, video: vid });
+      return;
+    }
+    if (intent === "send") {
+      const check = validateProposalForSend({
+        firstName,
+        lastName,
+        email,
+        phone,
+        videoUrl: video,
+        alignerCount,
+        pkg,
+      });
+      if (!check.ok) {
+        e.preventDefault();
+        const msg = check.message.toLowerCase();
+        setErrs({
+          first: !firstName.trim(),
+          last: !lastName.trim(),
+          email: !/.+@.+\..+/.test(email),
+          phone: ph || msg.includes("mobile") || msg.includes("phone"),
+          video: vid || msg.includes("video"),
+        });
+        alert(check.message);
+      }
     }
   };
 
@@ -169,16 +198,16 @@ export default function ProposalForm({
             <input className={"input" + (errs.first ? " err" : "")} name="firstName" value={firstName} onChange={(e) => { setFirstName(e.target.value); setErrs((s) => ({ ...s, first: false })); }} placeholder="First name" />
           </div>
           <div>
-            <label className="label">Last name</label>
-            <input className="input" name="lastName" value={lastName} onChange={(e) => setLastName(e.target.value)} placeholder="Last name" />
+            <label className="label">Last name *</label>
+            <input className={"input" + (errs.last ? " err" : "")} name="lastName" value={lastName} onChange={(e) => { setLastName(e.target.value); setErrs((s) => ({ ...s, last: false })); }} placeholder="Last name" />
           </div>
           <div>
             <label className="label">Email *</label>
             <input className={"input" + (errs.email ? " err" : "")} name="email" value={email} onChange={(e) => { setEmail(e.target.value); setErrs((s) => ({ ...s, email: false })); }} placeholder="name@email.com" />
           </div>
           <div>
-            <label className="label">Phone (WhatsApp)</label>
-            <input className="input" name="phone" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="Mobile number" />
+            <label className="label">Phone (WhatsApp) *</label>
+            <input className={"input" + (errs.phone ? " err" : "")} name="phone" value={phone} onChange={(e) => { setPhone(e.target.value); setErrs((s) => ({ ...s, phone: false })); }} placeholder="Mobile number" />
           </div>
         </div>
 
@@ -219,8 +248,8 @@ export default function ProposalForm({
         )}
 
         <div style={{ marginTop: 20 }}>
-          <label className="label">ClinCheck video link</label>
-          <input className="input" name="videoUrl" value={video} onChange={(e) => setVideo(e.target.value)} placeholder="Paste ClinCheck video URL" />
+          <label className="label">ClinCheck video link *</label>
+          <input className={"input" + (errs.video ? " err" : "")} name="videoUrl" value={video} onChange={(e) => { setVideo(e.target.value); setErrs((s) => ({ ...s, video: false })); }} placeholder="Paste ClinCheck video URL (https://…)" />
         </div>
         <div style={{ marginTop: 16 }}>
           <label className="label">Notes</label>

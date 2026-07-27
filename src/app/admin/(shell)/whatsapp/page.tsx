@@ -16,7 +16,7 @@ export default async function WhatsAppSettingsPage() {
   return (
     <>
       <TopBar title="WhatsApp" sub="Cloud API connection (shared for local + production)" />
-      <div className="ds-scroll" style={{ flex: 1, overflow: "auto", padding: 28 }}>
+      <div className="ds-scroll ds-admin-pad" style={{ flex: 1, overflow: "auto" }}>
         <div className="ds-view">
           <WhatsAppSettingsForm cfg={cfg} appUrl={appUrl} />
         </div>

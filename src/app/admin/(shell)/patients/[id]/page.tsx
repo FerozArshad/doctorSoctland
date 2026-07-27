@@ -168,8 +168,8 @@ export default async function PatientProfile({ params }: { params: { id: string 
             <div style={{ display: "flex", alignItems: "center", gap: 16, flexWrap: "wrap" }}>
               <div style={{ width: 58, height: 58, borderRadius: "50%", background: avatarBg(c.id), color: "#fff", display: "grid", placeItems: "center", fontWeight: 800, fontSize: 20, flex: "none" }}>{initials(c.firstName, c.lastName)}</div>
               <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                  <span style={{ fontSize: 22, fontWeight: 800, letterSpacing: "-.01em" }}>{c.firstName} {c.lastName}</span>
+                <div className="ds-patient-badges">
+                  <span className="ds-patient-name">{c.firstName} {c.lastName}</span>
                   <span className="badge" style={{ color: st.fg, background: st.bg, padding: "4px 11px" }}>
                     <span style={{ width: 6, height: 6, borderRadius: "50%", background: st.dot }} />
                     {st.label}

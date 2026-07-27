@@ -17,7 +17,7 @@ export default async function SettingsPage() {
   return (
     <>
       <TopBar title="Settings" sub="Your profile and password" />
-      <div className="ds-scroll" style={{ flex: 1, overflow: "auto", padding: 28 }}>
+      <div className="ds-scroll ds-admin-pad" style={{ flex: 1, overflow: "auto" }}>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(320px, 480px))", gap: 18 }}>
           <AdminProfileForm name={me.name} email={me.email} role={me.role} isSuperAdmin={me.isSuperAdmin} />
           <AdminPasswordForm adminName={me.name} adminEmail={me.email} />

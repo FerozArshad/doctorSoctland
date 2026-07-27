@@ -11,7 +11,7 @@ export default async function PricingPage() {
   return (
     <>
       <TopBar title="Pricing tiers" sub="Treatment prices, deposit, and payment options for new proposals" />
-      <div className="ds-scroll" style={{ flex: 1, overflow: "auto", padding: 28 }}>
+      <div className="ds-scroll ds-admin-pad" style={{ flex: 1, overflow: "auto" }}>
         <PricingSettingsForm cfg={cfg} />
       </div>
     </>

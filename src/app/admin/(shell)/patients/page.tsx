@@ -39,12 +39,12 @@ export default async function PatientsPage() {
   return (
     <>
       <TopBar title="Patients" sub="Manage records & proposals" />
-      <div className="ds-scroll" style={{ flex: 1, overflow: "auto", padding: 28 }}>
+      <div className="ds-scroll ds-admin-pad" style={{ flex: 1, overflow: "auto" }}>
         {admin.isSuperAdmin && (
-          <form action={syncAllStripeFromDashboard} style={{ marginBottom: 16 }}>
+          <form action={syncAllStripeFromDashboard} style={{ marginBottom: 16 }} className="ds-mobile-full">
             <FormSubmitButton
-              className="btn btn-outline"
-              style={{ padding: "10px 16px", fontSize: 13.5 }}
+              className="btn btn-outline ds-mobile-full"
+              style={{ padding: "10px 16px", fontSize: 13.5, width: "100%" }}
               label="Sync all payments from Stripe"
               pendingLabel="Syncing from Stripe…"
             />

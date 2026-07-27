@@ -26,7 +26,7 @@ export default async function EmailSettingsPage() {
           </Link>
         }
       />
-      <div className="ds-scroll" style={{ flex: 1, overflow: "auto", padding: 28 }}>
+      <div className="ds-scroll ds-admin-pad" style={{ flex: 1, overflow: "auto" }}>
         <div style={{ display: "flex", flexDirection: "column", gap: 18, maxWidth: 720 }}>
           <div className="card" style={{ padding: 20, fontSize: 13, lineHeight: 1.65, color: "#5A6A7E" }}>
             <strong style={{ color: "#16202E" }}>Delivery status note:</strong> Gmail and Resend confirm when an email is

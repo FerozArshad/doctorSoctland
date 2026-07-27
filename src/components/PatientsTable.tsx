@@ -71,7 +71,7 @@ export default function PatientsTable({ rows }: { rows: PatientRow[] }) {
   const grid = "2.4fr 1.3fr 1fr 1.4fr 1.2fr 0.5fr";
 
   return (
-    <div className="ds-view card" style={{ overflow: "hidden" }}>
+    <div className="ds-view card ds-patients-card" style={{ overflow: "hidden" }}>
       <div className="ds-patients-toolbar">
         <div className="ds-patients-search">
           <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#9AA6B4" strokeWidth="2" strokeLinecap="round" style={{ position: "absolute", left: 13, top: 11 }}>
@@ -103,8 +103,8 @@ export default function PatientsTable({ rows }: { rows: PatientRow[] }) {
       </div>
 
       {/* sent-by filter */}
-      <div style={{ padding: "12px 20px", display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", borderBottom: "1px solid #EEF2F6", background: "#FBFCFD" }}>
-        <span style={{ fontSize: 11.5, fontWeight: 700, letterSpacing: ".05em", textTransform: "uppercase", color: "#8A96A5" }}>Sent by</span>
+      <div className="ds-filter-row">
+        <span className="ds-filter-row-label">Sent by</span>
         <div className="ds-filter-chips">
           {COORD_CHIPS.map(([k, label]) => (
             <button
@@ -139,8 +139,8 @@ export default function PatientsTable({ rows }: { rows: PatientRow[] }) {
             <div className="ds-pat-col-patient" style={{ display: "flex", alignItems: "center", gap: 12, minWidth: 0 }}>
               <div style={{ width: 38, height: 38, borderRadius: "50%", background: r.avatarBg, color: "#fff", display: "grid", placeItems: "center", fontWeight: 700, fontSize: 13, flex: "none" }}>{r.initials}</div>
               <div style={{ minWidth: 0 }}>
-                <div style={{ fontSize: 14, fontWeight: 700, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{r.name}</div>
-                <div style={{ fontSize: 12.5, color: "#8A96A5", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{r.email}</div>
+                <div className="ds-pat-text-truncate" style={{ fontSize: 14, fontWeight: 700, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{r.name}</div>
+                <div className="ds-pat-text-truncate" style={{ fontSize: 12.5, color: "#8A96A5", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{r.email}</div>
               </div>
             </div>
             <div className="ds-pat-col-plan" style={{ fontSize: 13.5, color: "#3C4a59" }}>

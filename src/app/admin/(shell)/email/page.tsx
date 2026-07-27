@@ -48,7 +48,7 @@ export default async function EmailLogsPage({
           </Link>
         }
       />
-      <div className="ds-scroll" style={{ flex: 1, overflow: "auto", padding: 28 }}>
+      <div className="ds-scroll ds-admin-pad" style={{ flex: 1, overflow: "auto" }}>
         <EmailLogsTable rows={rows} total={total} page={page} pageSize={pageSize} counts={counts} filters={filters} />
       </div>
     </>

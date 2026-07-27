@@ -151,7 +151,7 @@ export default async function ReportsPage({
   return (
     <>
       <TopBar title="Monthly reports" sub="Automated Invisalign volume, conversion & value — locked, not editable" />
-      <div className="ds-scroll" style={{ flex: 1, overflow: "auto", padding: 28 }}>
+      <div className="ds-scroll ds-admin-pad" style={{ flex: 1, overflow: "auto" }}>
         <div className="ds-view">
           <div className="card" style={{ padding: "16px 20px", display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap" }}>
             {me.isSuperAdmin && (

@@ -11,12 +11,20 @@ export const dynamic = "force-dynamic";
 
 /** Browser / health-check — Stripe delivers events via POST only. */
 export async function GET() {
-  const configured = !!process.env.STRIPE_WEBHOOK_SECRET?.trim();
+  const sk = process.env.STRIPE_SECRET_KEY?.trim() || "";
+  const whsec = process.env.STRIPE_WEBHOOK_SECRET?.trim() || "";
+  const stripeKeyMode = sk.startsWith("sk_live_") ? "live" : sk.startsWith("sk_test_") ? "test" : sk ? "unknown" : "missing";
+  const webhookSecretConfigured = !!whsec;
+  const webhookSecretLooksValid = whsec.startsWith("whsec_") && !/localtest|example|change-me/i.test(whsec);
   return NextResponse.json({
-    ok: true,
+    ok: stripeKeyMode === "live" && webhookSecretConfigured && webhookSecretLooksValid,
     endpoint: "stripe-webhook",
-    message: "This URL is for Stripe webhooks (POST only). Opening it in a browser is normal — configure it in Stripe Dashboard → Developers → Webhooks.",
-    webhookSecretConfigured: configured,
+    message: "Stripe sends POST here after checkout. Browser GET is only a health check.",
+    stripeKeyMode,
+    stripeKeyConfigured: !!sk,
+    webhookSecretConfigured,
+    webhookSecretLooksValid,
+    appUrl: process.env.APP_URL || null,
   });
 }
 

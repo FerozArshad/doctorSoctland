@@ -5,6 +5,7 @@ import { estMonths, fmt, netPricePence, paymentPreferenceLabel } from "@/lib/pri
 import { getPricing } from "@/lib/pricing-settings";
 import { avatarBg, initials, statusOf, timeAgo } from "@/lib/status";
 import { COMP_ITEMS, COMP_TOTAL } from "@/lib/content";
+import { treatmentLabel } from "@/lib/treatments";
 import { approveFinance, markPaid, recordDeposit, sendPatientTemplate, setFinanceStatus, syncStripePayment } from "@/app/admin/actions";
 import ResendProposalForm from "@/components/ResendProposalForm";
 import { coordinatorKeyFor, COORDINATORS } from "@/lib/coordinators";
@@ -213,6 +214,9 @@ export default async function PatientProfile({ params }: { params: { id: string 
                       Follow-up {c.sequenceTouch}/7
                     </span>
                   )}
+                  <span className="badge" style={{ color: "#3C4a59", background: "#EEF2F6", padding: "4px 11px" }}>
+                    {treatmentLabel(c.treatmentType)}
+                  </span>
                 </div>
                 <div style={{ fontSize: 13.5, color: "#7A8696", marginTop: 4, display: "flex", gap: 16, flexWrap: "wrap" }}>
                   <span>{c.email}</span>

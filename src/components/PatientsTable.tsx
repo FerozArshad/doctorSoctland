@@ -2,6 +2,7 @@
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { STATUS, StatusKey } from "@/lib/status";
+import { treatmentLabel } from "@/lib/treatments";
 
 export type PatientRow = {
   id: string;
@@ -11,6 +12,7 @@ export type PatientRow = {
   avatarBg: string;
   alignerCount: number;
   pkg: string;
+  treatmentType: string;
   priceFmt: string;
   status: string;
   financeStatus: string; // none | applied | accepted | declined
@@ -145,8 +147,12 @@ export default function PatientsTable({ rows }: { rows: PatientRow[] }) {
             </div>
             <div className="ds-pat-col-plan" style={{ fontSize: 13.5, color: "#3C4a59" }}>
               <div className="ds-pat-mobile-label">Plan</div>
-              <span style={{ fontWeight: 700 }}>{r.alignerCount}</span> aligners
-              <div style={{ fontSize: 12, color: "#9AA6B4" }}>Invisalign {r.pkg}</div>
+              <div style={{ fontWeight: 700 }}>{treatmentLabel(r.treatmentType)}</div>
+              {r.treatmentType === "invisalign" && (
+                <div style={{ fontSize: 12, color: "#9AA6B4", marginTop: 2 }}>
+                  {r.alignerCount} aligners · {r.pkg}
+                </div>
+              )}
             </div>
             <div className="ds-pat-col-value" style={{ fontSize: 14.5, fontWeight: 800 }}>
               <div className="ds-pat-mobile-label">Value</div>

@@ -136,6 +136,8 @@ model Patient {
   lastName              String       @default("")
   email                 String       @unique
   phone                 String       @default("")
+  // invisalign | veneers | implants | composite_bonding | other
+  treatmentType         String       @default("invisalign")
   alignerCount          Int
   pkg                   String       @default("Go") // Express | Go
   videoUrl              String       @default("")

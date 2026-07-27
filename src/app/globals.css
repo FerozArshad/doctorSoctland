@@ -770,6 +770,9 @@ a { color: inherit; transition: color .15s var(--ease), opacity .15s var(--ease)
   .ds-pkg-btns > button {
     width: 100% !important;
   }
+  .ds-treatment-grid {
+    grid-template-columns: 1fr !important;
+  }
   .ds-proposal-form-actions > a,
   .ds-proposal-form-actions > button {
     width: 100% !important;

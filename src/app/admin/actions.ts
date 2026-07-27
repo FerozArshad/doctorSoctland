@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { db } from "@/lib/db";
 import { canAccessPatient, clearAdminSession, createAdminSession, requireAdmin } from "@/lib/auth";
 import { fmt, fullPricePence, netPricePence, priceForPence } from "@/lib/pricing";
+import { parseTreatmentType, treatmentLabel } from "@/lib/treatments";
 import { getPricing } from "@/lib/pricing-settings";
 import { COORDINATORS, coordinatorFor, fromHeader, FALLBACK_COORDINATOR, type Coordinator } from "@/lib/coordinators";
 import { brandedEmail, emailConfigured, financeLinkEmailHtml, proposalEmailHtml, sendEmail, sendProposalWhatsApp, sendWhatsApp, escapeHtml, adminWelcomeEmailHtml, adminPasswordResetEmailHtml, notifyAdmin } from "@/lib/notify";
@@ -735,6 +736,7 @@ export async function createPatient(formData: FormData) {
   const lastName = String(formData.get("lastName") || "").trim();
   const email = String(formData.get("email") || "").trim().toLowerCase();
   const phone = String(formData.get("phone") || "").trim();
+  const treatmentType = parseTreatmentType(formData.get("treatmentType"));
 
   if (!firstName || !/.+@.+\..+/.test(email)) redirect("/admin/patients/new?error=1");
 
@@ -758,7 +760,8 @@ export async function createPatient(formData: FormData) {
         lastName,
         email,
         phone,
-        activities: { create: { text: "Contact details updated — opening proposal" } },
+        treatmentType,
+        activities: { create: { text: `Contact details updated — opening proposal (${treatmentLabel(treatmentType)})` } },
       },
     });
     redirect(
@@ -777,6 +780,7 @@ export async function createPatient(formData: FormData) {
       lastName,
       email,
       phone,
+      treatmentType,
       alignerCount,
       pkg: "Go",
       videoUrl: "",
@@ -786,7 +790,7 @@ export async function createPatient(formData: FormData) {
       discountPct: cfg.discountPct,
       upfrontPaidPence: cfg.upfrontPence,
       ownerId: admin.id,
-      activities: { create: { text: "Draft proposal created" } },
+      activities: { create: { text: `Draft proposal created — ${treatmentLabel(treatmentType)}` } },
     },
   });
 

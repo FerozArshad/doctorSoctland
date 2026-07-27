@@ -26,6 +26,7 @@ export default async function PatientsPage() {
     avatarBg: avatarBg(c.id),
     alignerCount: c.alignerCount,
     pkg: c.pkg,
+    treatmentType: c.treatmentType || "invisalign",
     priceFmt: fmt(netPricePence(c.pricePence, c.upfrontPaidPence)),
     status: c.status,
     financeStatus: c.financeStatus || "none",

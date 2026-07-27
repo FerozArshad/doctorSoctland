@@ -434,29 +434,26 @@ export default async function PatientProfile({ params }: { params: { id: string 
                 <PaymentReceiptsSection patientId={c.id} receipts={c.paymentReceipts} />
 
                 <div className="ds-patient-payment-actions" style={{ marginTop: 14 }}>
-                  <form action={syncStripePayment}>
+                  <form action={syncStripePayment} className="ds-payment-form">
                     <input type="hidden" name="patientId" value={c.id} />
                     <FormSubmitButton
-                      className="btn btn-outline"
-                      style={{ padding: 11, borderRadius: 10, fontSize: 13.5 }}
+                      className="btn btn-outline ds-payment-btn"
                       label="Sync from Stripe"
                       pendingLabel="Syncing…"
                     />
                   </form>
-                  <form action={recordDeposit}>
+                  <form action={recordDeposit} className="ds-payment-form">
                     <input type="hidden" name="patientId" value={c.id} />
                     <FormSubmitButton
-                      className="btn btn-outline"
-                      style={{ flex: 1, padding: 11, borderRadius: 10, fontSize: 13.5 }}
+                      className="btn btn-outline ds-payment-btn"
                       label={`Record ${fmt(cfg.depositPence)} deposit`}
                       pendingLabel="Saving…"
                     />
                   </form>
-                  <form action={markPaid}>
+                  <form action={markPaid} className="ds-payment-form">
                     <input type="hidden" name="patientId" value={c.id} />
                     <FormSubmitButton
-                      className="btn btn-dark"
-                      style={{ flex: 1, padding: 11, borderRadius: 10, fontSize: 13.5 }}
+                      className="btn btn-dark ds-payment-btn"
                       label="Mark paid in full"
                       pendingLabel="Saving…"
                     />

@@ -6,6 +6,7 @@ type AdminShellContextValue = {
   navOpen: boolean;
   openNav: () => void;
   closeNav: () => void;
+  toggleNav: () => void;
 };
 
 const AdminShellContext = createContext<AdminShellContextValue | null>(null);
@@ -15,6 +16,7 @@ export function AdminShellProvider({ children }: { children: React.ReactNode }) 
 
   const openNav = useCallback(() => setNavOpen(true), []);
   const closeNav = useCallback(() => setNavOpen(false), []);
+  const toggleNav = useCallback(() => setNavOpen((v) => !v), []);
 
   useEffect(() => {
     document.body.style.overflow = navOpen ? "hidden" : "";
@@ -23,8 +25,17 @@ export function AdminShellProvider({ children }: { children: React.ReactNode }) 
     };
   }, [navOpen]);
 
+  useEffect(() => {
+    if (!navOpen) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") closeNav();
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [navOpen, closeNav]);
+
   return (
-    <AdminShellContext.Provider value={{ navOpen, openNav, closeNav }}>
+    <AdminShellContext.Provider value={{ navOpen, openNav, closeNav, toggleNav }}>
       {children}
     </AdminShellContext.Provider>
   );

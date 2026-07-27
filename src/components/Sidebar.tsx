@@ -81,8 +81,20 @@ export default function Sidebar({
       className={"ds-sidebar" + (navOpen ? " is-open" : "")}
       style={{ width: 248, flex: "none", background: "#0B1828", display: "flex", flexDirection: "column", position: "sticky", top: 0, height: "100vh", overflow: "visible" }}
     >
-      <div className="ds-sb-logo" style={{ padding: "26px 22px 18px" }}>
-        <BrandLogo width={140} height={38} />
+      <div className="ds-sb-header">
+        <div className="ds-sb-logo" style={{ padding: "26px 22px 18px", flex: 1, minWidth: 0 }}>
+          <BrandLogo width={140} height={38} />
+        </div>
+        <button
+          type="button"
+          className="ds-sidebar-close"
+          onClick={closeNav}
+          aria-label="Close navigation"
+        >
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden>
+            <path d="M18 6 6 18M6 6l12 12" />
+          </svg>
+        </button>
       </div>
       <nav className="ds-sb-nav" style={{ padding: "6px 12px", flex: 1, overflowY: "auto", overflowX: "hidden" }}>
         <div className="ds-sb-label" style={{ fontSize: 11, fontWeight: 700, letterSpacing: ".1em", textTransform: "uppercase", color: "#4E6178", padding: "8px 12px 6px" }}>

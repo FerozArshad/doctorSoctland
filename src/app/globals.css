@@ -415,6 +415,33 @@ a { color: inherit; transition: color .15s var(--ease), opacity .15s var(--ease)
   white-space: nowrap;
 }
 
+/* Sidebar drawer */
+.ds-sb-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 4px;
+  padding-right: 10px;
+}
+.ds-sidebar-close {
+  display: none;
+  width: 40px;
+  height: 40px;
+  margin-top: 24px;
+  flex: none;
+  border: none;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.1);
+  color: #E8EEF6;
+  cursor: pointer;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+}
+.ds-sidebar-close:hover {
+  background: rgba(255, 255, 255, 0.16);
+}
+
 /* Sidebar drawer backdrop */
 .ds-sidebar-backdrop {
   display: none;
@@ -453,6 +480,16 @@ a { color: inherit; transition: color .15s var(--ease), opacity .15s var(--ease)
   .ds-sidebar.is-open {
     transform: translateX(0);
     box-shadow: 8px 0 40px rgba(0, 0, 0, 0.35);
+  }
+  .ds-sidebar-close {
+    display: inline-flex;
+  }
+  .ds-patient-payment-actions {
+    flex-direction: column !important;
+  }
+  .ds-payment-form {
+    width: 100% !important;
+    flex: 1 1 auto !important;
   }
   .ds-admin-pad { padding: 20px 16px !important; }
   .ds-topbar { padding: 10px 16px !important; max-width: 100%; }
@@ -641,7 +678,22 @@ a { color: inherit; transition: color .15s var(--ease), opacity .15s var(--ease)
 .ds-patient-card {
   padding: 24px;
   min-width: 0;
-  overflow: hidden;
+  overflow-x: clip;
+  overflow-y: visible;
+}
+.ds-payment-form {
+  flex: 1 1 180px;
+  min-width: 0;
+  display: flex;
+}
+.ds-payment-btn {
+  width: 100%;
+  padding: 11px 14px !important;
+  font-size: 13.5px !important;
+  border-radius: 10px !important;
+  white-space: normal !important;
+  text-align: center;
+  line-height: 1.35;
 }
 .ds-patient-comp-grid {
   display: grid;

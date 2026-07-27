@@ -1,4 +1,5 @@
 import { COORDINATORS } from "@/lib/coordinators";
+import { TREATMENT_TYPES } from "@/lib/treatments";
 import {
   buildReportPaymentLines,
   orderDateForPatient,
@@ -27,6 +28,8 @@ export type MonthlyReportData = {
   bookingCreditPence: number;
   financeIncomePence: number;
   totalIncomePence: number;
+  proposalsByTreatment: Record<string, number>;
+  ordersByTreatment: Record<string, number>;
 };
 
 const pad = (n: number) => String(n).padStart(2, "0");
@@ -155,6 +158,15 @@ export function buildMonthlyReportData(opts: {
     .filter((o) => o.paymentType === "Finance")
     .map((o) => ({ id: o.id, name: o.patientName, email: o.email }));
 
+  const countByTreatment = (rows: ReportRow[]) => {
+    const counts: Record<string, number> = {};
+    for (const t of TREATMENT_TYPES) counts[t.label] = 0;
+    for (const row of rows) {
+      counts[row.treatment] = (counts[row.treatment] || 0) + 1;
+    }
+    return counts;
+  };
+
   return {
     monthName,
     year,
@@ -173,6 +185,8 @@ export function buildMonthlyReportData(opts: {
     bookingCreditPence,
     financeIncomePence,
     totalIncomePence,
+    proposalsByTreatment: countByTreatment(proposals),
+    ordersByTreatment: countByTreatment(orders),
   };
 }
 

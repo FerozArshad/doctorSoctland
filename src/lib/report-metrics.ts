@@ -1,4 +1,5 @@
 import { fmt, netPricePence } from "@/lib/pricing";
+import { treatmentLabel } from "@/lib/treatments";
 
 export type ReportPaymentType = "Deposit" | "Paid in Full" | "Finance";
 
@@ -15,6 +16,7 @@ export type ReportPatientSlice = {
   financeApprovedAt: Date | null;
   consentSignedAt: Date | null;
   sentByEmail: string;
+  treatmentType?: string | null;
   payments?: Array<{ type: string; status: string; paidAt: Date | null }>;
 };
 
@@ -22,6 +24,7 @@ export type ReportRow = {
   id: string;
   patientName: string;
   email: string;
+  treatment: string;
   grossPence: number;
   bookingCreditPence: number;
   netPence: number;
@@ -103,6 +106,7 @@ export function toReportRow(
     id: p.id,
     patientName: `${p.firstName} ${p.lastName}`.trim(),
     email: p.email,
+    treatment: treatmentLabel(p.treatmentType),
     grossPence,
     bookingCreditPence,
     netPence,

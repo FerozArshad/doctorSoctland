@@ -459,6 +459,7 @@ export default async function ProposalPage({
                       previewMode={!!admin}
                       financeRedirectUrl={financeRedirectUrl}
                       docs={proposalDocs}
+                      treatmentType={c.treatmentType}
                     />
 
                     {!paid && !depositPaid && (

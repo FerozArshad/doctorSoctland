@@ -55,7 +55,7 @@ export async function GET(req: NextRequest) {
         brandedEmail(
           "Your monthly report is due",
           `<p style="font-size:15px;line-height:1.7;color:#3C4a59;">Hi ${firstNameOf(a.name)},</p>
-           <p style="font-size:15px;line-height:1.7;color:#3C4a59;">Your <strong>${monthName}</strong> report is due today. It takes about two minutes — consults seen, how many went ahead, and bonding/veneer figures. Invisalign orders and income are calculated for you.</p>
+           <p style="font-size:15px;line-height:1.7;color:#3C4a59;">Your <strong>${monthName}</strong> report is due today. Proposals, orders and income across all treatments are calculated automatically from live patient records.</p>
            <div style="text-align:center;margin:22px 0 8px;"><a href="${link}" style="display:inline-block;background:#0E9384;color:#fff;text-decoration:none;padding:13px 26px;border-radius:11px;font-weight:800;font-size:14.5px;">File your ${monthName} report →</a></div>`
         )
       ).catch(console.error);

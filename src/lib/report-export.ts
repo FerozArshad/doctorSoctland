@@ -8,10 +8,12 @@ export type ReportExportInput = {
   year: number;
   month: number;
   proposalsSent: number;
-  invisalignOrders: number;
+  treatmentOrders: number;
   conversionPct: number | null;
   avgOrderPence: number;
-  invisalignIncomePence: number;
+  totalIncomePence: number;
+  proposalsByTreatment: Record<string, number>;
+  ordersByTreatment: Record<string, number>;
   cashCollectedPence: number;
   bookingCreditPence: number;
   financeIncomePence: number;
@@ -19,6 +21,7 @@ export type ReportExportInput = {
   proposals: Array<{
     patientName: string;
     email: string;
+    treatment: string;
     grossPence: number;
     bookingCreditPence: number;
     netPence: number;
@@ -28,6 +31,7 @@ export type ReportExportInput = {
   orders: Array<{
     patientName: string;
     email: string;
+    treatment: string;
     grossPence: number;
     bookingCreditPence: number;
     netPence: number;
@@ -57,11 +61,11 @@ function valueCell(gross: number, credit: number, net: number) {
   return fmt(net);
 }
 
-/** Flat rows for CSV / Excel — automated Invisalign metrics only. */
+/** Flat rows for CSV / Excel — automated treatment metrics. */
 export function reportExportRows(d: ReportExportInput): string[][] {
   const rows: string[][] = [
     [d.practiceName],
-    ["Monthly Invisalign report (automated — not editable)"],
+    ["Monthly treatment report (automated — not editable)"],
     ["Scope", d.scopeLabel],
     ["Period", d.monthName],
     [
@@ -78,25 +82,34 @@ export function reportExportRows(d: ReportExportInput): string[][] {
     ["SUMMARY"],
     ["Metric", "Value"],
     ["Proposals sent", String(d.proposalsSent)],
-    ["Invisalign orders", String(d.invisalignOrders)],
+    ["Treatment orders", String(d.treatmentOrders)],
     ["Conversion rate (orders ÷ proposals)", pct(d.conversionPct)],
     ["Average revenue per patient (new orders)", d.avgOrderPence ? fmt(d.avgOrderPence) : "—"],
     ["Card / Stripe collected this month", fmt(d.cashCollectedPence)],
-    [`Booking credit included (${fmt(d.defaultCreditPence)} per order)`, fmt(d.bookingCreditPence)],
+    [`Booking credit included (varies by treatment)`, fmt(d.bookingCreditPence)],
     ["Finance net value (entered)", d.financeIncomePence ? fmt(d.financeIncomePence) : "—"],
-    ["Total income (incl. booking credit)", fmt(d.invisalignIncomePence)],
+    ["Total income (incl. booking credit)", fmt(d.totalIncomePence)],
+    [],
+    ["ORDERS BY TREATMENT"],
+    ["Treatment", "Orders"],
+    ...Object.entries(d.ordersByTreatment).map(([treatment, count]) => [treatment, String(count)]),
+    [],
+    ["PROPOSALS BY TREATMENT"],
+    ["Treatment", "Proposals sent"],
+    ...Object.entries(d.proposalsByTreatment).map(([treatment, count]) => [treatment, String(count)]),
     [],
     ["PROPOSALS SENT"],
-    ["Patient", "Email", "Payment type", "Net value", "Booking credit", "Staff"],
+    ["Patient", "Email", "Treatment", "Payment type", "Net value", "Booking credit", "Staff"],
   ];
 
   if (d.proposals.length === 0) {
-    rows.push(["No proposals this month", "", "", "", "", ""]);
+    rows.push(["No proposals this month", "", "", "", "", "", ""]);
   } else {
     for (const p of d.proposals) {
       rows.push([
         p.patientName,
         p.email,
+        p.treatment,
         p.paymentType,
         fmt(p.netPence),
         p.bookingCreditPence ? fmt(p.bookingCreditPence) : "—",
@@ -105,14 +118,15 @@ export function reportExportRows(d: ReportExportInput): string[][] {
     }
   }
 
-  rows.push([], ["ORDERS"], ["Patient", "Email", "Payment type", "Net value", "Booking credit", "Finance net", "Staff"]);
+  rows.push([], ["ORDERS"], ["Patient", "Email", "Treatment", "Payment type", "Net value", "Booking credit", "Finance net", "Staff"]);
   if (d.orders.length === 0) {
-    rows.push(["No orders this month", "", "", "", "", "", ""]);
+    rows.push(["No orders this month", "", "", "", "", "", "", ""]);
   } else {
     for (const o of d.orders) {
       rows.push([
         o.patientName,
         o.email,
+        o.treatment,
         o.paymentType,
         fmt(o.netPence),
         o.bookingCreditPence ? fmt(o.bookingCreditPence) : "—",
@@ -218,27 +232,31 @@ export function reportToPdfHtml(d: ReportExportInput): string {
 <body>
   <button class="noprint" onclick="window.print()" style="padding:10px 16px;margin-bottom:16px;cursor:pointer;background:#0E9384;color:#fff;border:none;border-radius:8px;font-weight:700">Print / Save as PDF</button>
   <h1>${htmlEscape(d.practiceName)}</h1>
-  <div class="sub">Monthly Invisalign report · ${htmlEscape(d.monthName)} · ${htmlEscape(d.scopeLabel)}</div>
-  <div class="lock">Automated from live records — booking credit (${htmlEscape(fmt(d.defaultCreditPence))}) included in totals</div>
+  <div class="sub">Monthly treatment report · ${htmlEscape(d.monthName)} · ${htmlEscape(d.scopeLabel)}</div>
+  <div class="lock">Automated from live records — booking credit included per patient record</div>
   <div class="grid">
     <div class="stat"><b>${d.proposalsSent}</b>Proposals sent</div>
-    <div class="stat"><b>${d.invisalignOrders}</b>Orders</div>
+    <div class="stat"><b>${d.treatmentOrders}</b>Orders</div>
     <div class="stat"><b>${htmlEscape(pct(d.conversionPct))}</b>Conversion</div>
     <div class="stat"><b>${htmlEscape(d.avgOrderPence ? fmt(d.avgOrderPence) : "—")}</b>Avg revenue / patient</div>
   </div>
   <div class="income">
     <div><span>Card / Stripe collected</span><strong>${htmlEscape(fmt(d.cashCollectedPence))}</strong></div>
-    <div><span>Booking credit (${htmlEscape(fmt(d.defaultCreditPence))} per order)</span><strong>${htmlEscape(fmt(d.bookingCreditPence))}</strong></div>
+    <div><span>Booking credit (all treatments)</span><strong>${htmlEscape(fmt(d.bookingCreditPence))}</strong></div>
     <div><span>Finance net value</span><strong>${htmlEscape(d.financeIncomePence ? fmt(d.financeIncomePence) : "—")}</strong></div>
-    <div style="border-top:1px solid #E1E7EE;margin-top:6px;padding-top:8px;font-weight:800"><span>Total income</span><strong>${htmlEscape(fmt(d.invisalignIncomePence))}</strong></div>
+    <div style="border-top:1px solid #E1E7EE;margin-top:6px;padding-top:8px;font-weight:800"><span>Total income</span><strong>${htmlEscape(fmt(d.totalIncomePence))}</strong></div>
   </div>
+  <h2>Orders by treatment</h2>
+  <table><thead><tr><th>Treatment</th><th>Orders</th></tr></thead><tbody>
+  ${Object.entries(d.ordersByTreatment).map(([t, n]) => row([t, String(n)])).join("")}
+  </tbody></table>
   <h2>Proposals sent</h2>
-  <table><thead><tr><th>Patient</th><th>Email</th><th>Payment type</th><th>Value</th><th>Staff</th></tr></thead><tbody>
-  ${d.proposals.length ? d.proposals.map((p) => row([p.patientName, p.email, p.paymentType, valueCell(p.grossPence, p.bookingCreditPence, p.netPence), p.staff])).join("") : row(["None", "", "", "", ""])}
+  <table><thead><tr><th>Patient</th><th>Email</th><th>Treatment</th><th>Payment type</th><th>Value</th><th>Staff</th></tr></thead><tbody>
+  ${d.proposals.length ? d.proposals.map((p) => row([p.patientName, p.email, p.treatment, p.paymentType, valueCell(p.grossPence, p.bookingCreditPence, p.netPence), p.staff])).join("") : row(["None", "", "", "", "", ""])}
   </tbody></table>
   <h2>Orders</h2>
-  <table><thead><tr><th>Patient</th><th>Email</th><th>Payment type</th><th>Value</th><th>Finance net</th><th>Staff</th></tr></thead><tbody>
-  ${d.orders.length ? d.orders.map((o) => row([o.patientName, o.email, o.paymentType, valueCell(o.grossPence, o.bookingCreditPence, o.netPence), o.financeNetPence ? fmt(o.financeNetPence) : "—", o.staff])).join("") : row(["None", "", "", "", "", ""])}
+  <table><thead><tr><th>Patient</th><th>Email</th><th>Treatment</th><th>Payment type</th><th>Value</th><th>Finance net</th><th>Staff</th></tr></thead><tbody>
+  ${d.orders.length ? d.orders.map((o) => row([o.patientName, o.email, o.treatment, o.paymentType, valueCell(o.grossPence, o.bookingCreditPence, o.netPence), o.financeNetPence ? fmt(o.financeNetPence) : "—", o.staff])).join("") : row(["None", "", "", "", "", "", ""])}
   </tbody></table>
   <h2>Payments &amp; income</h2>
   <table><thead><tr><th>Patient</th><th>Payment type</th><th>Line</th><th>Amount</th><th>Date</th></tr></thead><tbody>

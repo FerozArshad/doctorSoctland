@@ -6,7 +6,7 @@ import { useEffect, useRef, useState, useTransition } from "react";
 import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import { completePaymentConsent } from "@/app/p/actions";
-import { CONSENT_TITLE, CONSENT_PARAGRAPHS, CONSENT_CHECKBOX_LABEL } from "@/lib/consent";
+import { consentTitle, consentParagraphs, consentCheckboxLabel } from "@/lib/consent";
 import ProposalDocuments, { type ProposalDoc } from "@/components/ProposalDocuments";
 import SuccessModal from "@/components/SuccessModal";
 
@@ -30,6 +30,7 @@ export default function ConsentModal({
   previewMode = false,
   financeRedirectUrl = null,
   docs = [],
+  treatmentType,
 }: {
   open: boolean;
   onClose: () => void;
@@ -40,6 +41,7 @@ export default function ConsentModal({
   previewMode?: boolean;
   financeRedirectUrl?: string | null;
   docs?: ProposalDoc[];
+  treatmentType?: string | null;
 }) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const drawing = useRef(false);
@@ -51,6 +53,9 @@ export default function ConsentModal({
   const [success, setSuccess] = useState<{ title: string; body: string } | null>(null);
   const [mounted, setMounted] = useState(false);
   const router = useRouter();
+  const consentTitleText = consentTitle(treatmentType);
+  const consentParagraphList = consentParagraphs(treatmentType);
+  const consentCheckboxText = consentCheckboxLabel(treatmentType);
 
   useEffect(() => setMounted(true), []);
 
@@ -246,10 +251,10 @@ export default function ConsentModal({
             }}
           >
             <summary style={{ fontSize: 13, fontWeight: 800, color: "#16202E", cursor: "pointer", listStyle: "none" }}>
-              {CONSENT_TITLE} <span style={{ color: "#0E9384", fontWeight: 700 }}>— tap to read</span>
+              {consentTitleText} <span style={{ color: "#0E9384", fontWeight: 700 }}>— tap to read</span>
             </summary>
             <div style={{ marginTop: 10, maxHeight: 160, overflowY: "auto" }}>
-              {CONSENT_PARAGRAPHS.map((p, i) => (
+              {consentParagraphList.map((p, i) => (
                 <p key={i} style={{ fontSize: 12.5, lineHeight: 1.65, color: "#3C4a59", margin: i === 0 ? 0 : "10px 0 0" }}>
                   {p}
                 </p>
@@ -343,7 +348,7 @@ export default function ConsentModal({
               onChange={(e) => setConsent(e.target.checked)}
               style={{ width: 18, height: 18, accentColor: "#0E9384", marginTop: 1, flex: "none" }}
             />
-            <span style={{ fontSize: 12.5, color: "#3C4a59", lineHeight: 1.5 }}>{CONSENT_CHECKBOX_LABEL}</span>
+            <span style={{ fontSize: 12.5, color: "#3C4a59", lineHeight: 1.5 }}>{consentCheckboxText}</span>
           </label>
 
           <button

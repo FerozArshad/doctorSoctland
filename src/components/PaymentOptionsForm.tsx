@@ -25,6 +25,7 @@ export default function PaymentOptionsForm({
   previewMode = false,
   financeRedirectUrl = null,
   docs = [],
+  treatmentType,
 }: {
   token: string;
   options: PayOption[];
@@ -35,6 +36,7 @@ export default function PaymentOptionsForm({
   /** External finance portal — opens in a new tab after consent. */
   financeRedirectUrl?: string | null;
   docs?: ProposalDoc[];
+  treatmentType?: string | null;
 }) {
   const [choice, setChoice] = useState<PayOption["key"]>(options[0]?.key ?? "full");
   const [note, setNote] = useState("");
@@ -53,6 +55,7 @@ export default function PaymentOptionsForm({
         previewMode={previewMode}
         financeRedirectUrl={financeRedirectUrl}
         docs={docs}
+        treatmentType={treatmentType}
       />
 
       <div style={{ display: "flex", flexDirection: "column", gap: compact ? 8 : 10 }}>

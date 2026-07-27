@@ -16,7 +16,7 @@ export default function PatientLoginPage({ searchParams }: { searchParams: { err
           <div style={{ padding: "28px 28px" }}>
             <div style={{ fontSize: 22, fontWeight: 800, letterSpacing: "-.01em" }}>Welcome back</div>
             <div style={{ fontSize: 13.5, color: "#7A8696", marginTop: 4, lineHeight: 1.6 }}>
-              Log in to view your Invisalign proposal, watch your smile video and manage payments.
+              Log in to view your treatment proposal, watch your smile preview and manage payments.
             </div>
             {searchParams.error && (
               <div style={{ marginTop: 16, padding: "11px 14px", borderRadius: 10, background: "#FBE9E8", color: "#C23B34", fontSize: 13.5, fontWeight: 600 }}>

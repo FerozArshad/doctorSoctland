@@ -1,4 +1,4 @@
-// Automated monthly Invisalign report — fully computed from live data, no
+// Automated monthly treatment report — fully computed from live data, no
 // manual edits. Segment by staff (sent-by coordinator) and flick months.
 import Link from "next/link";
 import { redirect } from "next/navigation";
@@ -9,6 +9,7 @@ import { getPricing } from "@/lib/pricing-settings";
 import { COORDINATORS, FALLBACK_COORDINATOR } from "@/lib/coordinators";
 import { firstNameOf } from "@/lib/status";
 import { buildMonthlyReportData, pad, staffLabel } from "@/lib/build-monthly-report";
+import { TREATMENT_TYPES } from "@/lib/treatments";
 import { PAYMENT_LINE_TYPE_LABELS, type ReportPaymentType } from "@/lib/report-metrics";
 import TopBar from "@/components/TopBar";
 import ReportPdfExportButton from "@/components/ReportPdfExportButton";
@@ -92,6 +93,7 @@ export default async function ReportsPage({
         proposalSentAt: true,
         sentByEmail: true,
         sentByName: true,
+        treatmentType: true,
         ownerId: true,
         payments: {
           where: { status: "paid" },
@@ -148,7 +150,7 @@ export default async function ReportsPage({
 
   return (
     <>
-      <TopBar title="Monthly reports" sub="Automated Invisalign volume, conversion & value — locked, not editable" />
+      <TopBar title="Monthly reports" sub="Automated treatment volume, conversion & value — locked, not editable" />
       <div className="ds-scroll ds-admin-pad" style={{ flex: 1, overflow: "auto" }}>
         <div className="ds-view">
           <div className="card" style={{ padding: "16px 20px", display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap" }}>
@@ -198,14 +200,27 @@ export default async function ReportsPage({
           </div>
 
           <div style={{ marginTop: 14, padding: "12px 18px", borderRadius: 12, background: "#F4FCFA", border: "1px solid #CFEDE5", fontSize: 13.5, color: "#0B7A6E", fontWeight: 600 }}>
-            Live from patient &amp; payment records · {staffLabel(staffKey)} · {fmt(cfg.upfrontPence)} booking credit included in totals
+            Live from patient &amp; payment records · {staffLabel(staffKey)} · booking credit included per patient record
           </div>
 
           <div className="ds-stats" style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 14, marginTop: 14 }}>
             {stat("Proposals sent", String(report.proposalCount), `secure links sent in ${monthName}`)}
-            {stat("Invisalign orders", String(report.orderCount), "patients who went ahead (payment or finance)")}
+            {stat("Treatment orders", String(report.orderCount), "patients who went ahead (payment or finance)")}
             {stat("Conversion rate", report.conversionPct === null ? "—" : `${report.conversionPct}%`, "orders ÷ proposals sent")}
             {stat("Avg revenue / patient", report.avgOrderPence ? fmt(report.avgOrderPence) : "—", "gross treatment value incl. booking credit")}
+          </div>
+
+          <div className="card" style={{ marginTop: 14, padding: "16px 20px" }}>
+            <div style={{ fontSize: 15, fontWeight: 800, marginBottom: 10 }}>By treatment</div>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: 10 }}>
+              {TREATMENT_TYPES.map((t) => (
+                <div key={t.key} style={{ padding: "10px 12px", borderRadius: 10, background: "#F6F9FA", border: "1px solid #EEF2F6" }}>
+                  <div style={{ fontSize: 12, color: "#7A8696", fontWeight: 600 }}>{t.label}</div>
+                  <div style={{ fontSize: 18, fontWeight: 800, marginTop: 4 }}>{report.ordersByTreatment[t.label] || 0}</div>
+                  <div style={{ fontSize: 11, color: "#9AA6B4", marginTop: 2 }}>{report.proposalsByTreatment[t.label] || 0} proposals</div>
+                </div>
+              ))}
+            </div>
           </div>
 
           <div className="card" style={{ marginTop: 14, padding: "16px 20px" }}>
@@ -216,7 +231,7 @@ export default async function ReportsPage({
                 <strong>{fmt(report.cashCollectedPence)}</strong>
               </div>
               <div style={{ display: "flex", justifyContent: "space-between", gap: 12 }}>
-                <span style={{ color: "#5C6a79" }}>Booking credit ({fmt(cfg.upfrontPence)} per order)</span>
+                <span style={{ color: "#5C6a79" }}>Booking credit (all treatments)</span>
                 <strong>{fmt(report.bookingCreditPence)}</strong>
               </div>
               {report.financePatients.length > 0 && (
@@ -236,7 +251,7 @@ export default async function ReportsPage({
             <div className="card" style={{ overflow: "hidden" }}>
               <div style={{ padding: "14px 18px", borderBottom: "1px solid #EEF2F6" }}>
                 <div style={{ fontSize: 15, fontWeight: 800 }}>Proposals sent</div>
-                <div style={{ fontSize: 12.5, color: "#7A8696", marginTop: 2 }}>Patient · payment type · value</div>
+                <div style={{ fontSize: 12.5, color: "#7A8696", marginTop: 2 }}>Patient · treatment · payment type · value</div>
               </div>
               {report.proposals.length === 0 ? (
                 <div style={{ padding: 24, fontSize: 13.5, color: "#9AA6B4" }}>No proposals sent in {monthName}.</div>
@@ -246,6 +261,7 @@ export default async function ReportsPage({
                     <div style={{ minWidth: 0, flex: 1 }}>
                       <div style={{ fontSize: 13.5, fontWeight: 700 }}>{p.patientName}</div>
                       <div style={{ fontSize: 11.5, color: "#9AA6B4", marginTop: 2 }}>{p.email}</div>
+                      <div style={{ fontSize: 11.5, color: "#5C6a79", marginTop: 4, fontWeight: 600 }}>{p.treatment}</div>
                       <div style={{ marginTop: 8 }}>
                         <PaymentTypeBadge type={p.paymentType} />
                       </div>
@@ -262,7 +278,7 @@ export default async function ReportsPage({
             <div className="card" style={{ overflow: "hidden" }}>
               <div style={{ padding: "14px 18px", borderBottom: "1px solid #EEF2F6" }}>
                 <div style={{ fontSize: 15, fontWeight: 800 }}>Orders this month</div>
-                <div style={{ fontSize: 12.5, color: "#7A8696", marginTop: 2 }}>Patient · payment type · value</div>
+                <div style={{ fontSize: 12.5, color: "#7A8696", marginTop: 2 }}>Patient · treatment · payment type · value</div>
               </div>
               {report.orders.length === 0 ? (
                 <div style={{ padding: 24, fontSize: 13.5, color: "#9AA6B4" }}>No new orders in {monthName}.</div>
@@ -272,6 +288,7 @@ export default async function ReportsPage({
                     <div style={{ minWidth: 0, flex: 1 }}>
                       <div style={{ fontSize: 13.5, fontWeight: 700 }}>{o.patientName}</div>
                       <div style={{ fontSize: 11.5, color: "#9AA6B4", marginTop: 2 }}>{o.email}</div>
+                      <div style={{ fontSize: 11.5, color: "#5C6a79", marginTop: 4, fontWeight: 600 }}>{o.treatment}</div>
                       <div style={{ marginTop: 8 }}>
                         <PaymentTypeBadge type={o.paymentType} />
                       </div>
@@ -290,7 +307,7 @@ export default async function ReportsPage({
             <div style={{ padding: "14px 18px", borderBottom: "1px solid #EEF2F6" }}>
               <div style={{ fontSize: 15, fontWeight: 800 }}>Payments &amp; income</div>
               <div style={{ fontSize: 12.5, color: "#7A8696", marginTop: 2 }}>
-                Card payments, {fmt(cfg.upfrontPence)} booking credit, and finance (when net value entered for PDF)
+                Card payments, booking credit, and finance (when net value entered for PDF)
               </div>
             </div>
             {report.paymentLines.length === 0 ? (
@@ -318,7 +335,7 @@ export default async function ReportsPage({
           <div style={{ marginTop: 18, fontSize: 12.5, color: "#9AA6B4", lineHeight: 1.55 }}>
             Conversion = orders ÷ proposals sent for {monthName}
             {staffKey !== "all" ? ` (${staffLabel(staffKey)})` : ""}. Payment type shows Deposit, Paid in Full, or Finance.
-            Finance orders are included when finance is accepted or the patient applies. {fmt(cfg.upfrontPence)} booking credit is added to income for each new order.
+            Finance orders are included when finance is accepted or the patient applies. Booking credit is added to income for each new order based on the patient record.
             {me.isSuperAdmin ? "" : ` Showing only patients attributed to ${me.name} (${me.email}).`}
             {" "}Fallback sender: {FALLBACK_COORDINATOR.email}.
           </div>

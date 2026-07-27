@@ -21,7 +21,7 @@ import { isMessageActivity } from "@/lib/messages";
 import { publicActivityText } from "@/lib/activity-display";
 import { patientTemplateText, patientTemplateTitle } from "@/lib/patient-templates";
 import { syncPatientStripePayments } from "@/lib/stripe-checkout";
-import { CONSENT_PARAGRAPHS, CONSENT_TITLE } from "@/lib/consent";
+import { consentTitle, consentParagraphs } from "@/lib/consent";
 
 export const dynamic = "force-dynamic";
 
@@ -138,6 +138,8 @@ export default async function PatientProfile({ params }: { params: { id: string 
   const planCopy = treatmentCopy(c.treatmentType);
   const includedItems = includedItemsFor(c.treatmentType);
   const includedTotal = includedTotalFor(c.treatmentType);
+  const signedConsentTitle = consentTitle(c.treatmentType);
+  const signedConsentParagraphs = consentParagraphs(c.treatmentType);
   const paidPct = netOwed > 0 ? Math.min(100, Math.max(0, Math.round((100 * c.amountPaidPence) / netOwed))) : 0;
 
   const timeline = TIMELINE_STEPS.map((label, i) => {
@@ -268,9 +270,9 @@ export default async function PatientProfile({ params }: { params: { id: string 
                       Consent signed {c.consentSignedAt.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}
                       {c.dateOfBirth ? ` · DOB ${c.dateOfBirth}` : ""}
                     </div>
-                    <div style={{ fontSize: 13, fontWeight: 800, color: "#3C4a59", marginBottom: 8 }}>{CONSENT_TITLE}</div>
+                    <div style={{ fontSize: 13, fontWeight: 800, color: "#3C4a59", marginBottom: 8 }}>{signedConsentTitle}</div>
                     <div style={{ padding: "14px 16px", borderRadius: 12, background: "#F7FAFC", border: "1px solid #E7ECF2", maxHeight: 220, overflow: "auto", marginBottom: 14 }}>
-                      {CONSENT_PARAGRAPHS.map((p, i) => (
+                      {signedConsentParagraphs.map((p, i) => (
                         <p key={i} style={{ fontSize: 12.5, color: "#3C4a59", lineHeight: 1.55, margin: i === 0 ? 0 : "10px 0 0" }}>{p}</p>
                       ))}
                     </div>

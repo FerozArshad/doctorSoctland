@@ -4,7 +4,7 @@
 import { Resend } from "resend";
 import type { Patient } from "@prisma/client";
 import { db } from "./db";
-import { estMonths, fmt, fullPricePence, instalmentPence, netPricePence, PRICING_DEFAULTS, WHITENING_ADDON_PENCE, veneerPricePence, type PricingConfig } from "./pricing";
+import { estMonths, fmt, fullPricePence, instalmentPence, netPricePence, PRICING_DEFAULTS, WHITENING_ADDON_PENCE, veneerPricePence, veneerUnitPricePence, veneerPriceTierLabel, type PricingConfig } from "./pricing";
 import { paymentServiceDescription, treatmentCopy } from "./treatments";
 import { gmailConfigured, sendGmail } from "./google";
 import { log, summarizeError } from "./log";
@@ -536,8 +536,10 @@ export function proposalEmailHtml(p: Patient, cfg: PricingConfig = PRICING_DEFAU
     ? row("Number of aligners", String(p.alignerCount)) +
       row("Estimated treatment time", "≈ " + estMonths(p.alignerCount) + " months") +
       row("Treatment package", "Invisalign " + p.pkg)
-    : copy.usesVeneerPackages
-      ? row("Veneers package", `${p.alignerCount} teeth`) + row("Package price", fmt(veneerPricePence(p.alignerCount)))
+    : copy.usesVeneerSlidingPricing
+      ? row("Veneer units", String(p.alignerCount)) +
+        row("Rate", `${fmt(veneerUnitPricePence(p.alignerCount))} per unit (${veneerPriceTierLabel(p.alignerCount)})`) +
+        row("Treatment total", fmt(veneerPricePence(p.alignerCount)))
       : copy.offersWhitening
         ? row("Number of teeth", String(p.alignerCount)) +
           (p.includeWhitening ? row("Whitening add-on", fmt(WHITENING_ADDON_PENCE)) : "") +
@@ -572,8 +574,8 @@ export function proposalWhatsAppText(p: Patient) {
   const net = netPricePence(p.pricePence, p.upfrontPaidPence);
   const planLine = copy.usesAligners
     ? `✅ ${p.alignerCount} aligners · ≈${estMonths(p.alignerCount)} months · ${fmt(net)} to pay`
-    : copy.usesVeneerPackages
-      ? `✅ ${p.alignerCount} teeth veneers · ${fmt(veneerPricePence(p.alignerCount))} · ${fmt(net)} to pay`
+    : copy.usesVeneerSlidingPricing
+      ? `✅ ${p.alignerCount} veneer units · ${fmt(veneerUnitPricePence(p.alignerCount))}/unit · ${fmt(net)} to pay`
       : copy.offersWhitening
         ? `✅ ${p.alignerCount} teeth${p.includeWhitening ? " + whitening" : ""} · ${copy.label} · ${fmt(net)} to pay`
         : copy.usesTeethCount

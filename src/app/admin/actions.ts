@@ -6,7 +6,7 @@ import { db } from "@/lib/db";
 import { canAccessPatient, clearAdminSession, createAdminSession, requireAdmin } from "@/lib/auth";
 import { fmt, fullPricePence, netPricePence, treatmentPricePence, treatmentBookingCreditPence } from "@/lib/pricing";
 import { getPricing } from "@/lib/pricing-settings";
-import { parseTreatmentType, treatmentCopy, treatmentLabel, isValidVeneerTeethCount } from "@/lib/treatments";
+import { parseTreatmentType, treatmentCopy, treatmentLabel, planCountMax, planCountMin } from "@/lib/treatments";
 import { COORDINATORS, coordinatorFor, fromHeader, FALLBACK_COORDINATOR, type Coordinator } from "@/lib/coordinators";
 import { brandedEmail, emailConfigured, financeLinkEmailHtml, proposalEmailHtml, sendEmail, sendProposalWhatsApp, sendWhatsApp, escapeHtml, adminWelcomeEmailHtml, adminPasswordResetEmailHtml, notifyAdmin } from "@/lib/notify";
 import { gmailConfigured } from "@/lib/google";
@@ -737,8 +737,8 @@ function parseProposalFormData(formData: FormData) {
   const email = String(formData.get("email") || "").trim().toLowerCase();
   const phone = String(formData.get("phone") || "").trim();
   let alignerCount = Math.min(40, Math.max(1, parseInt(String(formData.get("alignerCount") || "14"), 10) || 14));
-  if (treatmentType === "veneers" && !isValidVeneerTeethCount(alignerCount)) {
-    alignerCount = 6;
+  if (treatmentType === "veneers") {
+    alignerCount = Math.min(planCountMax("veneers"), Math.max(planCountMin("veneers"), alignerCount));
   }
   const includeWhitening = treatmentType === "composite_bonding" && formData.get("includeWhitening") === "on";
   const pkg = formData.get("pkg") === "Express" ? "Express" : "Go";

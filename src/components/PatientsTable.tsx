@@ -156,7 +156,7 @@ export default function PatientsTable({ rows }: { rows: PatientRow[] }) {
               )}
               {(r.treatmentType === "veneers") && (
                 <div style={{ fontSize: 12, color: "#9AA6B4", marginTop: 2 }}>
-                  {r.alignerCount} teeth · {fmt(veneerPricePence(r.alignerCount))}
+                  {r.alignerCount} units · {fmt(veneerPricePence(r.alignerCount))}
                 </div>
               )}
               {r.treatmentType === "composite_bonding" && (

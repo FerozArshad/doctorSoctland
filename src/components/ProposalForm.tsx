@@ -3,13 +3,13 @@
 import { useEffect, useState } from "react";
 import { useFormStatus } from "react-dom";
 import { updatePatient, createPatient } from "@/app/admin/actions";
-import { estMonths, fmt, netPricePence, treatmentPricePence, treatmentBookingCreditPence, VENEER_PACKAGES, WHITENING_ADDON_PENCE, COMPOSITE_PRICE_PER_TOOTH_PENCE, veneerPricePence, type PricingConfig } from "@/lib/pricing";
+import { estMonths, fmt, netPricePence, treatmentPricePence, treatmentBookingCreditPence, WHITENING_ADDON_PENCE, COMPOSITE_PRICE_PER_TOOTH_PENCE, veneerUnitPricePence, veneerPriceTierLabel, type PricingConfig } from "@/lib/pricing";
 import { validateProposalForSend } from "@/lib/proposal-validation";
 import SentByPicker from "@/components/SentByPicker";
 import TreatmentTabs from "@/components/TreatmentTabs";
 import TreatmentBadge from "@/components/TreatmentBadge";
 import DeletePatientButton from "@/components/DeletePatientButton";
-import { defaultPlanCount, normalizeTreatmentType, planCountLabel, planCountMax, planCountShortLabel, treatmentCopy, type TreatmentType } from "@/lib/treatments";
+import { defaultPlanCount, normalizeTreatmentType, planCountLabel, planCountMax, planCountMin, planCountShortLabel, treatmentCopy, type TreatmentType } from "@/lib/treatments";
 
 export type ProposalPatient = {
   id: string;
@@ -332,26 +332,28 @@ export default function ProposalForm({
         </div>
           </>
         )}
-        {copy.usesVeneerPackages && (
+        {copy.usesVeneerSlidingPricing && (
           <div style={{ marginTop: 12 }}>
-            <label className="label">Veneers package</label>
-            <input type="hidden" name="alignerCount" value={alignerCount} />
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <label className="label">Number of veneer units</label>
+              <span style={{ fontSize: 20, fontWeight: 800, color: "#0E9384" }}>{alignerCount}</span>
+            </div>
+            <input
+              type="range"
+              name="alignerCount"
+              min={planCountMin(treatment)}
+              max={planCountMax(treatment)}
+              value={alignerCount}
+              onChange={(e) => setAlignerCount(parseInt(e.target.value) || planCountMin(treatment))}
+              style={{ width: "100%", marginTop: 10, accentColor: "#0E9384" }}
+            />
             <input type="hidden" name="pkg" value={pkg} />
-            <div className="ds-pkg-btns" style={{ display: "flex", gap: 10, marginTop: 8, flexWrap: "wrap" }}>
-              {VENEER_PACKAGES.map((vp) => (
-                <button
-                  key={vp.teeth}
-                  type="button"
-                  onClick={() => setAlignerCount(vp.teeth)}
-                  style={pkgBtn(alignerCount === vp.teeth)}
-                >
-                  {vp.teeth} teeth <span style={{ fontWeight: 500, opacity: 0.85 }}>{fmt(vp.pricePence)}</span>
-                </button>
-              ))}
+            <div style={{ fontSize: 12, color: "#7A8696", marginTop: 6 }}>
+              {veneerPriceTierLabel(alignerCount)}
             </div>
           </div>
         )}
-        {copy.usesTeethCount && !copy.usesVeneerPackages && (
+        {copy.usesTeethCount && !copy.usesVeneerSlidingPricing && (
           <div style={{ marginTop: 12 }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
               <label className="label">{planCountLabel(treatment)}</label>
@@ -456,17 +458,12 @@ export default function ProposalForm({
             <span style={{ fontSize: 14, fontWeight: 800 }}>+{fmt(WHITENING_ADDON_PENCE)}</span>
           </div>
           )}
+          {copy.usesVeneerSlidingPricing && (
           <div style={{ display: "flex", justifyContent: "space-between", padding: "14px 16px", borderBottom: "1px solid #F1F4F8" }}>
-            <span style={{ fontSize: 13, color: "#7A8696" }}>Treatment</span>
-            <span style={{ fontSize: 14, fontWeight: 800 }}>{copy.label}</span>
+            <span style={{ fontSize: 13, color: "#7A8696" }}>Rate</span>
+            <span style={{ fontSize: 14, fontWeight: 800 }}>{fmt(veneerUnitPricePence(alignerCount))} per unit</span>
           </div>
-          </>
-          ) : copy.usesVeneerPackages ? (
-          <>
-          <div style={{ display: "flex", justifyContent: "space-between", padding: "14px 16px", borderBottom: "1px solid #F1F4F8" }}>
-            <span style={{ fontSize: 13, color: "#7A8696" }}>Package</span>
-            <span style={{ fontSize: 14, fontWeight: 800 }}>{alignerCount} teeth</span>
-          </div>
+          )}
           <div style={{ display: "flex", justifyContent: "space-between", padding: "14px 16px", borderBottom: "1px solid #F1F4F8" }}>
             <span style={{ fontSize: 13, color: "#7A8696" }}>Treatment</span>
             <span style={{ fontSize: 14, fontWeight: 800 }}>{copy.label}</span>

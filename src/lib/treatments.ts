@@ -20,6 +20,8 @@ export type TreatmentCopy = {
   usesAligners: boolean;
   usesTeethCount: boolean;
   usesVeneerPackages: boolean;
+  /** Sliding per-unit veneers pricing (replaces fixed packages). */
+  usesVeneerSlidingPricing: boolean;
   offersWhitening: boolean;
   usesClinCheckVideo: boolean;
   /** AI smile simulator link (non-Invisalign treatments). */
@@ -44,6 +46,7 @@ const COPY: Record<TreatmentType, TreatmentCopy> = {
     usesAligners: true,
     usesTeethCount: false,
     usesVeneerPackages: false,
+    usesVeneerSlidingPricing: false,
     offersWhitening: false,
     usesClinCheckVideo: true,
     usesAiSimulation: false,
@@ -66,7 +69,8 @@ const COPY: Record<TreatmentType, TreatmentCopy> = {
     followUpPlanName: "veneers treatment plan",
     usesAligners: false,
     usesTeethCount: true,
-    usesVeneerPackages: true,
+    usesVeneerPackages: false,
+    usesVeneerSlidingPricing: true,
     offersWhitening: false,
     usesClinCheckVideo: false,
     usesAiSimulation: true,
@@ -90,6 +94,7 @@ const COPY: Record<TreatmentType, TreatmentCopy> = {
     usesAligners: false,
     usesTeethCount: false,
     usesVeneerPackages: false,
+    usesVeneerSlidingPricing: false,
     offersWhitening: false,
     usesClinCheckVideo: false,
     usesAiSimulation: true,
@@ -113,6 +118,7 @@ const COPY: Record<TreatmentType, TreatmentCopy> = {
     usesAligners: false,
     usesTeethCount: true,
     usesVeneerPackages: false,
+    usesVeneerSlidingPricing: false,
     offersWhitening: true,
     usesClinCheckVideo: false,
     usesAiSimulation: true,
@@ -136,6 +142,7 @@ const COPY: Record<TreatmentType, TreatmentCopy> = {
     usesAligners: false,
     usesTeethCount: false,
     usesVeneerPackages: false,
+    usesVeneerSlidingPricing: false,
     offersWhitening: false,
     usesClinCheckVideo: false,
     usesAiSimulation: true,
@@ -174,10 +181,21 @@ export function parseTreatmentType(raw: FormDataEntryValue | null): TreatmentTyp
 
 /** Max value for the plan count slider (aligners or teeth). */
 export function planCountMax(key: string | null | undefined): number {
+  const t = normalizeTreatmentType(key);
+  if (t === "veneers") return 28;
   const copy = treatmentCopy(key);
   if (copy.usesTeethCount) return 20;
   if (copy.usesAligners) return 40;
   return 20;
+}
+
+/** Min value for the plan count slider. */
+export function planCountMin(key: string | null | undefined): number {
+  const t = normalizeTreatmentType(key);
+  if (t === "veneers") return 6;
+  const copy = treatmentCopy(key);
+  if (copy.usesTeethCount || copy.usesAligners) return 1;
+  return 1;
 }
 
 export function planCountLabel(key: string | null | undefined): string {
@@ -196,14 +214,14 @@ export function planCountShortLabel(key: string | null | undefined): string {
 
 export function defaultPlanCount(key: string | null | undefined): number {
   const copy = treatmentCopy(key);
-  if (copy.usesVeneerPackages) return 6;
+  if (copy.usesVeneerSlidingPricing) return 6;
   if (copy.usesTeethCount) return 6;
   if (copy.usesAligners) return 14;
   return 1;
 }
 
 export function isValidVeneerTeethCount(teeth: number): boolean {
-  return teeth === 6 || teeth === 10 || teeth === 20;
+  return Number.isFinite(teeth) && teeth >= 6 && teeth <= planCountMax("veneers");
 }
 
 export const TREATMENT_TAG_STYLE: Record<TreatmentType, { fg: string; bg: string }> = {
@@ -238,7 +256,7 @@ export function paymentServiceDescription(
     return `Invisalign ${pkg} treatment (${alignerCount} aligners)`;
   }
   if (t === "veneers") {
-    return `${copy.label} treatment (${alignerCount} teeth package)`;
+    return `${copy.label} treatment (${alignerCount} veneers)`;
   }
   if (t === "composite_bonding") {
     const base = `${copy.label} treatment (${alignerCount} teeth`;

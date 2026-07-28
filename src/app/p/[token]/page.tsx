@@ -3,7 +3,7 @@ import { notFound, redirect } from "next/navigation";
 import { Suspense } from "react";
 import { db } from "@/lib/db";
 import { getAdmin, getPatientSession } from "@/lib/auth";
-import { estMonths, finance36Pence, fmt, fullPricePence, instalmentPence, netPricePence, treatmentBookingCreditPence, WHITENING_ADDON_PENCE, veneerPricePence } from "@/lib/pricing";
+import { estMonths, finance36Pence, fmt, fullPricePence, instalmentPence, netPricePence, treatmentBookingCreditPence, WHITENING_ADDON_PENCE, veneerUnitPricePence, veneerPriceTierLabel } from "@/lib/pricing";
 import { getPricing } from "@/lib/pricing-settings";
 import { treatmentCopy, planCountShortLabel } from "@/lib/treatments";
 import { includedItemsFor, includedTotalFor, whyUsFor } from "@/lib/content";
@@ -260,15 +260,16 @@ export default async function ProposalPage({
                       <div style={{ fontSize: 16, fontWeight: 800, marginTop: 3 }}>{copy.label} {c.pkg}</div>
                     </div>
                       </>
-                    ) : copy.usesVeneerPackages ? (
+                    ) : copy.usesVeneerSlidingPricing ? (
                     <>
                     <div style={{ padding: "12px 12px", borderBottom: "1px solid #EEF2F6" }}>
-                      <div style={{ fontSize: 11, color: "#7A8696", fontWeight: 600 }}>Package</div>
-                      <div style={{ fontSize: 20, fontWeight: 800, marginTop: 2 }}>{c.alignerCount} teeth</div>
+                      <div style={{ fontSize: 11, color: "#7A8696", fontWeight: 600 }}>Veneer units</div>
+                      <div style={{ fontSize: 20, fontWeight: 800, marginTop: 2 }}>{c.alignerCount}</div>
                     </div>
                     <div style={{ padding: "12px 12px", borderBottom: "1px solid #EEF2F6" }}>
-                      <div style={{ fontSize: 11, color: "#7A8696", fontWeight: 600 }}>Package price</div>
-                      <div style={{ fontSize: 16, fontWeight: 800, marginTop: 3 }}>{fmt(veneerPricePence(c.alignerCount))}</div>
+                      <div style={{ fontSize: 11, color: "#7A8696", fontWeight: 600 }}>Rate</div>
+                      <div style={{ fontSize: 16, fontWeight: 800, marginTop: 3 }}>{fmt(veneerUnitPricePence(c.alignerCount))} per unit</div>
+                      <div style={{ fontSize: 11, color: "#7A8696", marginTop: 4 }}>{veneerPriceTierLabel(c.alignerCount)}</div>
                     </div>
                     </>
                     ) : copy.offersWhitening ? (

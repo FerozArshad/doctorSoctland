@@ -94,22 +94,41 @@ export function fmt(pence: number): string {
   return "£" + Math.round(pence / 100).toLocaleString("en-GB");
 }
 
-// ── Veneers & composite bonding (fixed product pricing) ─────────────────
+// ── Veneers (sliding per-unit pricing) & composite bonding ───────────────
 export const COMPOSITE_PRICE_PER_TOOTH_PENCE = 24_900; // £249
 export const WHITENING_ADDON_PENCE = 35_000; // £350
 
-export const VENEER_PACKAGES = [
-  { teeth: 6, pricePence: 249_900 },
-  { teeth: 10, pricePence: 349_900 },
-  { teeth: 20, pricePence: 599_900 },
+/** Minimum veneer units on a proposal. */
+export const VENEER_MIN_UNITS = 6;
+
+export const VENEER_UNIT_TIERS = [
+  { min: 6, max: 9, pricePerUnitPence: 41_500, label: "6–9 units · £415 per unit" },
+  { min: 10, max: 19, pricePerUnitPence: 35_000, label: "10–19 units · £350 per unit" },
+  { min: 20, max: 99, pricePerUnitPence: 30_000, label: "20+ units · £300 per unit" },
 ] as const;
 
-export function veneerPackageForTeeth(teeth: number) {
-  return VENEER_PACKAGES.find((p) => p.teeth === teeth) ?? null;
+/** Per-unit rate in pence for the given veneer count (tier applied to total units). */
+export function veneerUnitPricePence(units: number): number {
+  const u = Math.round(units);
+  if (u >= 20) return 30_000;
+  if (u >= 10) return 35_000;
+  if (u >= 6) return 41_500;
+  return 41_500;
 }
 
-export function veneerPricePence(teeth: number): number {
-  return veneerPackageForTeeth(teeth)?.pricePence ?? VENEER_PACKAGES[0].pricePence;
+/** Human-readable tier label for the current unit count. */
+export function veneerPriceTierLabel(units: number): string {
+  const u = Math.round(units);
+  if (u >= 20) return VENEER_UNIT_TIERS[2].label;
+  if (u >= 10) return VENEER_UNIT_TIERS[1].label;
+  return VENEER_UNIT_TIERS[0].label;
+}
+
+/** Total veneers treatment price = per-unit rate × unit count. */
+export function veneerPricePence(units: number): number {
+  const u = Math.round(units);
+  if (u < VENEER_MIN_UNITS) return veneerUnitPricePence(VENEER_MIN_UNITS) * VENEER_MIN_UNITS;
+  return veneerUnitPricePence(u) * u;
 }
 
 export function compositeBondingPricePence(teeth: number, includeWhitening = false): number {

@@ -50,7 +50,7 @@ export function validateProposalForSend(fields: ProposalFields): { ok: true } | 
   }
   if (fields.treatmentType === "veneers") {
     if (!isValidVeneerTeethCount(fields.alignerCount)) {
-      return { ok: false, message: "Choose a veneers package (6, 10 or 20 teeth) before sending" };
+      return { ok: false, message: "Choose between 6 and 28 veneer units before sending" };
     }
   } else if (copy.usesTeethCount) {
     if (!fields.alignerCount || fields.alignerCount < 1) {

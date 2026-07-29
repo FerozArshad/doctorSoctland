@@ -57,6 +57,9 @@ export function classifyEmailError(err: unknown, httpStatus?: number): { errorTy
   if (/bounce|550|551|552|553|554|recipient rejected|mailbox unavailable/i.test(combined)) {
     return { errorType: "bounce", errorCode: String(status || "bounce"), message };
   }
+  if (/prisma|connection pool|timed out fetching a new connection/i.test(combined)) {
+    return { errorType: "queue", errorCode: "pool_timeout", message };
+  }
   if (/econnrefused|etimedout|enotfound|network|fetch failed|connection|socket/i.test(combined)) {
     return { errorType: "connection", errorCode: String(status || "connection"), message };
   }
@@ -147,16 +150,14 @@ async function sendSystemAlertEmail(subject: string, html: string) {
   }
 
   const { sendEmailRaw } = await import("./notify");
-  await Promise.all(
-    recipients.map(async (to) => {
-      try {
-        await sendEmailRaw(to, subject, html);
-        log.info("email.alert.sent", { to, subject });
-      } catch (e) {
-        log.error("email.alert.fail", { to, subject, ...summarizeError(e) });
-      }
-    })
-  );
+  for (const to of recipients) {
+    try {
+      await sendEmailRaw(to, subject, html);
+      log.info("email.alert.sent", { to, subject });
+    } catch (e) {
+      log.error("email.alert.fail", { to, subject, ...summarizeError(e) });
+    }
+  }
 }
 
 export async function sendEmailIssueAlert(opts: {
@@ -247,7 +248,7 @@ export async function handleEmailFailureAlert(opts: {
       connection: "Email service connection error",
       rate_limit: "Email provider rate limit hit",
       bounce: "Email bounced",
-      queue: "Email queue failure",
+      queue: "Email logging / database queue error",
       retry: "Email delivery retries exhausted",
       delivery: "Email delivery failure",
       unknown: "Email delivery failure",

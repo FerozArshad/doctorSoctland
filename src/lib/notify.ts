@@ -119,11 +119,21 @@ export async function sendEmail(
       return { simulated: true, logId: logRow.id };
     }
 
-    await markEmailLogSent(logRow.id, {
-      provider: result.via || "unknown",
-      providerMessageId: result.providerMessageId,
-      apiResponse: result.apiResponse,
-    });
+    try {
+      await markEmailLogSent(logRow.id, {
+        provider: result.via || "unknown",
+        providerMessageId: result.providerMessageId,
+        apiResponse: result.apiResponse,
+      });
+    } catch (logErr) {
+      // Email was delivered — don't treat a logging failure as a send failure.
+      log.error("email.log.mark_sent.fail", {
+        logId: logRow.id,
+        to,
+        category,
+        ...summarizeError(logErr),
+      });
+    }
     log.info("email.sent", { logId: logRow.id, to, category, via: result.via });
     return {
       simulated: false,
@@ -405,16 +415,16 @@ async function sendAdminEmails(subject: string, html: string, extra?: (string | 
     log.warn("admin.notify.skip", { reason: "no_recipients" });
     return;
   }
-  await Promise.all(
-    recipients.map(async (to) => {
-      try {
-        const result = await sendEmail(to, subject, html, undefined, { category: "admin_alert" });
-        log.info("admin.notify.email", { to, via: result.via ?? (result.simulated ? "simulated" : "unknown") });
-      } catch (e) {
-        log.error("admin.notify.email.fail", { to, error: summarizeError(e) });
-      }
-    })
-  );
+  // Send sequentially — parallel sends each open DB connections for logging and can
+  // exhaust Prisma's pool (limit 5) on serverless when notifying all admins at once.
+  for (const to of recipients) {
+    try {
+      const result = await sendEmail(to, subject, html, undefined, { category: "admin_alert" });
+      log.info("admin.notify.email", { to, via: result.via ?? (result.simulated ? "simulated" : "unknown") });
+    } catch (e) {
+      log.error("admin.notify.email.fail", { to, error: summarizeError(e) });
+    }
+  }
 }
 
 // ── Admin alerts (email + WhatsApp to the practice) ─────────────────────

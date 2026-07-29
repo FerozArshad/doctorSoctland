@@ -33,9 +33,18 @@ export function resolveDatabaseUrl(): string {
 
 // Supabase's transaction pooler (port 6543) needs pgbouncer=true so Prisma
 // disables prepared statements; add it if a pooled URL arrives without it.
+// connection_limit=1 is recommended for serverless (Vercel) to avoid exhausting
+// the pool when multiple emails/notifications run in parallel.
 function normalizePooler(url: string): string {
   if (url.includes("pooler.supabase.com:6543") && !/[?&]pgbouncer=true/.test(url)) {
     url += (url.includes("?") ? "&" : "?") + "pgbouncer=true";
+  }
+  if (!/[?&]connection_limit=/.test(url)) {
+    const isServerless = !!process.env.VERCEL || process.env.NODE_ENV === "production";
+    const usesPooler = url.includes("pooler.supabase.com") || url.includes("pgbouncer=true");
+    if (isServerless || usesPooler) {
+      url += (url.includes("?") ? "&" : "?") + "connection_limit=1";
+    }
   }
   return url;
 }

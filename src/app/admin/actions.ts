@@ -308,7 +308,7 @@ export async function saveWhatsAppSettings(formData: FormData) {
     templatesEnabled: formData.get("templatesEnabled") === "on",
     templateLang: String(formData.get("templateLang") || "en_GB").trim() || "en_GB",
     tplProposal: String(formData.get("tplProposal") || "payment_reminder").trim() || "payment_reminder",
-    tplReminder: String(formData.get("tplReminder") || "porposal_ready").trim() || "porposal_ready",
+    tplReminder: String(formData.get("tplReminder") || "proposal_ready").trim() || "proposal_ready",
     tplLogin: String(formData.get("tplLogin") || "login_code").trim() || "login_code",
     webhookVerifyToken: String(formData.get("webhookVerifyToken") || "").trim(),
     metaAppSecret: keepOrSet("metaAppSecret", current.metaAppSecret),

@@ -34,7 +34,7 @@ const templates = [
     ],
   },
   {
-    name: pick(row?.tplReminder, process.env.WHATSAPP_TPL_REMINDER, "porposal_ready"),
+    name: pick(row?.tplReminder, process.env.WHATSAPP_TPL_REMINDER, "proposal_ready"),
     category: "UTILITY",
     components: [
       {

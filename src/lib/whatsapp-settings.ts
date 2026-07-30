@@ -68,7 +68,7 @@ export async function getWhatsAppConfig(): Promise<WhatsAppConfig> {
     templatesEnabled,
     templateLang: pick(row?.templateLang, process.env.WHATSAPP_TEMPLATE_LANG, "en_GB") || "en_GB",
     tplProposal: pick(row?.tplProposal, process.env.WHATSAPP_TPL_PROPOSAL, "payment_reminder"),
-    tplReminder: pick(row?.tplReminder, process.env.WHATSAPP_TPL_REMINDER, "porposal_ready"),
+    tplReminder: pick(row?.tplReminder, process.env.WHATSAPP_TPL_REMINDER, "proposal_ready"),
     tplLogin: pick(row?.tplLogin, process.env.WHATSAPP_TPL_LOGIN, "login_code"),
     webhookVerifyToken: pick(row?.webhookVerifyToken, process.env.WHATSAPP_WEBHOOK_VERIFY_TOKEN),
     metaAppSecret: pick(row?.metaAppSecret, process.env.META_APP_SECRET),
@@ -145,7 +145,7 @@ export async function getWhatsAppTemplateStatuses(): Promise<WhatsAppTemplateInf
 
   const defs: Array<{ key: WhatsAppTemplateInfo["key"]; label: string; name: string }> = [
     { key: "proposal", label: "Proposal send", name: c.tplProposal || "payment_reminder" },
-    { key: "reminder", label: "Follow-up reminder", name: c.tplReminder || "porposal_ready" },
+    { key: "reminder", label: "Follow-up reminder", name: c.tplReminder || "proposal_ready" },
     { key: "login", label: "Login OTP", name: c.tplLogin || "login_code" },
   ];
 

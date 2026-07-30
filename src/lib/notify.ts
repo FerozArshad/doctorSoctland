@@ -198,10 +198,7 @@ export async function whatsappConfigured() {
 function resolveTemplateName(raw: string, fallback: string): string {
   const name = (raw || fallback).trim();
   const aliases: Record<string, string> = {
-    proposal_ready: "payment_reminder",
-    proposal: "payment_reminder",
-    reminder: "porposal_ready",
-    payment_reminder_correct: "porposal_ready",
+    porposal_ready: "proposal_ready",
   };
   return aliases[name] || name;
 }
@@ -368,7 +365,7 @@ export async function sendReminderWhatsApp(p: Patient, cfg: PricingConfig = PRIC
   const body = reminderWhatsAppText(p, cfg);
   const c = await getWhatsAppConfig();
   if (c.templatesEnabled) {
-    return sendWhatsAppTemplate(p.phone, resolveTemplateName(c.tplReminder, "porposal_ready"), [p.firstName, proposalLink(p)]);
+    return sendWhatsAppTemplate(p.phone, resolveTemplateName(c.tplReminder, "proposal_ready"), [p.firstName, proposalLink(p)]);
   }
   return sendWhatsApp(p.phone, body);
 }

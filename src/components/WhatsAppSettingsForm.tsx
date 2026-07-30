@@ -378,31 +378,87 @@ export default function WhatsAppSettingsForm({
       </form>
 
       <div className="card" style={{ padding: 20 }}>
-        <div style={{ fontSize: 15, fontWeight: 800 }}>Recreate message templates in Meta</div>
+        <div style={{ fontSize: 15, fontWeight: 800 }}>Create templates in Meta (exact settings)</div>
         <div style={{ fontSize: 13, color: "#7A8696", marginTop: 6, lineHeight: 1.6 }}>
-          WhatsApp Manager → <strong>Message templates</strong> → Create. Language: <strong>English (UK)</strong> (<code>en_GB</code>).
-          Variables cannot be at the very start or end of the body.
+          WhatsApp Manager → <strong>Message templates</strong> → Create template.
+          Language: <strong>English (UK)</strong> — code <code>en_GB</code> (must match Template language above).
+          Use <strong>lowercase names with underscores</strong> exactly as below. <strong>No header</strong> on utility templates — body only.
         </div>
+
+        <div style={{ marginTop: 14, overflowX: "auto" }}>
+          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12.5 }}>
+            <thead>
+              <tr style={{ background: "#F6F9FA", textAlign: "left" }}>
+                <th style={{ padding: "8px 10px", borderBottom: "1px solid #EEF2F6" }}>Template name</th>
+                <th style={{ padding: "8px 10px", borderBottom: "1px solid #EEF2F6" }}>Category</th>
+                <th style={{ padding: "8px 10px", borderBottom: "1px solid #EEF2F6" }}>Variables (type)</th>
+                <th style={{ padding: "8px 10px", borderBottom: "1px solid #EEF2F6" }}>Sample values</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td style={{ padding: "10px", borderBottom: "1px solid #F1F4F8", verticalAlign: "top" }}><code>payment_reminder</code></td>
+                <td style={{ padding: "10px", borderBottom: "1px solid #F1F4F8", verticalAlign: "top" }}>Utility</td>
+                <td style={{ padding: "10px", borderBottom: "1px solid #F1F4F8", verticalAlign: "top" }}>
+                  {"{{1}}"} <strong>Text</strong> — first name<br />
+                  {"{{2}}"} <strong>Text</strong> — proposal URL
+                </td>
+                <td style={{ padding: "10px", borderBottom: "1px solid #F1F4F8", verticalAlign: "top", color: "#5C6B7A" }}>
+                  Sarah<br />
+                  https://dashboard.dentalscotland.com/p/example
+                </td>
+              </tr>
+              <tr>
+                <td style={{ padding: "10px", borderBottom: "1px solid #F1F4F8", verticalAlign: "top" }}><code>proposal_ready</code></td>
+                <td style={{ padding: "10px", borderBottom: "1px solid #F1F4F8", verticalAlign: "top" }}>Utility</td>
+                <td style={{ padding: "10px", borderBottom: "1px solid #F1F4F8", verticalAlign: "top" }}>
+                  {"{{1}}"} <strong>Text</strong> — first name<br />
+                  {"{{2}}"} <strong>Text</strong> — proposal URL
+                </td>
+                <td style={{ padding: "10px", borderBottom: "1px solid #F1F4F8", verticalAlign: "top", color: "#5C6B7A" }}>
+                  Sarah<br />
+                  https://dashboard.dentalscotland.com/p/example
+                </td>
+              </tr>
+              <tr>
+                <td style={{ padding: "10px", verticalAlign: "top" }}><code>login_code</code></td>
+                <td style={{ padding: "10px", verticalAlign: "top" }}>Authentication</td>
+                <td style={{ padding: "10px", verticalAlign: "top" }}>
+                  {"{{1}}"} <strong>Number</strong> — 6-digit OTP<br />
+                  Button: <strong>Copy code</strong> (OTP)
+                </td>
+                <td style={{ padding: "10px", verticalAlign: "top", color: "#5C6B7A" }}>123456</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
         <div style={{ marginTop: 14, display: "flex", flexDirection: "column", gap: 12, fontSize: 13, lineHeight: 1.55 }}>
           <div style={{ padding: 12, borderRadius: 10, background: "#F6F9FA", border: "1px solid #EEF2F6" }}>
-            <strong>payment_reminder</strong> (Utility) — proposal send<br />
+            <strong>payment_reminder</strong> — proposal send (matches Proposal template field)<br />
             <span style={{ color: "#5C6B7A" }}>
               Hello {"{{1}}"}, your personalised treatment plan from Dental Scotland is ready. Open your secure proposal here: {"{{2}}"} Thanks, Dental Scotland.
             </span>
           </div>
           <div style={{ padding: 12, borderRadius: 10, background: "#F6F9FA", border: "1px solid #EEF2F6" }}>
-            <strong>porposal_ready</strong> (Utility) — reminder<br />
+            <strong>proposal_ready</strong> — follow-up reminder (matches Reminder template field)<br />
             <span style={{ color: "#5C6B7A" }}>
               Hello {"{{1}}"}, a reminder that your Dental Scotland treatment proposal is waiting. View it here: {"{{2}}"} Thanks, Dental Scotland.
             </span>
           </div>
           <div style={{ padding: 12, borderRadius: 10, background: "#F6F9FA", border: "1px solid #EEF2F6" }}>
-            <strong>login_code</strong> (Authentication) — OTP<br />
+            <strong>login_code</strong> — patient OTP (matches Login OTP template field)<br />
             <span style={{ color: "#5C6B7A" }}>
               {"{{1}}"} is your verification code. For your security, do not share this code.
             </span>
-            <div style={{ marginTop: 6, fontSize: 12, color: "#7A8696" }}>Add a URL button with dynamic suffix for copy-code flow if required by Meta.</div>
+            <div style={{ marginTop: 6, fontSize: 12, color: "#7A8696" }}>
+              In Meta: choose <strong>Authentication</strong> → enable security line → add <strong>Copy code</strong> button. Do not add a header.
+            </div>
           </div>
+        </div>
+        <div style={{ marginTop: 12, fontSize: 12.5, color: "#8A5A12", lineHeight: 1.55 }}>
+          Delete the old misspelled template <code>porposal_ready</code> if you created it — use <code>proposal_ready</code> instead.
+          After approval, save settings here so template names match Meta exactly.
         </div>
       </div>
 

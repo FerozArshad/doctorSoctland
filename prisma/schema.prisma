@@ -38,7 +38,7 @@ model WhatsAppSettings {
   templatesEnabled     Boolean  @default(false)
   templateLang         String   @default("en_GB")
   tplProposal          String   @default("payment_reminder")
-  tplReminder          String   @default("porposal_ready")
+  tplReminder          String   @default("proposal_ready")
   tplLogin             String   @default("login_code")
   webhookVerifyToken   String   @default("")
   metaAppSecret        String   @default("")

@@ -368,8 +368,20 @@ export async function sendLoginCodeWhatsApp(toPhone: string, code: string): Prom
   }
   return sendWhatsApp(
     toPhone,
-    `Your Dental Scotland verification code is *${code}*. It expires in 10 minutes. Never share this code.`
+    `Your Dental Scotland verification code is ${code}. It expires in 10 minutes.`
   );
+}
+
+/** Meta pre-approved test template — proves outbound path (use en_US). */
+export async function sendWhatsAppHelloWorld(toPhone: string): Promise<WhatsAppSendResult> {
+  const to = normalisePhone(toPhone);
+  if (!(await whatsappConfigured()) || !to) {
+    return { simulated: true };
+  }
+  return graphSend(to, {
+    type: "template",
+    template: { name: "hello_world", language: { code: "en_US" } },
+  });
 }
 
 // E.164 normalisation for common practice inputs.

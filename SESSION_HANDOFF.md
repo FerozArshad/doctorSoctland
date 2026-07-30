@@ -162,36 +162,50 @@ Business-initiated messages to patients via **WhatsApp Cloud API** (no BSP, no n
 **Phase 2 (not built):** inbound webhook + conversation history / admin inbox.
 Outbound “Messages sent” history already exists on the patient profile (`MessageLog`).
 
-### 11.2 Meta account facts (verified via Graph API 2026-07-22)
+### 11.2 Meta account facts (verified via Graph API 2026-07-30 — new WABA)
 
 | Item | Value / status |
 |---|---|
+| Business Portfolio ID | `1372203827870181` (reference only — not used for API sends) |
 | Business verification | ✅ Verified |
 | WABA name | Dental Scotland |
-| **WABA ID** | `1839924533652808` ← **NOT** the phone number ID |
-| **Phone Number ID** (correct) | `1186752691194998` |
+| **WABA ID** | `2294276881326866` ← **NOT** the phone number ID |
+| **Phone Number ID** (correct) | `1240334725831342` |
 | Display phone | **+44 7915 357177** |
-| Display name | **Dental Scotland** — ✅ **APPROVED** (do not use “Dental Scotland Care”; that was rejected) |
+| Display name | **Dental Scotland** — ✅ **APPROVED** |
 | Code verification | `VERIFIED` |
-| Account / phone `status` | **`CONNECTED`** ✅ (registered via API / Postman 2026-07-23) |
-| `platform_type` | `NOT_APPLICABLE` |
-| `is_on_biz_app` | `false` |
-| WABA `subscribed_apps` | **`[]` empty** ← why number does **not** show under App → WhatsApp → API Setup |
-| Meta App ID (in `.env`) | `2093913674807269` |
-| Token type used | Permanent **System User** token with scopes `whatsapp_business_messaging`, `whatsapp_business_management` |
-| Token identity seen via API | “Conversions API System User” — token works against the WABA, but the **developer app is not subscribed** to the WABA |
+| Phone `status` | **`CONNECTED`** ✅ |
+| `platform_type` | `CLOUD_API` |
+| `account_mode` | `LIVE` |
+| WABA `can_send_message` | **`AVAILABLE`** ✅ (error **141008** resolved on new WABA) |
+| Phone `can_send_message` | **`AVAILABLE`** ✅ |
+| WABA review | **`APPROVED`** |
+| `quality_rating` | `UNKNOWN` (normal until first sends) |
+| WABA `subscribed_apps` | ✅ App **AI AUTOMATION** `2093913674807269` linked |
+| Meta App ID | `2093913674807269` |
+| Token | Permanent **System User** token → `WHATSAPP_TOKEN` |
 
-⚠️ **Critical mix-up that burned time:** local/Vercel previously had
-`WHATSAPP_PHONE_NUMBER_ID=1839924533652808` (the **WABA** id). Graph returns WABA
-fields (`message_template_namespace`, currency…) for that id. Messaging
-`/{id}/messages` then fails with “Object does not exist / missing permissions”.
-**Always use Phone Number ID `1186752691194998` for sends.**
+**Ignore SIP/calling errors `138024` / `138025`** — these are WhatsApp Business
+Calling only (`can_receive_call_sip`). They do **not** block messaging.
+
+⚠️ **Never use the WABA id as `WHATSAPP_PHONE_NUMBER_ID`.**  
+**Always use Phone Number ID `1240334725831342` for sends.**
+
+**Prove outbound (before relying on webhooks):** send Meta’s pre-approved
+`hello_world` template to a **personal** mobile (digits only, no `+`):
+
+```bash
+node scripts/test-whatsapp-hello.mjs 447XXXXXXXXX
+```
+
+Or `POST /v21.0/1240334725831342/messages` with `hello_world` / `en_US`.  
+Do **not** send to +44 7915 357177 (business sender cannot message itself).
 
 ### 11.3 Why the number does not appear in Meta “API Setup”
 The number **exists on the WABA** (API lists it). It does **not** appear in
 **developers.facebook.com → App → WhatsApp → API Setup** because:
 
-1. **`subscribed_apps` is empty** — the Meta App is not linked to WABA `1839924533652808`.
+1. **`subscribed_apps` is empty** — the Meta App is not linked to WABA `2294276881326866`.
 2. Phone was **PENDING**; registration completed → now **CONNECTED**.
 3. **Do not send test messages to +44 7915 357177 itself** (that is the business
    sender). Use a personal mobile on the patient record.
@@ -208,7 +222,7 @@ The number **exists on the WABA** (API lists it). It does **not** appear in
 3. After it appears: open **+44 7915 357177** → complete **Register / Activate**
    (set a **6-digit two-step PIN**). Status must become **CONNECTED** (not PENDING).
 4. Optional API register (once app is subscribed):  
-   `POST /v21.0/1186752691194998/register`  
+   `POST /v21.0/1240334725831342/register`  
    body `{ "messaging_product": "whatsapp", "pin": "<6-digit-PIN>" }`  
    — only with a PIN the practice chooses and stores safely.
 
@@ -266,7 +280,8 @@ profile id `cmrj4e00t000turyapyziq2ir`.
 | Name | Purpose | Correct / notes |
 |---|---|---|
 | `WHATSAPP_TOKEN` | Permanent System User token | Not the 24h API-Setup test token |
-| `WHATSAPP_PHONE_NUMBER_ID` | **Phone Number ID** | **`1186752691194998`** — never the WABA id |
+| `WHATSAPP_PHONE_NUMBER_ID` | **Phone Number ID** | **`1240334725831342`** — never the WABA id |
+| `WHATSAPP_WABA_ID` | WABA id (reference) | `2294276881326866` |
 | `WHATSAPP_TEMPLATES_ENABLED` | `1` / `true` to send templates | Local `1`; set on Vercel + redeploy |
 | `WHATSAPP_TEMPLATE_LANG` | Template language code | `en_GB` |
 | `ADMIN_NOTIFY_WHATSAPP` | Practice alert number | e.g. `+447915357177` (E.164) |
@@ -281,7 +296,7 @@ BSP/Tech Provider. Cloud API number above is the path.
 
 ### 11.7 How to test (once CONNECTED + app subscribed + Vercel env correct)
 
-1. Confirm Vercel: `WHATSAPP_PHONE_NUMBER_ID=1186752691194998`,
+1. Confirm Vercel: `WHATSAPP_PHONE_NUMBER_ID=1240334725831342`,
    `WHATSAPP_TEMPLATES_ENABLED=1`, token set → **Redeploy**.
 2. Log in (Super Admin sees all patients; coordinator only own).
 3. Open a patient with **your** mobile in E.164 (`+44…`) — not a fake demo number.
@@ -300,7 +315,7 @@ Graph quick checks (no secrets in handoff):
 | Error / symptom | Meaning | Fix |
 |---|---|---|
 | `#133010 Account not registered` | Phone still PENDING / not registered for Cloud API | Register number (PIN); wait for CONNECTED |
-| `Object with ID '18399…' does not exist` on `/messages` | Using **WABA id** as phone id | Use `1186752691194998` |
+| `Object with ID '22942…' does not exist` on `/messages` | Using **WABA id** as phone id | Use `1240334725831342` |
 | Number missing in App → API Setup | App not subscribed to WABA | Link app in Business Settings (§11.3) |
 | Variable at start/end rejected | Meta template rule | Static text before first & after last variable |
 | Zero-tap needs package name / signature | Android autofill OTP | Use **Copy code** auth template |
@@ -309,13 +324,12 @@ Graph quick checks (no secrets in handoff):
 | Free-form text to patients | Templates disabled or outside 24h window | Keep `WHATSAPP_TEMPLATES_ENABLED=1` for business-initiated |
 
 ### 11.9 Remaining WhatsApp checklist
-- [x] Register +44 7915 357177 → status **CONNECTED**
-- [ ] Link Meta App to WABA (`subscribed_apps` was still empty when last checked)
-- [ ] Vercel: `WHATSAPP_PHONE_NUMBER_ID=1186752691194998`,
-      `WHATSAPP_TEMPLATES_ENABLED=1`, optional `WHATSAPP_TPL_PROPOSAL=payment_reminder`,
-      `WHATSAPP_TPL_REMINDER=porposal_ready` + Redeploy
-- [ ] Smoke-test proposal WhatsApp + OTP to a **personal** handset (not the business number)
-- [ ] Phase 2: webhook + conversation history / inbox
+- [x] New WABA `2294276881326866` + Phone `1240334725831342` — **CONNECTED**, messaging **AVAILABLE**
+- [x] Meta App linked to WABA (`subscribed_apps` lists AI AUTOMATION)
+- [x] Vercel env: `WHATSAPP_PHONE_NUMBER_ID=1240334725831342`, token, templates enabled
+- [ ] **hello_world** smoke test to personal mobile (`node scripts/test-whatsapp-hello.mjs …`)
+- [ ] App smoke-test: resend proposal + OTP templates to personal handset
+- [ ] Phase 6 webhooks: confirm `messages` field subscribed in Meta; delivery statuses flow to `/api/whatsapp/webhook`
 - [ ] Optional: recreate templates with correct names (`proposal_ready` / `payment_reminder`)
 
 ### 11.10 Display-name request copy (for Meta, if ever re-submitted)
@@ -353,7 +367,7 @@ Crons are registered in Vercel (confirmed firing 2026-07-21, ~10:17 first observ
 Core: `DATABASE_URL`*, `AUTH_SECRET`, `APP_URL`, `CRON_SECRET`
 Gmail: `EMAIL_FROM`, `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GMAIL_REFRESH_TOKEN`, (`RESEND_API_KEY` optional)
 Notify: `ADMIN_NOTIFY_EMAIL` (=concierge@), `ADMIN_NOTIFY_WHATSAPP`
-WhatsApp: `WHATSAPP_TOKEN`, `WHATSAPP_PHONE_NUMBER_ID` (**=`1186752691194998`**, not WABA id),
+WhatsApp: `WHATSAPP_TOKEN`, `WHATSAPP_PHONE_NUMBER_ID` (**=`1240334725831342`**, not WABA id),
   `WHATSAPP_TEMPLATES_ENABLED`, `WHATSAPP_TEMPLATE_LANG` (`en_GB`), optional `WHATSAPP_TPL_*`
   (+ Embedded Signup: `NEXT_PUBLIC_META_APP_ID`, `NEXT_PUBLIC_META_CONFIG_ID`, `META_APP_SECRET`)
 Stripe: `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`
@@ -385,7 +399,7 @@ token → `GMAIL_REFRESH_TOKEN`. Redirect URI must match `<APP_URL>/api/auth/goo
 - [ ] **Create Millie & Rochelle admin logins** at `/admin/team`; optionally assign
       their existing patients via Edit → "Belongs to admin".
 - [ ] **WhatsApp go-live** (§11 full dossier): link Meta App to WABA → register
-      number to CONNECTED → Vercel phone id `1186752691194998` +
+      number to CONNECTED → Vercel phone id `1240334725831342` +
       `WHATSAPP_TEMPLATES_ENABLED=1` + redeploy → smoke-test; later webhook + inbox.
 - [ ] **Verify Gmail send-as** for millie@/rochelle@ (`[SEND-AS TEST]` emails in
       concierge@) — the touch-1 emails to Millie/Rochelle test patients came from the

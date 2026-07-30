@@ -52,15 +52,15 @@ what remains, where it ends up.
 ## 🔜 Remaining
 
 ### 1. WhatsApp go-live (biggest missing piece — business verification approved ✅)
-- [x] Env vars present locally; **correct Phone Number ID is `1186752691194998`**
-      (WABA id `1839924533652808` must NEVER be used as phone id)
+- [x] Env vars present locally; **correct Phone Number ID is `1240334725831342`**
+      (WABA id `2294276881326866` must NEVER be used as phone id)
 - [x] Code ready: template helpers in `src/lib/notify.ts` + send loaders/toasts
 - [x] Display name **Dental Scotland** approved
 - [x] Templates approved (`en_GB`): `proposal_ready`, `payment_reminder`, `login_code`
       (Copy-code auth; bodies need static text before/after variables)
 - [ ] **Link Meta App to WABA** (`subscribed_apps` was empty — number hidden in API Setup)
 - [ ] **Register** +44 7915 357177 → status CONNECTED (now PENDING; error `#133010`)
-- [ ] Vercel: `WHATSAPP_PHONE_NUMBER_ID=1186752691194998`,
+- [ ] Vercel: `WHATSAPP_PHONE_NUMBER_ID=1240334725831342`,
       `WHATSAPP_TEMPLATES_ENABLED=1`, redeploy
 - [ ] Smoke-test proposal WhatsApp + OTP
 - [ ] **Phase 2 — two-way WhatsApp**: webhook + admin inbox (see `SESSION_HANDOFF.md` §11)

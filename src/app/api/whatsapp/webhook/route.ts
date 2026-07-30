@@ -12,22 +12,64 @@ export const dynamic = "force-dynamic";
  * Configure in Meta App → WhatsApp → Configuration:
  *   Callback URL: https://dashboard.dentalscotland.com/api/whatsapp/webhook
  *   Verify token: same as saved in Admin → WhatsApp (or WHATSAPP_WEBHOOK_VERIFY_TOKEN)
- * Subscribe to: messages (includes delivery status updates)
+ * Subscribe to field: messages (includes inbound messages + delivery statuses)
  */
 
+function decodeParam(value: string): string {
+  try {
+    return decodeURIComponent(value).trim();
+  } catch {
+    return value.trim();
+  }
+}
+
+/** Meta GET verification — must echo hub.challenge as plain text. */
 export async function GET(req: NextRequest) {
   const mode = req.nextUrl.searchParams.get("hub.mode");
-  const token = req.nextUrl.searchParams.get("hub.verify_token") || "";
+  const token = decodeParam(req.nextUrl.searchParams.get("hub.verify_token") || "");
   const challenge = req.nextUrl.searchParams.get("hub.challenge");
   const cfg = await getWhatsAppConfig();
-  const expected = cfg.webhookVerifyToken || "";
+  const expected = (cfg.webhookVerifyToken || "").trim();
 
-  if (mode === "subscribe" && expected.length >= 16 && challenge && timingSafeEqualStr(token, expected)) {
-    log.info("whatsapp.webhook.verify", { ok: true });
-    return new NextResponse(challenge, { status: 200 });
+  // Browser visit without Meta params — not an error; endpoint is alive.
+  if (!mode && !token && !challenge) {
+    return new NextResponse(
+      "WhatsApp webhook endpoint is active. Meta verifies with GET hub.mode=subscribe; events arrive via POST with X-Hub-Signature-256.",
+      { status: 200, headers: { "Content-Type": "text/plain; charset=utf-8" } }
+    );
   }
-  log.warn("whatsapp.webhook.verify", { ok: false });
-  return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+
+  if (mode !== "subscribe") {
+    log.warn("whatsapp.webhook.verify", { ok: false, reason: "bad_mode", mode });
+    return NextResponse.json({ error: "Forbidden", detail: "hub.mode must be subscribe" }, { status: 403 });
+  }
+
+  if (!expected || expected.length < 8) {
+    log.warn("whatsapp.webhook.verify", { ok: false, reason: "verify_token_not_configured" });
+    return NextResponse.json(
+      { error: "Forbidden", detail: "Webhook verify token not configured in Admin → WhatsApp" },
+      { status: 403 }
+    );
+  }
+
+  if (!challenge) {
+    log.warn("whatsapp.webhook.verify", { ok: false, reason: "missing_challenge" });
+    return NextResponse.json({ error: "Forbidden", detail: "hub.challenge is required" }, { status: 403 });
+  }
+
+  if (!timingSafeEqualStr(token, expected)) {
+    log.warn("whatsapp.webhook.verify", { ok: false, reason: "token_mismatch" });
+    return NextResponse.json(
+      { error: "Forbidden", detail: "Verify token does not match Admin → WhatsApp settings" },
+      { status: 403 }
+    );
+  }
+
+  log.info("whatsapp.webhook.verify", { ok: true });
+  return new NextResponse(challenge, {
+    status: 200,
+    headers: { "Content-Type": "text/plain; charset=utf-8" },
+  });
 }
 
 type Status = {
@@ -40,8 +82,11 @@ type Status = {
 
 async function verifyMetaSignature(rawBody: string, signatureHeader: string | null): Promise<boolean> {
   const cfg = await getWhatsAppConfig();
-  const secret = cfg.metaAppSecret || "";
+  const secret = (cfg.metaAppSecret || "").trim();
   if (!secret || secret.length < 16) {
+    log.warn("whatsapp.webhook.signature_skipped", {
+      reason: secret ? "secret_too_short" : "META_APP_SECRET missing — set in Admin → WhatsApp",
+    });
     return process.env.NODE_ENV !== "production";
   }
   if (!signatureHeader?.startsWith("sha256=")) return false;
@@ -58,12 +103,15 @@ export async function POST(req: NextRequest) {
   }
 
   let body: {
+    object?: string;
     entry?: Array<{
       changes?: Array<{
+        field?: string;
         value?: {
           statuses?: Status[];
-          messages?: Array<{ from?: string; type?: string; text?: { body?: string } }>;
+          messages?: Array<{ from?: string; type?: string; text?: { body?: string }; id?: string }>;
           contacts?: Array<{ wa_id?: string; profile?: { name?: string } }>;
+          metadata?: { phone_number_id?: string; display_phone_number?: string };
         };
       }>;
     }>;
@@ -81,8 +129,19 @@ export async function POST(req: NextRequest) {
     for (const change of entry.changes || []) {
       const value = change.value;
       if (!value) continue;
+
       for (const st of value.statuses || []) {
         jobs.push(handleStatus(st));
+      }
+
+      for (const msg of value.messages || []) {
+        if (msg.type === "text" && msg.text?.body) {
+          log.info("whatsapp.inbound", {
+            from: msg.from || null,
+            messageId: msg.id ? msg.id.slice(0, 28) + "…" : null,
+            preview: msg.text.body.slice(0, 120),
+          });
+        }
       }
     }
   }

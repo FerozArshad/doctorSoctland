@@ -8,7 +8,7 @@ import { fmt, fullPricePence, netPricePence, treatmentPricePence, treatmentBooki
 import { getPricing } from "@/lib/pricing-settings";
 import { parseTreatmentType, treatmentCopy, treatmentLabel, planCountMax, planCountMin } from "@/lib/treatments";
 import { COORDINATORS, coordinatorFor, fromHeader, FALLBACK_COORDINATOR, type Coordinator } from "@/lib/coordinators";
-import { brandedEmail, emailConfigured, financeLinkEmailHtml, proposalEmailHtml, sendEmail, sendProposalWhatsApp, sendWhatsApp, escapeHtml, adminWelcomeEmailHtml, adminPasswordResetEmailHtml, notifyAdmin } from "@/lib/notify";
+import { brandedEmail, emailConfigured, financeLinkEmailHtml, proposalEmailHtml, sendEmail, sendProposalWhatsApp, sendWhatsApp, sendWhatsAppHelloWorld, escapeHtml, adminWelcomeEmailHtml, adminPasswordResetEmailHtml, notifyAdmin } from "@/lib/notify";
 import { gmailConfigured } from "@/lib/google";
 import { firstNameOf } from "@/lib/status";
 import { log, summarizeError } from "@/lib/log";
@@ -420,6 +420,40 @@ export async function registerWhatsAppPhone(formData: FormData) {
     redirect(toastUrl("/admin/whatsapp", `Phone registered with Meta${note}`, "✓"));
   } catch (e) {
     redirect(toastUrl("/admin/whatsapp", e instanceof Error ? e.message : "Registration failed", "!", "#E0A429"));
+  }
+}
+
+/** Send hello_world template to a personal mobile (Super Admin smoke test). */
+export async function sendWhatsAppTestMessage(formData: FormData) {
+  const me = await requireAdmin();
+  if (!me.isSuperAdmin) redirect("/admin");
+  const phone = String(formData.get("phone") || "").trim();
+  if (!phone) {
+    redirect(toastUrl("/admin/whatsapp", "Enter a recipient mobile number", "!", "#E0A429"));
+  }
+  const digits = phone.replace(/\D/g, "");
+  if (digits.endsWith("7915357177")) {
+    redirect(toastUrl("/admin/whatsapp", "Use a personal mobile — not the business sender +44 7915 357177", "!", "#E0A429"));
+  }
+  try {
+    const r = await sendWhatsAppHelloWorld(phone);
+    if (r.simulated) {
+      redirect(toastUrl("/admin/whatsapp", "WhatsApp not configured — save token + phone id first", "!", "#E0A429"));
+    }
+    if (r.error) {
+      log.error("whatsapp.test_send.fail", { phone, ...summarizeError(r.error) });
+      redirect(toastUrl("/admin/whatsapp", "Test send failed — see server logs", "!", "#E0A429"));
+    }
+    log.info("whatsapp.test_send.ok", { phone, messageId: r.messageId || null, adminId: me.id });
+    redirect(
+      toastUrl(
+        "/admin/whatsapp",
+        `hello_world sent to ${phone}${r.messageId ? ` · id ${r.messageId.slice(0, 20)}…` : ""}`,
+        "✓"
+      )
+    );
+  } catch (e) {
+    redirect(toastUrl("/admin/whatsapp", e instanceof Error ? e.message : "Test send failed", "!", "#E0A429"));
   }
 }
 

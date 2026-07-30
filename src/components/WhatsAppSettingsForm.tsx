@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import FormSubmitButton from "@/components/FormSubmitButton";
-import { saveWhatsAppSettings, testWhatsAppConnection, registerWhatsAppPhone } from "@/app/admin/actions";
+import { saveWhatsAppSettings, testWhatsAppConnection, registerWhatsAppPhone, sendWhatsAppTestMessage } from "@/app/admin/actions";
 
 type Cfg = {
   token: string;
@@ -196,7 +196,10 @@ export default function WhatsAppSettingsForm({
         </div>
 
         <label className="label">Phone Number ID *</label>
-        <input className="input" name="phoneNumberId" defaultValue={cfg.phoneNumberId} placeholder="1186752691194998" required />
+        <input className="input" name="phoneNumberId" defaultValue={cfg.phoneNumberId} placeholder="1240334725831342" required />
+        <div style={{ fontSize: 12, color: "#7A8696", marginTop: 6 }}>
+          WABA ID (reference only — do not use for sends): <code>2294276881326866</code>
+        </div>
 
         <div style={{ marginTop: 14 }}>
           <label className="label">Permanent access token (System User)</label>
@@ -242,9 +245,19 @@ export default function WhatsAppSettingsForm({
         </div>
 
         <div style={{ fontSize: 15, fontWeight: 800, margin: "22px 0 8px" }}>Webhook</div>
-        <div style={{ fontSize: 12.5, color: "#7A8696", marginBottom: 12, lineHeight: 1.55 }}>
-          Meta callback URL (read-only):{" "}
-          <code style={{ fontSize: 12 }}>{appUrl.replace(/\/$/, "")}/api/whatsapp/webhook</code>
+        <div style={{ fontSize: 12.5, color: "#7A8696", marginBottom: 12, lineHeight: 1.6 }}>
+          <strong>Callback URL</strong> (paste in Meta → WhatsApp → Configuration):<br />
+          <code style={{ fontSize: 12, wordBreak: "break-all" }}>{appUrl.replace(/\/$/, "")}/api/whatsapp/webhook</code>
+          <div style={{ marginTop: 10 }}>
+            Opening that URL in a browser should show <em>“WhatsApp webhook endpoint is active”</em> — not an error.
+            Meta verifies with a signed GET (<code>hub.mode=subscribe</code>). Events arrive via POST signed with your App Secret.
+          </div>
+          <ol style={{ margin: "10px 0 0", paddingLeft: 18 }}>
+            <li>Paste the callback URL above → click <strong>Verify and save</strong></li>
+            <li>Verify token below must match Meta <strong>exactly</strong> (save here first, then Meta)</li>
+            <li>Click <strong>Manage</strong> webhook fields → subscribe to <strong>messages</strong> (includes delivery statuses)</li>
+            <li>Save <strong>Meta App Secret</strong> below — required for secure POST in production</li>
+          </ol>
         </div>
 
         <label className="label">Verify token</label>
@@ -287,11 +300,57 @@ export default function WhatsAppSettingsForm({
         />
       </form>
 
+      <form action={sendWhatsAppTestMessage} className="card" style={{ padding: 20 }}>
+        <div style={{ fontSize: 15, fontWeight: 800 }}>Send test message</div>
+        <div style={{ fontSize: 13, color: "#7A8696", marginTop: 4, lineHeight: 1.55 }}>
+          Sends Meta&apos;s pre-approved <code>hello_world</code> template. Use a <strong>personal</strong> mobile — not +44 7915 357177.
+        </div>
+        <div style={{ marginTop: 14 }}>
+          <label className="label">Recipient mobile</label>
+          <input className="input" name="phone" placeholder="03186615562 or +923186615562" required />
+        </div>
+        <FormSubmitButton
+          className="btn btn-teal"
+          style={{ marginTop: 14, padding: "11px 16px", width: "100%" }}
+          label="Send hello_world test"
+          pendingLabel="Sending…"
+        />
+      </form>
+
+      <div className="card" style={{ padding: 20 }}>
+        <div style={{ fontSize: 15, fontWeight: 800 }}>Recreate message templates in Meta</div>
+        <div style={{ fontSize: 13, color: "#7A8696", marginTop: 6, lineHeight: 1.6 }}>
+          WhatsApp Manager → <strong>Message templates</strong> → Create. Language: <strong>English (UK)</strong> (<code>en_GB</code>).
+          Variables cannot be at the very start or end of the body.
+        </div>
+        <div style={{ marginTop: 14, display: "flex", flexDirection: "column", gap: 12, fontSize: 13, lineHeight: 1.55 }}>
+          <div style={{ padding: 12, borderRadius: 10, background: "#F6F9FA", border: "1px solid #EEF2F6" }}>
+            <strong>payment_reminder</strong> (Utility) — proposal send<br />
+            <span style={{ color: "#5C6B7A" }}>
+              Hello {"{{1}}"}, your personalised treatment plan from Dental Scotland is ready. Open your secure proposal here: {"{{2}}"} Thanks, Dental Scotland.
+            </span>
+          </div>
+          <div style={{ padding: 12, borderRadius: 10, background: "#F6F9FA", border: "1px solid #EEF2F6" }}>
+            <strong>porposal_ready</strong> (Utility) — reminder<br />
+            <span style={{ color: "#5C6B7A" }}>
+              Hello {"{{1}}"}, a reminder that your Dental Scotland treatment proposal is waiting. View it here: {"{{2}}"} Thanks, Dental Scotland.
+            </span>
+          </div>
+          <div style={{ padding: 12, borderRadius: 10, background: "#F6F9FA", border: "1px solid #EEF2F6" }}>
+            <strong>login_code</strong> (Authentication) — OTP<br />
+            <span style={{ color: "#5C6B7A" }}>
+              {"{{1}}"} is your verification code. For your security, do not share this code.
+            </span>
+            <div style={{ marginTop: 6, fontSize: 12, color: "#7A8696" }}>Add a URL button with dynamic suffix for copy-code flow if required by Meta.</div>
+          </div>
+        </div>
+      </div>
+
       <form action={registerWhatsAppPhone} className="card" style={{ padding: 20 }}>
         <div style={{ fontSize: 15, fontWeight: 800 }}>Register phone with Cloud API</div>
         <div style={{ fontSize: 13, color: "#7A8696", marginTop: 4, lineHeight: 1.55 }}>
           If Meta shows WABA status <strong>Onboarding</strong> or error <code>141008</code>, complete registration
-          for Phone Number ID <strong>{cfg.phoneNumberId || "1186752691194998"}</strong> (not the WABA id). Uses Meta&apos;s{" "}
+          for Phone Number ID <strong>{cfg.phoneNumberId || "1240334725831342"}</strong> (not WABA <code>2294276881326866</code>). Uses Meta&apos;s{" "}
           <code>POST /&#123;phone-number-id&#125;/register</code> endpoint.{" "}
           <strong>Max 10 attempts per 72 hours</strong> — wrong PINs count toward the limit.
         </div>

@@ -37,7 +37,14 @@ export function MessageNotificationsProvider({ children }: { children: React.Rea
   const refresh = useCallback(() => {
     fetch("/api/admin/notifications", { cache: "no-store" })
       .then((r) => (r.ok ? r.json() : EMPTY))
-      .then((json: MessageNotifications) => setData(json))
+      .then((json: MessageNotifications) =>
+        setData({
+          items: Array.isArray(json?.items) ? json.items : [],
+          recentSent: Array.isArray(json?.recentSent) ? json.recentSent : [],
+          upcoming: Array.isArray(json?.upcoming) ? json.upcoming : [],
+          alertCount: typeof json?.alertCount === "number" ? json.alertCount : 0,
+        })
+      )
       .catch(() => setData(EMPTY))
       .finally(() => setLoading(false));
   }, []);

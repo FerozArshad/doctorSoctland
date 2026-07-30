@@ -30,8 +30,8 @@ type Health = {
   summary: string;
 };
 
-function maskSecret(value: string) {
-  const v = value.trim();
+function maskSecret(value: string | null | undefined) {
+  const v = (value || "").trim();
   if (!v) return "";
   if (v.length <= 8) return "••••••••";
   return `${v.slice(0, 4)}…${v.slice(-4)}`;
@@ -58,7 +58,15 @@ export default function WhatsAppSettingsForm({
     fetch("/api/admin/whatsapp/health", { cache: "no-store" })
       .then((r) => (r.ok ? r.json() : null))
       .then((json) => {
-        if (!cancelled) setHealth(json);
+        if (cancelled || !json || typeof json !== "object") {
+          if (!cancelled) setHealth(null);
+          return;
+        }
+        setHealth({
+          ...json,
+          blockers: Array.isArray(json.blockers) ? json.blockers : [],
+          summary: typeof json.summary === "string" ? json.summary : "WhatsApp health unavailable",
+        });
       })
       .catch(() => {
         if (!cancelled) setHealth(null);
@@ -150,9 +158,9 @@ export default function WhatsAppSettingsForm({
                 ) : null}
               </div>
             ) : null}
-            {blocked && health.blockers.length > 0 && (
+            {blocked && (health.blockers ?? []).length > 0 && (
               <ul style={{ margin: "10px 0 0", paddingLeft: 18 }}>
-                {health.blockers.map((b) => (
+                {(health.blockers ?? []).map((b) => (
                   <li key={`${b.entity}-${b.code}-${b.description}`}>
                     <strong>
                       {b.entity}

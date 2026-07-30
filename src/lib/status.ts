@@ -58,6 +58,21 @@ export function avatarBg(id: string): string {
   return AVATARS[h % AVATARS.length];
 }
 
+export function toDate(value: Date | string | null | undefined): Date | null {
+  if (!value) return null;
+  if (value instanceof Date) return value;
+  const d = new Date(value);
+  return Number.isNaN(d.getTime()) ? null : d;
+}
+
+export function formatShortDate(
+  value: Date | string | null | undefined,
+  opts: Intl.DateTimeFormatOptions = { day: "numeric", month: "short" }
+): string {
+  const d = toDate(value);
+  return d ? d.toLocaleDateString("en-GB", opts) : "";
+}
+
 export function timeAgo(date: Date | string): string {
   const ts = typeof date === "string" ? new Date(date).getTime() : date.getTime();
   const s = Math.floor((Date.now() - ts) / 1000);

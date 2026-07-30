@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useState, useRef, useEffect } from "react";
 import { channelLabel } from "@/lib/messages";
-import { timeAgo } from "@/lib/status";
+import { formatShortDate, timeAgo } from "@/lib/status";
 import { useMessageNotifications } from "@/components/MessageNotificationsContext";
 
 export default function NotificationsBell() {
@@ -21,9 +21,10 @@ export default function NotificationsBell() {
     return () => document.removeEventListener("mousedown", close);
   }, [open, data.refresh]);
 
-  const instalments = data.items.filter((i) => i.kind === "instalment");
-  const upcoming = data.items.filter((i) => i.kind === "upcoming");
-  const recent = data.items.filter((i) => i.kind === "sent");
+  const items = data.items ?? [];
+  const instalments = items.filter((i) => i.kind === "instalment");
+  const upcoming = items.filter((i) => i.kind === "upcoming");
+  const recent = items.filter((i) => i.kind === "sent");
 
   return (
     <div ref={ref} style={{ position: "relative" }}>
@@ -57,7 +58,7 @@ export default function NotificationsBell() {
                 href={`/admin/patients/${u.patientId}`}
                 title={u.title}
                 detail={u.detail}
-                meta={u.dueDate ? `Due ${u.dueDate.toLocaleDateString("en-GB", { day: "numeric", month: "short" })}` : undefined}
+                meta={u.dueDate ? `Due ${formatShortDate(u.dueDate)}` : undefined}
                 unread={!!u.unread}
                 failed={!!u.failed || !!u.overdue}
                 accent={u.overdue ? "#C23B34" : u.dueToday ? "#B7791F" : "#0E9384"}

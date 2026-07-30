@@ -8,7 +8,7 @@ import { fmt, fullPricePence, netPricePence, treatmentPricePence, treatmentBooki
 import { getPricing } from "@/lib/pricing-settings";
 import { parseTreatmentType, treatmentCopy, treatmentLabel, planCountMax, planCountMin } from "@/lib/treatments";
 import { COORDINATORS, coordinatorFor, fromHeader, FALLBACK_COORDINATOR, type Coordinator } from "@/lib/coordinators";
-import { brandedEmail, emailConfigured, financeLinkEmailHtml, proposalEmailHtml, sendEmail, sendProposalWhatsApp, sendWhatsApp, sendWhatsAppHelloWorld, escapeHtml, adminWelcomeEmailHtml, adminPasswordResetEmailHtml, notifyAdmin } from "@/lib/notify";
+import { brandedEmail, emailConfigured, financeLinkEmailHtml, proposalEmailHtml, sendEmail, sendProposalWhatsApp, sendWhatsApp, sendWhatsAppHelloWorld, escapeHtml, adminWelcomeEmailHtml, adminPasswordResetEmailHtml, notifyAdmin, whatsAppFailureLabel } from "@/lib/notify";
 import { gmailConfigured } from "@/lib/google";
 import { firstNameOf } from "@/lib/status";
 import { log, summarizeError } from "@/lib/log";
@@ -1117,10 +1117,13 @@ async function deliverProposal(patientId: string, sentBy?: Coordinator) {
     results.push(`Email not sent`);
   }
   if (patient.phone && patient.phone !== "—") {
+    const waCfg = await getWhatsAppConfig();
+    const tplName = waCfg.tplProposal || "payment_reminder";
     const r = await sendProposalWhatsApp(patient);
     if (r.error) {
-      log.error("proposal.whatsapp.fail", { patientId, phone: patient.phone, ...summarizeError(r.error) });
-      results.push(`WhatsApp not sent`);
+      const label = whatsAppFailureLabel(r.error, tplName);
+      log.error("proposal.whatsapp.fail", { patientId, phone: patient.phone, template: tplName, ...summarizeError(r.error) });
+      results.push(label);
     } else if (r.simulated) {
       results.push(`WhatsApp not sent`);
       log.warn("proposal.whatsapp.simulated", { patientId, phone: patient.phone });
@@ -1176,14 +1179,17 @@ export async function sendProposal(formData: FormData) {
   const results = await deliverProposal(id, co);
   const wa = results.find((r) => r.startsWith("WhatsApp"));
   const emailFailed = results.some((r) => r === "Email not sent");
+  const waFailed = !!wa && wa !== "WhatsApp sent";
   const msg = emailFailed
     ? "Proposal email not sent — check configuration"
-    : wa === "WhatsApp not sent"
-      ? `Proposal emailed from ${co.name} — WhatsApp not sent`
+    : waFailed
+      ? wa!.includes("not approved")
+        ? `Proposal emailed from ${co.name} — WhatsApp waiting on Meta template approval`
+        : `Proposal emailed from ${co.name} — WhatsApp not sent`
       : wa === "WhatsApp sent"
         ? `Proposal sent by email + WhatsApp from ${co.name}`
         : `Proposal emailed to patient from ${co.name}`;
-  const warn = emailFailed || wa === "WhatsApp not sent";
+  const warn = emailFailed || waFailed;
   redirect(toastUrl(`/admin/patients/${id}`, msg, warn ? "!" : "✉", warn ? "#E0A429" : "#0E9384"));
 }
 

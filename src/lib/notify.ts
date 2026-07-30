@@ -340,6 +340,18 @@ export async function sendWhatsAppTemplate(
   return { ...r, via: "template" };
 }
 
+/** Human-readable reason when a WhatsApp send fails (for admin toasts + activity log). */
+export function whatsAppFailureLabel(error: unknown, templateName?: string): string {
+  const s = summarizeError(error);
+  if (s.code === 132001) {
+    return `WhatsApp not sent — template "${templateName || "payment_reminder"}" not approved in Meta yet (check Admin → WhatsApp)`;
+  }
+  if (s.message.includes("141008") || s.message.toLowerCase().includes("not active")) {
+    return "WhatsApp not sent — business account not fully active with Meta";
+  }
+  return "WhatsApp not sent";
+}
+
 export async function sendProposalWhatsApp(p: Patient): Promise<WhatsAppSendResult> {
   const body = proposalWhatsAppText(p);
   const c = await getWhatsAppConfig();

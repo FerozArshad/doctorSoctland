@@ -103,6 +103,59 @@ export type WhatsAppHealth = {
   summary: string;
 };
 
+export type WhatsAppTemplateInfo = {
+  key: "proposal" | "reminder" | "login";
+  label: string;
+  name: string;
+  status: "APPROVED" | "PENDING" | "REJECTED" | "MISSING" | "UNKNOWN";
+  language: string;
+};
+
+async function fetchWabaTemplates(token: string, wabaId: string) {
+  const res = await fetch(
+    `https://graph.facebook.com/v21.0/${encodeURIComponent(wabaId)}/message_templates?limit=100&fields=name,status,language`,
+    { headers: { Authorization: `Bearer ${token.trim()}` }, cache: "no-store" }
+  );
+  const json = (await res.json()) as {
+    error?: { message?: string };
+    data?: Array<{ name?: string; status?: string; language?: string }>;
+  };
+  if (!res.ok) return { ok: false as const, error: json.error?.message || "Could not load templates", templates: [] };
+  return { ok: true as const, templates: json.data || [] };
+}
+
+/** Live template approval status for proposal / reminder / OTP sends. */
+export async function getWhatsAppTemplateStatuses(): Promise<WhatsAppTemplateInfo[]> {
+  const c = await getWhatsAppConfig();
+  if (!c.token) return [];
+
+  let wabaId = (process.env.WHATSAPP_WABA_ID || "").trim();
+  if (!wabaId) {
+    const health = await getWhatsAppHealth();
+    wabaId = health?.wabaId || "";
+  }
+  if (!wabaId) return [];
+
+  const lang = (c.templateLang || "en_GB").trim() || "en_GB";
+  const listed = await fetchWabaTemplates(c.token, wabaId);
+  const byName = new Map<string, { status: string; language: string }>();
+  for (const t of listed.templates) {
+    if (t.name) byName.set(`${t.name}:${t.language || lang}`, { status: t.status || "UNKNOWN", language: t.language || lang });
+  }
+
+  const defs: Array<{ key: WhatsAppTemplateInfo["key"]; label: string; name: string }> = [
+    { key: "proposal", label: "Proposal send", name: c.tplProposal || "payment_reminder" },
+    { key: "reminder", label: "Follow-up reminder", name: c.tplReminder || "porposal_ready" },
+    { key: "login", label: "Login OTP", name: c.tplLogin || "login_code" },
+  ];
+
+  return defs.map((d) => {
+    const hit = byName.get(`${d.name}:${lang}`) || byName.get(`${d.name}:en_GB`) || byName.get(`${d.name}:en`);
+    const status = (hit?.status || "MISSING") as WhatsAppTemplateInfo["status"];
+    return { key: d.key, label: d.label, name: d.name, status, language: hit?.language || lang };
+  });
+}
+
 /** Live Meta health_status — detects WABA/phone blocks that still return API "accepted". */
 export async function getWhatsAppHealth(): Promise<WhatsAppHealth | null> {
   const c = await getWhatsAppConfig();

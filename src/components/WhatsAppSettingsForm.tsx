@@ -30,6 +30,21 @@ type Health = {
   summary: string;
 };
 
+type TemplateStatus = {
+  key: string;
+  label: string;
+  name: string;
+  status: string;
+  language: string;
+};
+
+function templateBadge(status: string) {
+  if (status === "APPROVED") return { label: "Approved", bg: "#E6F6EA", fg: "#1C7C3A" };
+  if (status === "PENDING") return { label: "Pending Meta review", bg: "#FBF3E2", fg: "#B7791F" };
+  if (status === "REJECTED") return { label: "Rejected", bg: "#FBE9E8", fg: "#C23B34" };
+  return { label: "Not created", bg: "#F4F6F9", fg: "#7A8696" };
+}
+
 function maskSecret(value: string | null | undefined) {
   const v = (value || "").trim();
   if (!v) return "";
@@ -46,30 +61,38 @@ export default function WhatsAppSettingsForm({
 }) {
   const [health, setHealth] = useState<Health | null>(null);
   const [healthLoading, setHealthLoading] = useState(!!(cfg.token && cfg.phoneNumberId));
+  const [templates, setTemplates] = useState<TemplateStatus[]>([]);
 
   useEffect(() => {
     if (!cfg.token || !cfg.phoneNumberId) {
       setHealth(null);
+      setTemplates([]);
       setHealthLoading(false);
       return;
     }
     let cancelled = false;
     setHealthLoading(true);
-    fetch("/api/admin/whatsapp/health", { cache: "no-store" })
-      .then((r) => (r.ok ? r.json() : null))
-      .then((json) => {
-        if (cancelled || !json || typeof json !== "object") {
-          if (!cancelled) setHealth(null);
-          return;
+    Promise.all([
+      fetch("/api/admin/whatsapp/health", { cache: "no-store" }).then((r) => (r.ok ? r.json() : null)),
+      fetch("/api/admin/whatsapp/templates", { cache: "no-store" }).then((r) => (r.ok ? r.json() : [])),
+    ])
+      .then(([healthJson, templateJson]) => {
+        if (cancelled) return;
+        if (!healthJson || typeof healthJson !== "object") setHealth(null);
+        else {
+          setHealth({
+            ...healthJson,
+            blockers: Array.isArray(healthJson.blockers) ? healthJson.blockers : [],
+            summary: typeof healthJson.summary === "string" ? healthJson.summary : "WhatsApp health unavailable",
+          });
         }
-        setHealth({
-          ...json,
-          blockers: Array.isArray(json.blockers) ? json.blockers : [],
-          summary: typeof json.summary === "string" ? json.summary : "WhatsApp health unavailable",
-        });
+        setTemplates(Array.isArray(templateJson) ? templateJson : []);
       })
       .catch(() => {
-        if (!cancelled) setHealth(null);
+        if (!cancelled) {
+          setHealth(null);
+          setTemplates([]);
+        }
       })
       .finally(() => {
         if (!cancelled) setHealthLoading(false);
@@ -82,6 +105,9 @@ export default function WhatsAppSettingsForm({
   const connected = !!(cfg.token && cfg.phoneNumberId);
   const blocked = !!(health && !health.ok);
   const published = !!(health?.verifiedName && health?.displayPhone);
+  const proposalTpl = templates.find((t) => t.key === "proposal");
+  const templatesReady = proposalTpl?.status === "APPROVED";
+  const templatesPending = proposalTpl?.status === "PENDING";
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 18, maxWidth: 720 }}>
@@ -97,12 +123,12 @@ export default function WhatsAppSettingsForm({
           <span
             className="badge"
             style={{
-              background: blocked ? "#FBE9E8" : connected ? "#E6F6EA" : "#FBF3E2",
-              color: blocked ? "#C23B34" : connected ? "#1C7C3A" : "#B7791F",
+              background: blocked ? "#FBE9E8" : connected && templatesReady ? "#E6F6EA" : connected && templatesPending ? "#FBF3E2" : connected ? "#E6F6EA" : "#FBF3E2",
+              color: blocked ? "#C23B34" : connected && templatesReady ? "#1C7C3A" : connected && templatesPending ? "#B7791F" : connected ? "#1C7C3A" : "#B7791F",
               padding: "6px 11px",
             }}
           >
-            {blocked ? "Messaging blocked" : connected ? "Ready to send" : "Not connected"}
+            {blocked ? "Messaging blocked" : connected && templatesPending ? "Templates pending" : connected ? "Ready to send" : "Not connected"}
           </span>
         </div>
         {published && (
@@ -120,6 +146,32 @@ export default function WhatsAppSettingsForm({
           {cfg.phoneNumberId ? ` · Phone Number ID ${cfg.phoneNumberId}` : ""}
           {cfg.token ? ` · Token ${maskSecret(cfg.token)}` : ""}
         </div>
+
+        {templates.length > 0 && (
+          <div style={{ marginTop: 14, padding: "12px 14px", borderRadius: 11, background: "#F6F9FA", border: "1px solid #EEF2F6" }}>
+            <div style={{ fontSize: 13, fontWeight: 800, marginBottom: 8 }}>Message templates (live from Meta)</div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              {templates.map((t) => {
+                const badge = templateBadge(t.status);
+                return (
+                  <div key={t.key} style={{ display: "flex", justifyContent: "space-between", gap: 10, alignItems: "center", fontSize: 13 }}>
+                    <span>
+                      <strong>{t.name}</strong> · {t.label} <span style={{ color: "#9AA6B4" }}>({t.language})</span>
+                    </span>
+                    <span className="badge" style={{ background: badge.bg, color: badge.fg, padding: "4px 8px", fontSize: 11.5 }}>
+                      {badge.label}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+            {templatesPending && (
+              <div style={{ marginTop: 10, fontSize: 12.5, color: "#8A5A12", lineHeight: 1.55 }}>
+                Proposal WhatsApp messages cannot send until <strong>payment_reminder</strong> is approved. Meta usually reviews within a few hours (sometimes 24–48h). Email proposals still work.
+              </div>
+            )}
+          </div>
+        )}
 
         {healthLoading && connected && (
           <div style={{ marginTop: 14, padding: "12px 14px", borderRadius: 11, background: "#F4F6F9", fontSize: 13, color: "#7A8696" }}>

@@ -859,7 +859,7 @@ export async function createPatient(formData: FormData) {
       await deliverProposal(existing.id, co);
       redirect(toastUrl(`/admin/patients/${existing.id}`, `Proposal sent to ${firstName}`, "✉"));
     }
-    redirect(toastUrl(`/admin/patients/${existing.id}`, `Opening proposal for ${firstName}`, "✓"));
+    redirect(toastUrl(`/admin/patients/${existing.id}/proposal`, `Opening proposal for ${firstName}`, "✓"));
   }
 
   const ownerRaw = formData.get("ownerId");
@@ -884,7 +884,7 @@ export async function createPatient(formData: FormData) {
     await deliverProposal(patient.id, co);
     redirect(toastUrl(`/admin/patients/${patient.id}`, `Proposal sent to ${firstName}`, "✉"));
   }
-  redirect(toastUrl(`/admin/patients/${patient.id}`, `Draft saved for ${firstName}`, "✓"));
+  redirect(toastUrl(`/admin/patients/${patient.id}/proposal`, `Draft saved for ${firstName}`, "✓"));
 }
 
 // Edit an existing patient — allowed at any status (even after paid/done).
@@ -943,7 +943,7 @@ export async function updatePatient(formData: FormData) {
   if (intent === "draft") {
     redirect(toastUrl(`/admin/patients/${id}/proposal`, "Draft saved — pick up where you left off", "✓"));
   }
-  redirect(toastUrl(`/admin/patients/${id}`, "Patient details updated", "✓"));
+  redirect(toastUrl(`/admin/patients/${id}/proposal`, "Proposal saved", "✓"));
 }
 
 // Approve a finance application: save the lender link and auto-email it to the patient.

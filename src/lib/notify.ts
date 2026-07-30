@@ -393,6 +393,13 @@ export async function sendWhatsAppHelloWorld(toPhone: string): Promise<WhatsAppS
   });
 }
 
+/** Persist patient mobiles in E.164 when recognisable (UK 07…, Pakistan 03…, +country). */
+export function formatPhoneForStorage(phone: string): string {
+  const trimmed = (phone || "").trim();
+  if (!trimmed || trimmed === "—") return trimmed;
+  return normalisePhone(trimmed) ?? trimmed;
+}
+
 // E.164 normalisation for common practice inputs.
 // UK: 07… → +44… | Pakistan: 03… → +92… | already +country kept as-is.
 export function normalisePhone(phone: string): string | null {

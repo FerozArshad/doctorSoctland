@@ -8,7 +8,7 @@ import { fmt, fullPricePence, netPricePence, treatmentPricePence, treatmentBooki
 import { getPricing } from "@/lib/pricing-settings";
 import { parseTreatmentType, treatmentCopy, treatmentLabel, planCountMax, planCountMin } from "@/lib/treatments";
 import { COORDINATORS, coordinatorFor, fromHeader, FALLBACK_COORDINATOR, type Coordinator } from "@/lib/coordinators";
-import { brandedEmail, emailConfigured, financeLinkEmailHtml, proposalEmailHtml, sendEmail, sendProposalWhatsApp, sendWhatsApp, sendWhatsAppHelloWorld, escapeHtml, adminWelcomeEmailHtml, adminPasswordResetEmailHtml, notifyAdmin, whatsAppFailureLabel } from "@/lib/notify";
+import { brandedEmail, emailConfigured, financeLinkEmailHtml, formatPhoneForStorage, proposalEmailHtml, sendEmail, sendProposalWhatsApp, sendWhatsApp, sendWhatsAppHelloWorld, escapeHtml, adminWelcomeEmailHtml, adminPasswordResetEmailHtml, notifyAdmin, whatsAppFailureLabel } from "@/lib/notify";
 import { gmailConfigured } from "@/lib/google";
 import { firstNameOf } from "@/lib/status";
 import { log, summarizeError } from "@/lib/log";
@@ -336,36 +336,36 @@ export async function testWhatsAppConnection() {
   if (!cfg.token || !cfg.phoneNumberId) {
     redirect(toastUrl("/admin/whatsapp", "Save Phone Number ID + token first", "!", "#E0A429"));
   }
+  let health;
   try {
-    const health = await getWhatsAppHealth();
-    if (!health) {
-      redirect(toastUrl("/admin/whatsapp", "Could not load WhatsApp health", "!", "#E0A429"));
-    }
-    if (!health.ok) {
-      const top = health.blockers[0];
-      log.error("whatsapp.health.blocked", { blockers: health.blockers, summary: health.summary });
-      redirect(
-        toastUrl(
-          "/admin/whatsapp",
-          "WhatsApp is not ready — messages may not deliver. Details are in server logs.",
-          "!",
-          "#E0A429"
-        )
-      );
-    }
-    redirect(
-      toastUrl(
-        "/admin/whatsapp",
-        `Ready: ${health.verifiedName || "WhatsApp"} · ${health.displayPhone || cfg.phoneNumberId}${
-          health.wabaId ? ` · WABA ${health.wabaId}` : ""
-        }`,
-        "✓"
-      )
-    );
+    health = await getWhatsAppHealth();
   } catch (e) {
     log.error("whatsapp.test.fail", summarizeError(e));
     redirect(toastUrl("/admin/whatsapp", "WhatsApp check failed — see server logs", "!", "#E0A429"));
   }
+  if (!health) {
+    redirect(toastUrl("/admin/whatsapp", "Could not load WhatsApp health", "!", "#E0A429"));
+  }
+  if (!health.ok) {
+    log.error("whatsapp.health.blocked", { blockers: health.blockers, summary: health.summary });
+    redirect(
+      toastUrl(
+        "/admin/whatsapp",
+        "WhatsApp is not ready — messages may not deliver. Details are in server logs.",
+        "!",
+        "#E0A429"
+      )
+    );
+  }
+  redirect(
+    toastUrl(
+      "/admin/whatsapp",
+      `Ready: ${health.verifiedName || "WhatsApp"} · ${health.displayPhone || cfg.phoneNumberId}${
+        health.wabaId ? ` · WABA ${health.wabaId}` : ""
+      }`,
+      "✓"
+    )
+  );
 }
 
 /** Complete Cloud API phone registration (moves WABA out of onboarding). Max 10 attempts / 72h. */
@@ -435,26 +435,27 @@ export async function sendWhatsAppTestMessage(formData: FormData) {
   if (digits.endsWith("7915357177")) {
     redirect(toastUrl("/admin/whatsapp", "Use a personal mobile — not the business sender +44 7915 357177", "!", "#E0A429"));
   }
+  let r;
   try {
-    const r = await sendWhatsAppHelloWorld(phone);
-    if (r.simulated) {
-      redirect(toastUrl("/admin/whatsapp", "WhatsApp not configured — save token + phone id first", "!", "#E0A429"));
-    }
-    if (r.error) {
-      log.error("whatsapp.test_send.fail", { phone, ...summarizeError(r.error) });
-      redirect(toastUrl("/admin/whatsapp", "Test send failed — see server logs", "!", "#E0A429"));
-    }
-    log.info("whatsapp.test_send.ok", { phone, messageId: r.messageId || null, adminId: me.id });
-    redirect(
-      toastUrl(
-        "/admin/whatsapp",
-        `hello_world sent to ${phone}${r.messageId ? ` · id ${r.messageId.slice(0, 20)}…` : ""}`,
-        "✓"
-      )
-    );
+    r = await sendWhatsAppHelloWorld(phone);
   } catch (e) {
     redirect(toastUrl("/admin/whatsapp", e instanceof Error ? e.message : "Test send failed", "!", "#E0A429"));
   }
+  if (r.simulated) {
+    redirect(toastUrl("/admin/whatsapp", "WhatsApp not configured — save token + phone id first", "!", "#E0A429"));
+  }
+  if (r.error) {
+    log.error("whatsapp.test_send.fail", { phone, ...summarizeError(r.error) });
+    redirect(toastUrl("/admin/whatsapp", "Test send failed — see server logs", "!", "#E0A429"));
+  }
+  log.info("whatsapp.test_send.ok", { phone, messageId: r.messageId || null, adminId: me.id });
+  redirect(
+    toastUrl(
+      "/admin/whatsapp",
+      `hello_world sent to ${phone}${r.messageId ? ` · id ${r.messageId.slice(0, 20)}…` : ""}`,
+      "✓"
+    )
+  );
 }
 
 // ── Team (Super Admin only) ─────────────────────────────────────────────
@@ -789,7 +790,7 @@ function proposalPatientData(
     firstName: fields.firstName,
     lastName: fields.lastName,
     email: fields.email,
-    phone: fields.phone,
+    phone: formatPhoneForStorage(fields.phone),
     alignerCount: fields.alignerCount,
     pkg: fields.pkg,
     videoUrl: fields.videoUrl,

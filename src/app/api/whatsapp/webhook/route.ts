@@ -3,6 +3,7 @@ import crypto from "crypto";
 import { db } from "@/lib/db";
 import { log } from "@/lib/log";
 import { timingSafeEqualStr } from "@/lib/secure";
+import { forwardWhatsAppWebhook } from "@/lib/whatsapp-forward";
 import { getWhatsAppConfig } from "@/lib/whatsapp-settings";
 
 export const dynamic = "force-dynamic";
@@ -13,6 +14,9 @@ export const dynamic = "force-dynamic";
  *   Callback URL: https://dashboard.dentalscotland.com/api/whatsapp/webhook
  *   Verify token: same as saved in Admin → WhatsApp (or WHATSAPP_WEBHOOK_VERIFY_TOKEN)
  * Subscribe to field: messages (includes inbound messages + delivery statuses)
+ *
+ * Inbound POSTs are optionally forwarded to affiliate (Gold Card) via WHATSAPP_FORWARD_* env.
+ * Meta callback URL stays on this app only.
  */
 
 function decodeParam(value: string): string {
@@ -97,7 +101,8 @@ async function verifyMetaSignature(rawBody: string, signatureHeader: string | nu
 
 export async function POST(req: NextRequest) {
   const rawBody = await req.text();
-  if (!(await verifyMetaSignature(rawBody, req.headers.get("x-hub-signature-256")))) {
+  const metaSignature = req.headers.get("x-hub-signature-256");
+  if (!(await verifyMetaSignature(rawBody, metaSignature))) {
     log.warn("whatsapp.webhook.bad_signature");
     return NextResponse.json({ error: "invalid signature" }, { status: 401 });
   }
@@ -147,6 +152,7 @@ export async function POST(req: NextRequest) {
   }
 
   await Promise.allSettled(jobs);
+  forwardWhatsAppWebhook(rawBody, metaSignature);
   return NextResponse.json({ ok: true });
 }
 

@@ -17,7 +17,10 @@ export function whatsAppForwardUrl(): string {
 
 /** Forward raw Meta payload to affiliate. Awaited inside waitUntil — do not void-fetch. */
 export async function forwardWhatsAppWebhook(rawBody: string, metaSignature: string | null): Promise<void> {
-  if (!whatsAppForwardEnabled()) return;
+  if (!whatsAppForwardEnabled()) {
+    log.warn("whatsapp.webhook.forward.skipped", { reason: "WHATSAPP_FORWARD_ENABLED not set" });
+    return;
+  }
   const url = whatsAppForwardUrl();
   if (!url) {
     log.warn("whatsapp.webhook.forward.skipped", { reason: "WHATSAPP_FORWARD_URL not set" });
@@ -37,7 +40,12 @@ export async function forwardWhatsAppWebhook(rawBody: string, metaSignature: str
       signal: AbortSignal.timeout(10_000),
     });
     if (!res.ok) {
-      log.warn("whatsapp.webhook.forward.fail", { status: res.status, url });
+      const errBody = await res.text().catch(() => "");
+      log.warn("whatsapp.webhook.forward.fail", {
+        status: res.status,
+        url,
+        body: errBody.slice(0, 200),
+      });
       return;
     }
     log.info("whatsapp.webhook.forward.ok", { status: res.status });

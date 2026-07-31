@@ -8,7 +8,12 @@ function envBool(v: string | undefined) {
 }
 
 export function whatsAppForwardEnabled(): boolean {
-  return envBool(process.env.WHATSAPP_FORWARD_ENABLED);
+  const v = (process.env.WHATSAPP_FORWARD_ENABLED || "").toLowerCase().trim();
+  // Explicit kill switch
+  if (v === "0" || v === "false" || v === "no" || v === "off") return false;
+  if (v === "1" || v === "true" || v === "yes" || v === "on") return true;
+  // If URL is configured, forward even when ENABLED was forgotten on Vercel.
+  return Boolean(whatsAppForwardUrl());
 }
 
 export function whatsAppForwardUrl(): string {
@@ -18,7 +23,9 @@ export function whatsAppForwardUrl(): string {
 /** Forward raw Meta payload to affiliate. Awaited inside waitUntil — do not void-fetch. */
 export async function forwardWhatsAppWebhook(rawBody: string, metaSignature: string | null): Promise<void> {
   if (!whatsAppForwardEnabled()) {
-    log.warn("whatsapp.webhook.forward.skipped", { reason: "WHATSAPP_FORWARD_ENABLED not set" });
+    log.warn("whatsapp.webhook.forward.skipped", {
+      reason: "forward disabled (set WHATSAPP_FORWARD_ENABLED=1 or WHATSAPP_FORWARD_URL)",
+    });
     return;
   }
   const url = whatsAppForwardUrl();

@@ -25,6 +25,11 @@ export async function claimWhatsAppWebhookPayload(rawBody: string): Promise<bool
       log.info("whatsapp.webhook.duplicate", { payloadHash: payloadHash.slice(0, 16) });
       return false;
     }
-    throw e;
+    // Missing table / DB blip must not block Meta → forward to Gold Card.
+    log.error("whatsapp.webhook.dedup.fail", {
+      message: e instanceof Error ? e.message : String(e),
+      payloadHash: payloadHash.slice(0, 16),
+    });
+    return true;
   }
 }

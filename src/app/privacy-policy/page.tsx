@@ -168,18 +168,37 @@ const sections: Section[] = [
         text: "When we use WhatsApp, we may process your phone number, message content, delivery and read receipts, and limited profile information made available by the platform. Meta acts as an independent data controller for its own processing. Meta’s privacy policy is available at https://www.whatsapp.com/legal/privacy-policy.",
       },
       {
+        type: "p",
+        text: "Inbound WhatsApp messages to our business number may be processed by our patient dashboard and, where relevant to a separate Dental Scotland membership programme (Gold Card), forwarded securely to our affiliate service at affiliate.dentalscotland.com. That programme has its own signup flow and consent wording; membership signup is not started by generic replies such as “Hi” unless you began the flow using a Gold Card referral link or QR code.",
+      },
+      {
         type: "ul",
         items: [
-          "We do not use WhatsApp to send unsolicited marketing without a lawful basis.",
+          "Service messages (proposals, OTP codes, payment-related follow-ups) use Meta-approved message templates where required by WhatsApp policy.",
+          "We do not use WhatsApp to send unsolicited marketing without a lawful basis and appropriate consent.",
+          "Marketing communications are separate from service messages — we will not send marketing WhatsApp templates unless you have given specific marketing consent.",
           "We do not sell your WhatsApp data to third parties.",
-          "You can stop WhatsApp messages from us by replying STOP, contacting us at " + CONTACT_EMAIL + ", or blocking our number in WhatsApp.",
-          "Our use of WhatsApp is limited to communicating about your treatment, proposals, payments and account access.",
+          "You can ask us to stop WhatsApp messages by contacting us at " + CONTACT_EMAIL + " or blocking our number in WhatsApp. If you reply STOP, we will treat that as a request to opt out of further messages from us and update our records accordingly.",
+          "Our use of WhatsApp for treatment purposes is limited to communicating about your care, proposals, payments and account access.",
         ],
       },
     ],
   },
   {
-    title: "9. Marketing",
+    title: "9. Gold Card membership programme",
+    blocks: [
+      {
+        type: "p",
+        text: "Dental Scotland may operate a separate membership or referral programme (Gold Card) hosted at affiliate.dentalscotland.com. If you join through WhatsApp, we (or our affiliate service provider) will record the consent wording shown to you, the time you agreed, and your WhatsApp identifier, separately from any marketing preferences.",
+      },
+      {
+        type: "p",
+        text: "Membership consent does not automatically mean you agree to marketing. If we ask for marketing consent, it will be presented separately and you may decline it while still using membership benefits where applicable.",
+      },
+    ],
+  },
+  {
+    title: "10. Marketing",
     blocks: [
       {
         type: "p",
@@ -192,7 +211,7 @@ const sections: Section[] = [
     ],
   },
   {
-    title: "10. Who we share your data with",
+    title: "11. Who we share your data with",
     blocks: [
       {
         type: "p",
@@ -204,6 +223,7 @@ const sections: Section[] = [
           "Payment processors (such as Stripe) to take secure card payments.",
           "Finance providers, where you choose to apply for finance.",
           "Meta / WhatsApp to deliver messages you have requested or agreed to receive.",
+          "Our affiliate platform (affiliate.dentalscotland.com) for Gold Card membership signups initiated via WhatsApp referral flows.",
           "Email, messaging and hosting providers that help us operate our systems.",
           "IT support and software providers acting under contract as data processors.",
           "Professional advisers such as insurers, accountants or lawyers where required.",
@@ -217,7 +237,7 @@ const sections: Section[] = [
     ],
   },
   {
-    title: "11. International transfers",
+    title: "12. International transfers",
     blocks: [
       {
         type: "p",
@@ -226,7 +246,7 @@ const sections: Section[] = [
     ],
   },
   {
-    title: "12. How long we keep your data",
+    title: "13. How long we keep your data",
     blocks: [
       {
         type: "p",
@@ -247,7 +267,7 @@ const sections: Section[] = [
     ],
   },
   {
-    title: "13. How to request deletion of your data",
+    title: "14. How to request deletion of your data",
     blocks: [
       {
         type: "p",
@@ -276,7 +296,7 @@ const sections: Section[] = [
     ],
   },
   {
-    title: "14. Your other rights under UK data protection law",
+    title: "15. Your other rights under UK data protection law",
     blocks: [
       { type: "p", text: "Subject to certain conditions, you also have the right to:" },
       {
@@ -301,7 +321,7 @@ const sections: Section[] = [
     ],
   },
   {
-    title: "15. Security",
+    title: "16. Security",
     blocks: [
       {
         type: "p",
@@ -314,7 +334,7 @@ const sections: Section[] = [
     ],
   },
   {
-    title: "16. Cookies",
+    title: "17. Cookies",
     blocks: [
       {
         type: "p",
@@ -327,7 +347,7 @@ const sections: Section[] = [
     ],
   },
   {
-    title: "17. Children",
+    title: "18. Children",
     blocks: [
       {
         type: "p",
@@ -336,7 +356,7 @@ const sections: Section[] = [
     ],
   },
   {
-    title: "18. Automated decision-making",
+    title: "19. Automated decision-making",
     blocks: [
       {
         type: "p",
@@ -345,7 +365,7 @@ const sections: Section[] = [
     ],
   },
   {
-    title: "19. Changes to this policy",
+    title: "20. Changes to this policy",
     blocks: [
       {
         type: "p",
@@ -358,7 +378,7 @@ const sections: Section[] = [
     ],
   },
   {
-    title: "20. Contact us",
+    title: "21. Contact us",
     blocks: [
       {
         type: "p",
@@ -388,7 +408,7 @@ export default function PrivacyPolicyPage() {
         <div style={{ background: "#fff", borderRadius: 16, padding: "28px 28px 32px", boxShadow: "0 20px 50px -30px rgba(11,24,40,.25)" }}>
           <h1 style={{ margin: 0, fontSize: 26, fontWeight: 800, letterSpacing: "-.02em", color: "#0E1A2B" }}>Privacy policy</h1>
           <p style={{ margin: "8px 0 24px", fontSize: 13.5, color: "#7A8696", lineHeight: 1.6 }}>
-            Last updated: 25 July 2026 · Public policy for {APP_URL.replace("https://", "")}
+            Last updated: 31 July 2026 · Public policy for {APP_URL.replace("https://", "")}
           </p>
           {sections.map((s) => (
             <section key={s.title} style={{ marginBottom: 24 }}>

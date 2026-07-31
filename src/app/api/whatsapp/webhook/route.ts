@@ -1,10 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
-import crypto from "crypto";
-import { db } from "@/lib/db";
+import { waitUntil } from "@vercel/functions";
 import { log } from "@/lib/log";
 import { timingSafeEqualStr } from "@/lib/secure";
-import { forwardWhatsAppWebhook } from "@/lib/whatsapp-forward";
+import { claimWhatsAppWebhookPayload } from "@/lib/whatsapp-webhook-dedup";
+import { processWhatsAppWebhookPost } from "@/lib/whatsapp-webhook-process";
 import { getWhatsAppConfig } from "@/lib/whatsapp-settings";
+import crypto from "crypto";
 
 export const dynamic = "force-dynamic";
 
@@ -16,7 +17,7 @@ export const dynamic = "force-dynamic";
  * Subscribe to field: messages (includes inbound messages + delivery statuses)
  *
  * Inbound POSTs are optionally forwarded to affiliate (Gold Card) via WHATSAPP_FORWARD_* env.
- * Meta callback URL stays on this app only.
+ * Meta callback URL stays on this app only. Processing uses waitUntil + payload dedup.
  */
 
 function decodeParam(value: string): string {
@@ -35,7 +36,6 @@ export async function GET(req: NextRequest) {
   const cfg = await getWhatsAppConfig();
   const expected = (cfg.webhookVerifyToken || "").trim();
 
-  // Browser visit without Meta params — not an error; endpoint is alive.
   if (!mode && !token && !challenge) {
     return new NextResponse(
       "WhatsApp webhook endpoint is active. Meta verifies with GET hub.mode=subscribe; events arrive via POST with X-Hub-Signature-256.",
@@ -76,14 +76,6 @@ export async function GET(req: NextRequest) {
   });
 }
 
-type Status = {
-  id?: string;
-  status?: string;
-  timestamp?: string;
-  recipient_id?: string;
-  errors?: Array<{ code?: number; title?: string; message?: string; error_data?: { details?: string } }>;
-};
-
 async function verifyMetaSignature(rawBody: string, signatureHeader: string | null): Promise<boolean> {
   const cfg = await getWhatsAppConfig();
   const secret = (cfg.metaAppSecret || "").trim();
@@ -107,107 +99,23 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "invalid signature" }, { status: 401 });
   }
 
-  let body: {
-    object?: string;
-    entry?: Array<{
-      changes?: Array<{
-        field?: string;
-        value?: {
-          statuses?: Status[];
-          messages?: Array<{ from?: string; type?: string; text?: { body?: string }; id?: string }>;
-          contacts?: Array<{ wa_id?: string; profile?: { name?: string } }>;
-          metadata?: { phone_number_id?: string; display_phone_number?: string };
-        };
-      }>;
-    }>;
-  };
-
+  let body: Parameters<typeof processWhatsAppWebhookPost>[2];
   try {
     body = JSON.parse(rawBody);
   } catch {
     return NextResponse.json({ ok: true });
   }
 
-  const jobs: Promise<unknown>[] = [];
-
-  for (const entry of body.entry || []) {
-    for (const change of entry.changes || []) {
-      const value = change.value;
-      if (!value) continue;
-
-      for (const st of value.statuses || []) {
-        jobs.push(handleStatus(st));
-      }
-
-      for (const msg of value.messages || []) {
-        if (msg.type === "text" && msg.text?.body) {
-          log.info("whatsapp.inbound", {
-            from: msg.from || null,
-            messageId: msg.id ? msg.id.slice(0, 28) + "…" : null,
-            preview: msg.text.body.slice(0, 120),
-          });
-        }
-      }
-    }
+  const claimed = await claimWhatsAppWebhookPayload(rawBody);
+  if (!claimed) {
+    return NextResponse.json({ ok: true });
   }
 
-  await Promise.allSettled(jobs);
-  forwardWhatsAppWebhook(rawBody, metaSignature);
-  return NextResponse.json({ ok: true });
-}
-
-async function handleStatus(st: Status) {
-  const status = (st.status || "").toLowerCase();
-  const waId = st.recipient_id || "";
-  const messageId = st.id || "";
-  const err = st.errors?.[0];
-  const errMsg = err?.message || err?.title || err?.error_data?.details || "";
-
-  log.info("whatsapp.status", {
-    status,
-    waId: waId || null,
-    messageId: messageId ? messageId.slice(0, 28) + "…" : null,
-    code: err?.code || null,
-    message: errMsg ? errMsg.slice(0, 160) : null,
-  });
-
-  if (!waId || (status !== "failed" && status !== "undeliverable" && status !== "delivered")) return;
-
-  const patient = await findPatientByWaId(waId);
-  if (!patient) {
-    log.warn("whatsapp.status.unmatched", { waId, status });
-    return;
-  }
-
-  let text: string;
-  if (status === "delivered") {
-    text = "WhatsApp delivered";
-  } else {
-    log.error("whatsapp.delivery.failed", {
-      patientId: patient.id,
-      waId,
-      status,
-      messageId: messageId || null,
-      code: err?.code || null,
-      message: errMsg || null,
-      errors: st.errors,
-    });
-    text = "WhatsApp not delivered";
-  }
-  await db.activity.create({ data: { patientId: patient.id, text } });
-}
-
-async function findPatientByWaId(waId: string) {
-  const digits = waId.replace(/\D/g, "");
-  if (digits.length < 8) return null;
-  const patients = await db.patient.findMany({
-    where: { phone: { contains: digits.slice(-10) } },
-    select: { id: true, phone: true },
-    take: 5,
-  });
-  return (
-    patients.find((p) => (p.phone || "").replace(/\D/g, "").endsWith(digits) || digits.endsWith((p.phone || "").replace(/\D/g, "").slice(-10))) ||
-    patients[0] ||
-    null
+  waitUntil(
+    processWhatsAppWebhookPost(rawBody, metaSignature, body).catch((e) => {
+      log.error("whatsapp.webhook.process.fail", { message: e instanceof Error ? e.message : String(e) });
+    })
   );
+
+  return NextResponse.json({ ok: true });
 }

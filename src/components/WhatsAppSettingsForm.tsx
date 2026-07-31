@@ -317,7 +317,7 @@ export default function WhatsAppSettingsForm({
             <li>Verify token below must match Meta <strong>exactly</strong> (save here first, then Meta)</li>
             <li>Click <strong>Manage</strong> webhook fields → subscribe to <strong>messages</strong> (includes delivery statuses)</li>
             <li>Save <strong>Meta App Secret</strong> below — required for secure POST in production</li>
-            <li>Inbound events are also forwarded to the Gold Card affiliate when <code>WHATSAPP_FORWARD_ENABLED=1</code> on Vercel (Meta callback stays here)</li>
+            <li>Inbound events are forwarded to Gold Card affiliate when <code>WHATSAPP_FORWARD_ENABLED=1</code> (uses <code>waitUntil</code> + dedup — see <code>docs/GOLD_CARD_WHATSAPP.md</code>)</li>
           </ol>
         </div>
 

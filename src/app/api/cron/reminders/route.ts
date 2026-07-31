@@ -5,7 +5,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { warmGoogleAccessToken } from "@/lib/google";
-import { brandedEmail, notifyAdmin, sendEmail, sendWhatsApp } from "@/lib/notify";
+import { brandedEmail, notifyAdmin, sendEmail, sendReminderWhatsApp, sendWhatsApp } from "@/lib/notify";
+import { getWhatsAppConfig } from "@/lib/whatsapp-settings";
 import { firstNameOf } from "@/lib/status";
 import { getPricing } from "@/lib/pricing-settings";
 import { receivesProposalFollowUps } from "@/lib/follow-ups";
@@ -107,12 +108,14 @@ export async function GET(req: NextRequest) {
       console.error(`sequence touch ${touch.n} to ${p.email} failed:`, e);
     }
 
-    // WhatsApp on every touch (copy matches the 7-message sequence).
+    // WhatsApp: approved templates only outside the 24h customer-care window (Meta policy).
     let waNote = "";
     if (sent && p.phone && p.phone !== "—") {
-      const waBody = touch.whatsapp(p, v);
       try {
-        const r = await sendWhatsApp(p.phone, waBody);
+        const waCfg = await getWhatsAppConfig();
+        const r = waCfg.templatesEnabled
+          ? await sendReminderWhatsApp(p, cfg)
+          : await sendWhatsApp(p.phone, touch.whatsapp(p, v));
         if (r.error) {
           log.error("sequence.whatsapp.fail", { patientId: p.id, touch: touch.n, ...summarizeError(r.error) });
           waNote = " · WhatsApp not sent";

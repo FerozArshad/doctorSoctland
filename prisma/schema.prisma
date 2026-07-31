@@ -47,6 +47,12 @@ model WhatsAppSettings {
   updatedByEmail       String   @default("")
 }
 
+/// Meta webhook idempotency — skip duplicate POST bodies (Meta retries up to 7 days).
+model WhatsAppWebhookDedup {
+  payloadHash String   @id
+  createdAt   DateTime @default(now())
+}
+
 /// Email alert recipients + failure-rate monitoring thresholds.
 model EmailSettings {
   id                   String    @id @default("default")

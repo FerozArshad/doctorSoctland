@@ -7,17 +7,17 @@ function envBool(v: string | undefined) {
   return s === "1" || s === "true" || s === "yes";
 }
 
+const DEFAULT_FORWARD_URL = "https://affiliate.dentalscotland.com/api/whatsapp/webhook";
+
 export function whatsAppForwardEnabled(): boolean {
   const v = (process.env.WHATSAPP_FORWARD_ENABLED || "").toLowerCase().trim();
-  // Explicit kill switch
+  // Explicit kill switch only
   if (v === "0" || v === "false" || v === "no" || v === "off") return false;
-  if (v === "1" || v === "true" || v === "yes" || v === "on") return true;
-  // If URL is configured, forward even when ENABLED was forgotten on Vercel.
-  return Boolean(whatsAppForwardUrl());
+  return true;
 }
 
 export function whatsAppForwardUrl(): string {
-  return (process.env.WHATSAPP_FORWARD_URL || "").trim();
+  return (process.env.WHATSAPP_FORWARD_URL || DEFAULT_FORWARD_URL).trim();
 }
 
 /** Forward raw Meta payload to affiliate. Awaited inside waitUntil — do not void-fetch. */

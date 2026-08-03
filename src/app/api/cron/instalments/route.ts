@@ -75,7 +75,8 @@ export async function GET(req: NextRequest) {
       }
       await notifyAdmin(
         `📅 Instalment due soon — ${p.firstName} ${p.lastName}`,
-        `Instalment ${inst.number}/3 (${fmt(inst.amountPence)}) due ${dueLabel(inst.dueDate)}. Reminder sent to patient.`
+        `Instalment ${inst.number}/3 (${fmt(inst.amountPence)}) due ${dueLabel(inst.dueDate)}. Reminder sent to patient.`,
+        p
       );
       await db.instalment.update({
         where: { id: inst.id },
@@ -118,7 +119,8 @@ export async function GET(req: NextRequest) {
         }
         await notifyAdmin(
           `⚠️ Instalment overdue — ${p.firstName} ${p.lastName}`,
-          `Instalment ${inst.number}/3 (${fmt(inst.amountPence)}) was due ${dueLabel(inst.dueDate)} but ${reason}. Patient alerted.`
+          `Instalment ${inst.number}/3 (${fmt(inst.amountPence)}) was due ${dueLabel(inst.dueDate)} but ${reason}. Patient alerted.`,
+          p
         );
         await db.activity.create({
           data: {
@@ -199,7 +201,8 @@ export async function GET(req: NextRequest) {
       }
       await notifyAdmin(
         `⚠️ Instalment failed for ${p.firstName} ${p.lastName}`,
-        `Instalment ${inst.number}/3 (${fmt(inst.amountPence)}) could not be collected: ${detail}. Patient alerted.`
+        `Instalment ${inst.number}/3 (${fmt(inst.amountPence)}) could not be collected: ${detail}. Patient alerted.`,
+        p
       );
       results.push({ instalment: inst.id, ok: false, detail });
       log.error("instalment.charge.fail", { instalmentId: inst.id, ...summarizeError(e) });
@@ -226,7 +229,8 @@ export async function GET(req: NextRequest) {
     }
     await notifyAdmin(
       `⚠️ Instalment still outstanding — ${p.firstName} ${p.lastName}`,
-      `Instalment ${inst.number}/3 (${fmt(inst.amountPence)}) remains unpaid after a failed charge. Patient reminded.`
+      `Instalment ${inst.number}/3 (${fmt(inst.amountPence)}) remains unpaid after a failed charge. Patient reminded.`,
+      p
     );
     await db.activity.create({
       data: {

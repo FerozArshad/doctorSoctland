@@ -87,7 +87,8 @@ export async function GET(req: NextRequest) {
       });
       await notifyAdmin(
         `⏳ Price lock expired — ${p.firstName} ${p.lastName}`.trim(),
-        `Their ${LOCK_DAYS}-day quote window has closed and the follow-up sequence has stopped. Requote if you want to re-engage: ${appUrl}/admin/patients/${p.id}`
+        `Their ${LOCK_DAYS}-day quote window has closed and the follow-up sequence has stopped. Requote if you want to re-engage: ${appUrl}/admin/patients/${p.id}`,
+        p
       );
       results.push({ patient: `${p.firstName} ${p.lastName}`.trim(), touch: null, sent: false, note: "lock expired" });
       continue;

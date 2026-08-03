@@ -974,7 +974,8 @@ export async function approveFinance(formData: FormData) {
   }
   await notifyAdmin(
     `💷 Finance link sent to ${patient.firstName} ${patient.lastName}`,
-    `Approved finance application — link emailed to ${patient.email}. View: ${process.env.APP_URL || ""}/admin/patients/${patient.id}`
+    `Approved finance application — link emailed to ${patient.email}. View: ${process.env.APP_URL || ""}/admin/patients/${patient.id}`,
+    patient
   ).catch(console.error);
   // redirect() throws NEXT_REDIRECT — must be called outside the try/catch.
   if (emailOk) redirect(toastUrl(`/admin/patients/${id}`, `Approved — finance link emailed to ${patient.firstName}`, "✉"));

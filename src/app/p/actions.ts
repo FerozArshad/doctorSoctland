@@ -383,7 +383,8 @@ export async function uploadPatientFile(formData: FormData): Promise<
   });
   await notifyAdmin(
     `📎 ${patient.firstName} uploaded ${created.fileName}`,
-    `View: ${appUrl()}/admin/patients/${patient.id}`
+    `View: ${appUrl()}/admin/patients/${patient.id}`,
+    patient
   ).catch(() => {});
 
   return { upload: { id: created.id, fileName: created.fileName, sizeBytes: created.sizeBytes } };
@@ -503,7 +504,8 @@ export async function completePaymentConsent(
     void notifyAdmin(
       `⭐ ${name} is interested (consent signed)`,
       `${name} signed consent${dob ? `, DOB ${dob}` : ""} and registered interest. View: ${appUrl()}/admin/patients/${patient.id}` +
-        (note ? ` — Their message: “${note}”` : "")
+        (note ? ` — Their message: “${note}”` : ""),
+      patient
     );
   }
 
@@ -515,7 +517,8 @@ export async function completePaymentConsent(
         `Payment is not confirmed yet — they must finish Stripe Checkout in the new tab. ` +
         `You will get a separate “paid” email when Stripe confirms it. ` +
         `View: ${appUrl()}/admin/patients/${patient.id}` +
-        (note ? ` — Their message: “${note}”` : "")
+        (note ? ` — Their message: “${note}”` : ""),
+      patient
     );
     return {
       ok: true,
@@ -577,7 +580,8 @@ export async function markInterested(formData: FormData) {
   });
   void notifyAdmin(
     `⭐ ${patient.firstName} ${patient.lastName} is interested!`,
-    `${patient.firstName} clicked I'M INTERESTED on their ${fmt(patient.pricePence)} ${treatmentCopy(patient.treatmentType).label} proposal. View: ${appUrl()}/admin/patients/${patient.id}`
+    `${patient.firstName} clicked I'M INTERESTED on their ${fmt(patient.pricePence)} ${treatmentCopy(patient.treatmentType).label} proposal. View: ${appUrl()}/admin/patients/${patient.id}`,
+    patient
   );
   redirect(toastUrl(`/p/${token}`, "Brilliant! We've let your Treatment Coordinator know", "★", "#9B51E0"));
 }
@@ -595,7 +599,8 @@ export async function logFollowUpCall(token: string) {
   });
   void notifyAdmin(
     `📞 ${patient.firstName} ${patient.lastName} booked a follow-up call`,
-    `${patient.firstName} opened the virtual follow-up booking from their proposal. View: ${appUrl()}/admin/patients/${patient.id}`
+    `${patient.firstName} opened the virtual follow-up booking from their proposal. View: ${appUrl()}/admin/patients/${patient.id}`,
+    patient
   );
 }
 
@@ -611,7 +616,8 @@ export async function bookCall(formData: FormData) {
   });
   void notifyAdmin(
     `📞 ${patient.firstName} ${patient.lastName} requested a call`,
-    `Please call ${patient.firstName} on ${patient.phone || patient.email} about their ${treatmentCopy(patient.treatmentType).label} proposal. View: ${appUrl()}/admin/patients/${patient.id}`
+    `Please call ${patient.firstName} on ${patient.phone || patient.email} about their ${treatmentCopy(patient.treatmentType).label} proposal. View: ${appUrl()}/admin/patients/${patient.id}`,
+    patient
   );
   redirect(toastUrl(`/p/${token}`, "Call requested — we'll be in touch shortly", "📞", "#2E6BFF"));
 }
@@ -632,7 +638,8 @@ export async function switchToCardPayment(formData: FormData) {
   });
   void notifyAdmin(
     `💳 ${patient.firstName} ${patient.lastName} wants to pay another way`,
-    `${patient.firstName} opted to pay by card instead of finance (5% discount). View: ${appUrl()}/admin/patients/${patient.id}`
+    `${patient.firstName} opted to pay by card instead of finance (5% discount). View: ${appUrl()}/admin/patients/${patient.id}`,
+    patient
   );
   revalidatePath(`/p/${token}`);
   redirect(`/p/${token}#payment`);
@@ -652,7 +659,8 @@ export async function chooseFinance(formData: FormData) {
   });
   void notifyAdmin(
     `💷 ${patient.firstName} ${patient.lastName} applied for 0% finance`,
-    `${patient.firstName} started a finance application for their ${fmt(patient.pricePence)} plan. View: ${appUrl()}/admin/patients/${patient.id}`
+    `${patient.firstName} started a finance application for their ${fmt(patient.pricePence)} plan. View: ${appUrl()}/admin/patients/${patient.id}`,
+    patient
   );
   const financeUrl = process.env.FINANCE_APPLY_URL;
   if (financeUrl && !financeUrl.includes("example.com")) redirect(financeUrl);

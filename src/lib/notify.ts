@@ -423,28 +423,45 @@ export function normalisePhone(phone: string): string | null {
   return null;
 }
 
-/** All dashboard admin logins + practice inbox — used for admin alert emails. */
-async function adminNotifyEmails(...extra: (string | null | undefined)[]): Promise<string[]> {
+/** Patient fields used to route admin alerts to the assigned coordinator only. */
+export type PatientNotifyContext = Pick<Patient, "sentByEmail" | "ownerId">;
+
+function addValidEmail(recipients: Set<string>, email?: string | null) {
+  const e = (email || "").trim().toLowerCase();
+  if (/.+@.+\..+/.test(e)) recipients.add(e);
+}
+
+/**
+ * Resolve which admin inbox(es) should receive patient-specific alerts.
+ * Matches dashboard access rules: sent-by coordinator, or draft owner.
+ * Legacy patients with no assignment notify super admins only.
+ */
+export async function patientAdminNotifyEmails(patient: PatientNotifyContext): Promise<string[]> {
   const recipients = new Set<string>();
-  const add = (email?: string | null) => {
-    const e = (email || "").trim().toLowerCase();
-    if (/.+@.+\..+/.test(e)) recipients.add(e);
-  };
-  add(process.env.ADMIN_NOTIFY_EMAIL);
-  for (const e of extra) add(e);
-  const admins = await db.admin.findMany({ select: { email: true } });
-  for (const a of admins) add(a.email);
+  const sentBy = (patient.sentByEmail || "").trim();
+  if (sentBy) addValidEmail(recipients, sentBy);
+
+  if (patient.ownerId) {
+    const owner = await db.admin.findUnique({ where: { id: patient.ownerId }, select: { email: true } });
+    addValidEmail(recipients, owner?.email);
+  }
+
+  if (recipients.size === 0) {
+    const supers = await db.admin.findMany({ where: { isSuperAdmin: true }, select: { email: true } });
+    for (const a of supers) addValidEmail(recipients, a.email);
+    addValidEmail(recipients, process.env.ADMIN_NOTIFY_EMAIL);
+  }
+
   return Array.from(recipients);
 }
 
-async function sendAdminEmails(subject: string, html: string, extra?: (string | null | undefined)[]) {
-  const recipients = await adminNotifyEmails(...(extra || []));
+async function sendAdminEmailsTo(recipients: string[], subject: string, html: string) {
   if (recipients.length === 0) {
     log.warn("admin.notify.skip", { reason: "no_recipients" });
     return;
   }
   // Send sequentially — parallel sends each open DB connections for logging and can
-  // exhaust Prisma's pool (limit 5) on serverless when notifying all admins at once.
+  // exhaust Prisma's pool (limit 5) on serverless when notifying multiple admins.
   for (const to of recipients) {
     try {
       const result = await sendEmail(to, subject, html, undefined, { category: "admin_alert" });
@@ -456,10 +473,11 @@ async function sendAdminEmails(subject: string, html: string, extra?: (string | 
 }
 
 // ── Admin alerts (email + WhatsApp to the practice) ─────────────────────
-export async function notifyAdmin(subject: string, text: string) {
-  const jobs: Promise<unknown>[] = [
-    sendAdminEmails(subject, brandedEmail(escapeHtml(subject), `<p style="font-size:15px;line-height:1.7;color:#3C4a59;">${escapeHtml(text)}</p>`)),
-  ];
+/** Notify the admin(s) assigned to this patient — never all admins. */
+export async function notifyAdmin(subject: string, text: string, patient: PatientNotifyContext) {
+  const html = brandedEmail(escapeHtml(subject), `<p style="font-size:15px;line-height:1.7;color:#3C4a59;">${escapeHtml(text)}</p>`);
+  const recipients = await patientAdminNotifyEmails(patient);
+  const jobs: Promise<unknown>[] = [sendAdminEmailsTo(recipients, subject, html)];
   const waCfg = await getWhatsAppConfig();
   const wa = waCfg.adminNotifyWhatsApp;
   if (wa) {
@@ -490,9 +508,8 @@ export async function notifyFinanceApplication(
      <div style="text-align:center;margin:22px 0 8px;"><a href="${link}" style="display:inline-block;background:#0E9384;color:#fff;text-decoration:none;padding:13px 26px;border-radius:11px;font-weight:800;font-size:14.5px;">Open patient record →</a></div>`
   );
 
-  const jobs: Promise<unknown>[] = [
-    sendAdminEmails(subject, html, [patient.sentByEmail]),
-  ];
+  const recipients = await patientAdminNotifyEmails(patient);
+  const jobs: Promise<unknown>[] = [sendAdminEmailsTo(recipients, subject, html)];
 
   const waCfg = await getWhatsAppConfig();
   if (waCfg.adminNotifyWhatsApp) {

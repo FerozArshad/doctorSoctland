@@ -5,6 +5,51 @@ import { getAlertRecipientEmails, getEmailSettings } from "./email-settings";
 export const EMAIL_STATUSES = ["queued", "sent", "delivered", "bounced", "failed", "deferred"] as const;
 export type EmailStatus = (typeof EMAIL_STATUSES)[number];
 
+export const EMAIL_CATEGORIES = [
+  "general",
+  "proposal",
+  "otp",
+  "admin_alert",
+  "payment_confirmation",
+  "receipt",
+  "payment_deposit",
+  "instalment_reminder",
+  "instalment_overdue",
+  "instalment_failed",
+  "finance_received",
+  "finance_link",
+  "test",
+] as const;
+
+/** Categories for payment-related outbound emails (filter preset). */
+export const PAYMENT_EMAIL_CATEGORIES = [
+  "payment_confirmation",
+  "receipt",
+  "payment_deposit",
+  "instalment_reminder",
+  "instalment_overdue",
+  "instalment_failed",
+] as const;
+
+export function categoryLabel(category: string): string {
+  const labels: Record<string, string> = {
+    general: "General",
+    proposal: "Proposal",
+    otp: "Login code",
+    admin_alert: "Admin alert",
+    payment_confirmation: "Payment received",
+    receipt: "Receipt",
+    payment_deposit: "Deposit schedule",
+    instalment_reminder: "Instalment reminder",
+    instalment_overdue: "Instalment overdue",
+    instalment_failed: "Instalment failed",
+    finance_received: "Finance application",
+    finance_link: "Finance link",
+    test: "Test",
+  };
+  return labels[category] || category;
+}
+
 export const EMAIL_ERROR_TYPES = [
   "auth",
   "connection",
@@ -270,6 +315,8 @@ export async function handleEmailFailureAlert(opts: {
 export type EmailLogFilters = {
   status?: string;
   errorType?: string;
+  category?: string;
+  patientId?: string;
   to?: string;
   q?: string;
   from?: Date;
@@ -285,6 +332,12 @@ export async function queryEmailLogs(filters: EmailLogFilters) {
 
   if (filters.status && filters.status !== "all") where.status = filters.status;
   if (filters.errorType && filters.errorType !== "all") where.errorType = filters.errorType;
+  if (filters.category === "payment") {
+    where.category = { in: [...PAYMENT_EMAIL_CATEGORIES] };
+  } else if (filters.category && filters.category !== "all") {
+    where.category = filters.category;
+  }
+  if (filters.patientId?.trim()) where.patientId = filters.patientId.trim();
   if (filters.to?.trim()) where.to = { contains: filters.to.trim().toLowerCase() };
   if (filters.q?.trim()) {
     where.OR = [
@@ -342,4 +395,23 @@ export async function queryEmailLogs(filters: EmailLogFilters) {
 
 export async function getEmailLogDetail(id: string) {
   return db.emailLog.findUnique({ where: { id } });
+}
+
+export async function queryPatientEmailLogs(patientId: string, limit = 40) {
+  return db.emailLog.findMany({
+    where: { patientId },
+    orderBy: { createdAt: "desc" },
+    take: limit,
+    select: {
+      id: true,
+      to: true,
+      subject: true,
+      status: true,
+      category: true,
+      htmlBody: true,
+      sentAt: true,
+      createdAt: true,
+      errorMessage: true,
+    },
+  });
 }

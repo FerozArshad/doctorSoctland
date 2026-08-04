@@ -1,10 +1,11 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import FormSubmitButton from "@/components/FormSubmitButton";
+import EmailHtmlPreview from "@/components/EmailHtmlPreview";
 import TopBar from "@/components/TopBar";
 import { retryEmailLog } from "@/app/admin/actions";
 import { requireAdmin } from "@/lib/auth";
-import { getEmailLogDetail } from "@/lib/email-log";
+import { categoryLabel, getEmailLogDetail } from "@/lib/email-log";
 
 export const dynamic = "force-dynamic";
 
@@ -41,7 +42,7 @@ export default async function EmailLogDetailPage({ params }: { params: { id: str
               <div><div style={{ fontSize: 11, fontWeight: 800, color: "#8A96A5", textTransform: "uppercase" }}>To</div><div style={{ marginTop: 4 }}>{row.to}</div></div>
               <div><div style={{ fontSize: 11, fontWeight: 800, color: "#8A96A5", textTransform: "uppercase" }}>From</div><div style={{ marginTop: 4 }}>{row.fromAddress || "—"}</div></div>
               <div><div style={{ fontSize: 11, fontWeight: 800, color: "#8A96A5", textTransform: "uppercase" }}>Provider</div><div style={{ marginTop: 4 }}>{row.provider || "—"}</div></div>
-              <div><div style={{ fontSize: 11, fontWeight: 800, color: "#8A96A5", textTransform: "uppercase" }}>Category</div><div style={{ marginTop: 4 }}>{row.category}</div></div>
+              <div><div style={{ fontSize: 11, fontWeight: 800, color: "#8A96A5", textTransform: "uppercase" }}>Category</div><div style={{ marginTop: 4 }}>{categoryLabel(row.category)}</div></div>
               <div><div style={{ fontSize: 11, fontWeight: 800, color: "#8A96A5", textTransform: "uppercase" }}>Created</div><div style={{ marginTop: 4 }}>{fmtDt(row.createdAt)}</div></div>
               <div><div style={{ fontSize: 11, fontWeight: 800, color: "#8A96A5", textTransform: "uppercase" }}>Sent</div><div style={{ marginTop: 4 }}>{fmtDt(row.sentAt)}</div></div>
               <div><div style={{ fontSize: 11, fontWeight: 800, color: "#8A96A5", textTransform: "uppercase" }}>Retries</div><div style={{ marginTop: 4 }}>{row.retryCount} / {row.maxRetries}</div></div>
@@ -69,12 +70,25 @@ export default async function EmailLogDetailPage({ params }: { params: { id: str
               </div>
             )}
 
+            {row.patientId && (
+              <div style={{ marginTop: 18, fontSize: 13 }}>
+                <Link href={`/admin/patients/${row.patientId}`} style={{ color: "#0E9384", fontWeight: 700 }}>
+                  View patient record →
+                </Link>
+              </div>
+            )}
+
             {canRetry && (
               <form action={retryEmailLog} style={{ marginTop: 20 }}>
                 <input type="hidden" name="logId" value={row.id} />
                 <FormSubmitButton className="btn btn-teal" label="Retry this email" pendingLabel="Sending…" />
               </form>
             )}
+          </div>
+
+          <div className="card" style={{ padding: 24 }}>
+            <div style={{ fontSize: 11, fontWeight: 800, color: "#8A96A5", textTransform: "uppercase", marginBottom: 12 }}>Email content</div>
+            <EmailHtmlPreview html={row.htmlBody} defaultOpen />
           </div>
 
           {row.metadata && row.metadata !== "{}" && (

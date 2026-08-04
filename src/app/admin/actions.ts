@@ -895,8 +895,18 @@ export async function updatePatient(formData: FormData) {
   const { admin, patient } = await requireOwnedPatient(id);
   // Only a Super Admin may reassign ownership (the field only renders for them).
   const ownerRaw = formData.get("ownerId");
-  const ownerChange =
-    admin.isSuperAdmin && ownerRaw !== null ? { ownerId: String(ownerRaw) || null } : {};
+  let ownerChange: { ownerId?: string | null; sentByEmail?: string; sentByName?: string } = {};
+  if (admin.isSuperAdmin && ownerRaw !== null) {
+    const newOwnerId = String(ownerRaw) || null;
+    ownerChange.ownerId = newOwnerId;
+    if (newOwnerId) {
+      const assignee = await db.admin.findUnique({ where: { id: newOwnerId }, select: { email: true, name: true } });
+      if (assignee) {
+        ownerChange.sentByEmail = assignee.email;
+        ownerChange.sentByName = assignee.name;
+      }
+    }
+  }
   const fields = parseProposalFormData(formData);
   const { firstName, lastName, email, treatmentType } = fields;
 
@@ -967,7 +977,10 @@ export async function approveFinance(formData: FormData) {
 
   let emailOk = true;
   try {
-    await sendEmail(patient.email, "Your 0% finance application is ready — Dental Scotland", financeLinkEmailHtml(patient, financeLink));
+    await sendEmail(patient.email, "Your 0% finance application is ready — Dental Scotland", financeLinkEmailHtml(patient, financeLink), undefined, {
+      category: "finance_link",
+      patientId: patient.id,
+    });
   } catch (e) {
     console.error(e);
     emailOk = false;
@@ -1289,6 +1302,34 @@ export async function resendReceipt(formData: FormData) {
   );
 }
 
+/** Super Admin — reassign patient to another coordinator (dashboard access + alerts). */
+export async function reassignPatient(formData: FormData) {
+  const patientId = String(formData.get("patientId"));
+  const assignToId = String(formData.get("assignToId") || "");
+  const me = await requireAdmin();
+  if (!me.isSuperAdmin) {
+    redirect(toastUrl(`/admin/patients/${patientId}`, "Only a Super Admin can reassign patients", "!", "#E0A429"));
+  }
+  const assignee = await db.admin.findUnique({ where: { id: assignToId }, select: { id: true, name: true, email: true } });
+  if (!assignee) {
+    redirect(toastUrl(`/admin/patients/${patientId}`, "Choose a valid coordinator", "!", "#E0A429"));
+  }
+  const patient = await db.patient.findUnique({ where: { id: patientId } });
+  if (!patient) redirect("/admin/patients");
+
+  await db.patient.update({
+    where: { id: patientId },
+    data: {
+      ownerId: assignee.id,
+      sentByEmail: assignee.email,
+      sentByName: assignee.name,
+      activities: { create: { text: `Patient reassigned to ${assignee.name}` } },
+    },
+  });
+  log.info("patient.reassign", { adminId: me.id, patientId, assignToId: assignee.id, assigneeEmail: assignee.email });
+  redirect(toastUrl(`/admin/patients/${patientId}`, `Assigned to ${assignee.name}`, "✓"));
+}
+
 /** Super Admin only — permanently remove a patient and related records. */
 export async function deletePatient(formData: FormData) {
   const id = String(formData.get("patientId"));
@@ -1322,7 +1363,10 @@ export async function sendPatientTemplate(formData: FormData) {
 
   let emailOk = false;
   try {
-    await sendEmail(patient.email, `${title} — Dental Scotland`, emailHtml);
+    await sendEmail(patient.email, `${title} — Dental Scotland`, emailHtml, undefined, {
+      category: template,
+      patientId: id,
+    });
     emailOk = true;
   } catch (e) {
     log.error("template.email.fail", { patientId: id, template, ...summarizeError(e) });

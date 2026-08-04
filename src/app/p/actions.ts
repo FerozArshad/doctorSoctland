@@ -478,7 +478,9 @@ export async function completePaymentConsent(
       await sendEmail(
         patient.email,
         `${title} — Dental Scotland`,
-        brandedEmail(title, `<p style="font-size:15px;line-height:1.7;color:#3C4a59;white-space:pre-wrap;">${escapeHtml(bodyText)}</p>`)
+        brandedEmail(title, `<p style="font-size:15px;line-height:1.7;color:#3C4a59;white-space:pre-wrap;">${escapeHtml(bodyText)}</p>`),
+        undefined,
+        { category: "finance_received", patientId: patient.id }
       );
     } catch (e) {
       console.error("finance.confirmation.email.fail", e);

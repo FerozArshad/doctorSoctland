@@ -1,7 +1,7 @@
 import Link from "next/link";
 import FormSubmitButton from "@/components/FormSubmitButton";
 import { retryEmailLog } from "@/app/admin/actions";
-import { EMAIL_ERROR_TYPES, EMAIL_STATUSES } from "@/lib/email-log";
+import { EMAIL_CATEGORIES, EMAIL_ERROR_TYPES, EMAIL_STATUSES, categoryLabel } from "@/lib/email-log";
 
 type LogRow = {
   id: string;
@@ -87,6 +87,18 @@ export default function EmailLogsTable({
             </select>
           </div>
           <div>
+            <label className="label">Category</label>
+            <select className="input" name="category" defaultValue={filters.category || "all"}>
+              <option value="all">All categories</option>
+              <option value="payment">All payment emails</option>
+              {EMAIL_CATEGORIES.map((c) => (
+                <option key={c} value={c}>
+                  {categoryLabel(c)}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
             <label className="label">Recipient</label>
             <input className="input" name="to" defaultValue={filters.to || ""} placeholder="email@example.com" />
           </div>
@@ -139,7 +151,7 @@ export default function EmailLogsTable({
                       <td style={{ padding: "12px 14px", maxWidth: 180, overflow: "hidden", textOverflow: "ellipsis" }}>{row.to}</td>
                       <td style={{ padding: "12px 14px", maxWidth: 260 }}>
                         <div style={{ fontWeight: 650, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{row.subject}</div>
-                        <div style={{ fontSize: 11.5, color: "#9AA6B4", marginTop: 2 }}>{row.category}</div>
+                        <div style={{ fontSize: 11.5, color: "#9AA6B4", marginTop: 2 }}>{categoryLabel(row.category)}</div>
                       </td>
                       <td style={{ padding: "12px 14px", fontSize: 12.5, color: "#5A6A7E" }}>{row.provider || "—"}</td>
                       <td style={{ padding: "12px 14px", maxWidth: 220 }}>

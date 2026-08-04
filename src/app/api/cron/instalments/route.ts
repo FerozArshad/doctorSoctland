@@ -68,7 +68,9 @@ export async function GET(req: NextRequest) {
       await sendEmail(
         p.email,
         `Reminder: instalment ${inst.number}/3 due soon — Dental Scotland`,
-        instalmentReminderEmailHtml(p, inst.number, inst.amountPence, inst.dueDate)
+        instalmentReminderEmailHtml(p, inst.number, inst.amountPence, inst.dueDate),
+        undefined,
+        { category: "instalment_reminder", patientId: p.id, metadata: { instalment: inst.number } }
       );
       if (p.phone) {
         await sendWhatsApp(p.phone, instalmentReminderWhatsApp(p, inst.number, inst.amountPence, inst.dueDate));
@@ -112,7 +114,9 @@ export async function GET(req: NextRequest) {
         await sendEmail(
           p.email,
           `Overdue: instalment ${inst.number}/3 — Dental Scotland`,
-          instalmentOverdueEmailHtml(p, inst.number, inst.amountPence, inst.dueDate)
+          instalmentOverdueEmailHtml(p, inst.number, inst.amountPence, inst.dueDate),
+          undefined,
+          { category: "instalment_overdue", patientId: p.id, metadata: { instalment: inst.number } }
         ).catch(console.error);
         if (p.phone) {
           await sendWhatsApp(p.phone, instalmentOverdueWhatsApp(p, inst.number, inst.amountPence)).catch(console.error);
@@ -191,7 +195,9 @@ export async function GET(req: NextRequest) {
       await sendEmail(
         p.email,
         `Action needed: instalment ${inst.number}/3 — Dental Scotland`,
-        instalmentFailedEmailHtml(p, inst.number, inst.amountPence, detail)
+        instalmentFailedEmailHtml(p, inst.number, inst.amountPence, detail),
+        undefined,
+        { category: "instalment_failed", patientId: p.id, metadata: { instalment: inst.number } }
       ).catch(console.error);
       if (p.phone) {
         await sendWhatsApp(
@@ -222,7 +228,9 @@ export async function GET(req: NextRequest) {
     await sendEmail(
       p.email,
       `Reminder: instalment ${inst.number}/3 still outstanding — Dental Scotland`,
-      instalmentFailedEmailHtml(p, inst.number, inst.amountPence, "previous collection attempt failed")
+      instalmentFailedEmailHtml(p, inst.number, inst.amountPence, "previous collection attempt failed"),
+      undefined,
+      { category: "instalment_failed", patientId: p.id, metadata: { instalment: inst.number, followUp: true } }
     ).catch(console.error);
     if (p.phone) {
       await sendWhatsApp(p.phone, instalmentOverdueWhatsApp(p, inst.number, inst.amountPence)).catch(console.error);

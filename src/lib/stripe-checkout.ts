@@ -108,7 +108,9 @@ export async function applyCheckoutSessionPaid(
   await sendEmail(
     patient.email,
     "Deposit received — your instalment plan is set — Dental Scotland",
-    depositScheduleEmailHtml(patient, amount, per, dueDates)
+    depositScheduleEmailHtml(patient, amount, per, dueDates),
+    undefined,
+    { category: "payment_deposit", patientId, metadata: { type: "deposit", amountPence: amount } }
   ).catch((e) => log.error("stripe.deposit.email.fail", summarizeError(e)));
   await issuePaymentReceipt(paymentRecord.id).catch((e) => log.error("payment.receipt.fail", summarizeError(e)));
   await notifyAdmin(

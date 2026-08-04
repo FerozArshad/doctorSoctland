@@ -390,7 +390,7 @@ export default function ProposalForm({
 
         {owners && (
           <div style={{ marginTop: 20 }}>
-            <label className="label">Belongs to admin</label>
+            <label className="label">Assigned coordinator</label>
             <select className="input" name="ownerId" defaultValue={patient.ownerId ?? ""}>
               <option value="">— Unassigned (Super Admins only) —</option>
               {owners.map((o) => (

@@ -17,6 +17,9 @@ import DeletePatientButton from "@/components/DeletePatientButton";
 import AdminPatientFiles from "@/components/AdminPatientFiles";
 import PaymentReceiptsSection from "@/components/PaymentReceiptsSection";
 import PatientPaymentsSection from "@/components/PatientPaymentsSection";
+import PatientEmailLog from "@/components/PatientEmailLog";
+import ReassignPatientForm from "@/components/ReassignPatientForm";
+import { queryPatientEmailLogs } from "@/lib/email-log";
 import { isMessageActivity } from "@/lib/messages";
 import { publicActivityText } from "@/lib/activity-display";
 import { patientTemplateText, patientTemplateTitle } from "@/lib/patient-templates";
@@ -128,6 +131,14 @@ export default async function PatientProfile({ params }: { params: { id: string 
   }
 
   const cfg = await getPricing();
+  const patientEmails = await queryPatientEmailLogs(c.id);
+  const coordinatorAdmins = admin.isSuperAdmin
+    ? await db.admin.findMany({
+        where: { isSuperAdmin: false },
+        select: { id: true, name: true, email: true },
+        orderBy: { name: "asc" },
+      })
+    : [];
 
   const st = statusOf(c.status);
   const overdue = c.status === "overdue";
@@ -474,6 +485,8 @@ export default async function PatientProfile({ params }: { params: { id: string 
 
                 <PaymentReceiptsSection patientId={c.id} receipts={c.paymentReceipts} />
 
+                <PatientEmailLog rows={patientEmails} isSuperAdmin={admin.isSuperAdmin} />
+
                 <div className="ds-patient-payment-actions" style={{ marginTop: 14 }}>
                   <form action={syncStripePayment} className="ds-payment-form">
                     <input type="hidden" name="patientId" value={c.id} />
@@ -527,6 +540,15 @@ export default async function PatientProfile({ params }: { params: { id: string 
             </div>
 
             <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
+              {admin.isSuperAdmin && coordinatorAdmins.length > 0 && (
+                <ReassignPatientForm
+                  patientId={c.id}
+                  currentOwnerId={c.ownerId}
+                  currentSentByEmail={c.sentByEmail}
+                  currentSentByName={c.sentByName}
+                  admins={coordinatorAdmins}
+                />
+              )}
               {/* timeline */}
               <div className="card ds-patient-card">
                 <div style={{ fontSize: 15, fontWeight: 800, marginBottom: 18 }}>Status</div>

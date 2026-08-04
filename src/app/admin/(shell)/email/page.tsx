@@ -24,6 +24,7 @@ export default async function EmailLogsPage({
   const filters = {
     status: sp("status"),
     errorType: sp("errorType"),
+    category: sp("category"),
     to: sp("to"),
     q: sp("q"),
     page: String(page),
@@ -32,6 +33,7 @@ export default async function EmailLogsPage({
   const { rows, total, pageSize, counts } = await queryEmailLogs({
     status: filters.status || undefined,
     errorType: filters.errorType || undefined,
+    category: filters.category || undefined,
     to: filters.to || undefined,
     q: filters.q || undefined,
     page,
